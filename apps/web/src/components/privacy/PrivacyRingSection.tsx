@@ -3,19 +3,20 @@
 // Helius Solana Privacy Ring closes the last leak (the escrow deposit).
 import { FadeIn } from "@/components/motion/FadeIn";
 import { usePrivacyRing } from "@/lib/privacy/usePrivacyRing";
-import { DEMO_ENABLED } from "@/lib/config";
+import { DEMO_ENABLED, networkName } from "@/lib/config";
 import { RingDiagram, RingMark } from "./RingMotif";
 
 const SEALED: Array<{ what: string; how: string; until: string }> = [
   { what: "Maximum price", how: "keccak-256 commitment", until: "until you reveal" },
   { what: "Bid size", how: "keccak-256 commitment", until: "until you reveal" },
-  { what: "Deposit amount", how: "Helius Privacy Ring confidential balance", until: "always" },
-  { what: "Refunds", how: "confidential transfer to your shielded balance", until: "always" },
-  { what: "Holder payouts", how: "confidential transfer to your shielded balance", until: "always" },
+  { what: "Bid deposit", how: "a lock inside your Sealed balance, never an on-chain transfer", until: "always" },
+  { what: "Private deposit amount", how: "Helius Privacy Ring confidential transfer to Sealed custody", until: "always" },
+  { what: "Private withdrawal amount", how: "confidential transfer to your shielded address", until: "always" },
 ];
 
 const PUBLIC: Array<{ what: string; why: string }> = [
   { what: "Wallet addresses", why: "The Default Ring encrypts amounts and assets, not the parties." },
+  { what: "Moving funds into or out of the ring", why: "Shielding and unshielding are public steps: that amount shows on-chain." },
   { what: "Buyback drips", why: "Every buy-and-burn lands on-chain, on schedule. That is the point." },
   { what: "Protocol fees", why: "The fee split is auditable by anyone, in real time." },
   { what: "Clearing price & total raised", why: "One uniform price, published once the reveal window closes." },
@@ -23,17 +24,17 @@ const PUBLIC: Array<{ what: string; why: string }> = [
 
 export function PrivacyRingSection() {
   const ring = usePrivacyRing();
-  const mode = ring.loading ? "checking ring…" : ring.simulated ? "simulated in demo" : ring.available ? `live · ${ring.network}` : "unavailable";
+  const mode = ring.loading ? "checking ring…" : ring.privateEnabled ? `live · ${networkName(ring.network)}` : ring.simulated ? "simulated in demo" : "not live yet";
 
   return (
     <section aria-labelledby="privacy-ring-title" className="bleed mt-20 bg-night text-night-text sm:mt-28">
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-20">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-night-rule pb-3 font-mono text-[10.5px] uppercase tracking-[0.08em] text-night-muted">
           <span className="flex items-center gap-2.5">
-            <RingMark size={16} active className="text-signal-tint" /> § 03 — Privacy ring
+            <RingMark size={16} active className="text-signal-tint" /> § 03 · Privacy ring
           </span>
           <span>
-            Default Ring · beta · <span className={ring.available && !ring.simulated ? "text-signal-tint" : undefined}>{mode}</span>
+            Default Ring · beta · <span className={ring.privateEnabled ? "text-signal-tint" : undefined}>{mode}</span>
           </span>
         </div>
 
@@ -45,9 +46,9 @@ export function PrivacyRingSection() {
               Now a sealed <span className="accent text-signal-tint">deposit</span>.
             </h2>
             <p className="mt-6 max-w-measure text-[15px] leading-relaxed text-night-muted">
-              A commitment hides what you bid, but the collateral you lock beside it is a public transfer, and it sets an upper bound on
-              your size. Fund it from a Helius Privacy Ring balance instead: the amount travels encrypted, and only your viewing key can
-              read it back.
+              A commitment hides what you bid, and the deposit you lock beside it stays inside your Sealed balance. The last trace is how
+              that balance was funded. Send it with a Helius Privacy Ring confidential transfer instead: the amount travels encrypted, and
+              only your viewing key can read it back.
             </p>
 
             <div className="mt-12">
@@ -95,8 +96,8 @@ export function PrivacyRingSection() {
             SPL and Token-2022; you decrypt your own with a viewing key.
           </p>
           <p className="font-serif italic sm:col-span-7">
-            ¹ {DEMO_ENABLED ? "In demo the ring is simulated and holds no real funds. " : ""}On-chain, private deposits switch on with the shielded-escrow program
-            upgrade; until then bids fund the escrow publicly, and the commitment still hides price and size.
+            ¹ {DEMO_ENABLED ? "In demo the ring is simulated and holds no real funds. " : ""}Private deposits and withdrawals open once Sealed enables
+            them on this network. Your Privacy Ring keys come from one wallet signature and never leave your browser tab.
           </p>
         </div>
       </div>

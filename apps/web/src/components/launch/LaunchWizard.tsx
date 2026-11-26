@@ -19,13 +19,17 @@ import {
   type QuoteAssetSymbol,
 } from "@sealed/shared";
 import { api, ApiError } from "@/lib/api";
-import { IS_MAINNET, NETWORK } from "@/lib/config";
+import { IS_MAINNET, NETWORK, networkName } from "@/lib/config";
 import { fmtAmount, fmtCompact, fmtInt, fmtPrice, fmtUsd } from "@/lib/format";
 import { SPRING } from "../motion/spring";
 import { RollingNumber } from "../motion/RollingNumber";
 import { ArrowRight, LockIcon } from "../ui/Icons";
 import { Scale } from "./Scale";
 import { Clause, lineInput, QuoteAssetList, SectionHead, StepRail, Term } from "./parts";
+import { ImageUploader, type ImageMeta } from "../upload/ImageUploader";
+import { TokenAvatar } from "../ui/TokenAvatar";
+import { getSession, useCustodySession } from "@/lib/custody";
+import { isUploadedImageUrl } from "@/lib/upload/tokenImage";
 
 const STEPS = ["Identity & quote", "Auction terms", "Term sheet"] as const;
 const MIN_DUR = IS_MAINNET ? MIN_COMMIT_DURATION_SEC_MAINNET : MIN_COMMIT_DURATION_SEC_DEVNET;
@@ -80,7 +84,7 @@ const initial: Form = {
 };
 
 const FIELD_LABEL: Record<string, string> = {
-  name: "Name", ticker: "Ticker", description: "Description", imageUri: "Image URI", totalSupply: "Total supply",
+  name: "Name", ticker: "Ticker", description: "Description", imageUri: "Token image", totalSupply: "Total supply",
   creatorAllocationBps: "Creator allocation", auctionSupplyBps: "Auction supply", commitDurationSec: "Commit window",
   floorPrice: "Floor price", tickSize: "Tick size", targetRaise: "Target raise", clearingCap: "Clearing cap",
 };
@@ -94,6 +98,8 @@ export function LaunchWizard() {
   const [touchedPricing, setTouchedPricing] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [deployErr, setDeployErr] = useState<string | null>(null);
+  const [imageMeta, setImageMeta] = useState<ImageMeta | null>(null);
+  const custody = useCustodySession();
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) =>
     setF((prev) => {
@@ -130,9 +136,11 @@ export function LaunchWizard() {
     const m: Partial<Record<string, string>> = {};
     if (!parsed.success) for (const i of parsed.error.issues) m[String(i.path[0])] ??= i.message;
     if (input.clearingCap < input.targetRaise) m.clearingCap = "Cap must be ≥ target raise";
-    if (input.commitDurationSec < MIN_DUR) m.commitDurationSec = `Minimum ${MIN_DUR / 60} minutes on ${NETWORK}`;
+    if (input.commitDurationSec < MIN_DUR) m.commitDurationSec = `Minimum ${MIN_DUR / 60} minutes`;
+    if (IS_MAINNET && input.imageUri && !isUploadedImageUrl(input.imageUri)) m.imageUri = "Upload the image here; links aren't accepted on mainnet";
+    else if (input.imageUri && imageMeta?.wallet && custody.wallet && imageMeta.wallet !== custody.wallet) m.imageUri = "Uploaded from a different wallet; upload it again from this one";
     return m;
-  }, [parsed, input.clearingCap, input.targetRaise, input.commitDurationSec]);
+  }, [parsed, input.clearingCap, input.targetRaise, input.commitDurationSec, input.imageUri, imageMeta?.wallet, custody.wallet]);
 
   const step0Ok = !issues.name && !issues.ticker && !issues.description && !issues.imageUri;
   const step1Ok = !issues.creatorAllocationBps && !issues.floorPrice && !issues.tickSize && !issues.targetRaise && !issues.clearingCap && !issues.commitDurationSec && !issues.totalSupply;
@@ -158,7 +166,8 @@ export function LaunchWizard() {
     setDeploying(true);
     setDeployErr(null);
     try {
-      const { launch } = await api.createLaunch(parsed.data);
+      const token = custody.wallet ? getSession(custody.wallet)?.token : null;
+      const { launch } = await api.createLaunch(parsed.data, { token });
       router.push(`/token/${launch.mint}`);
     } catch (e) {
       setDeployErr(
@@ -181,7 +190,7 @@ export function LaunchWizard() {
       {/* masthead */}
       <header className="grid gap-8 border-b border-ink pb-8 lg:grid-cols-12 lg:items-end">
         <div className="lg:col-span-8">
-          <p className="section-mark">§ Launch Studio — Offering memorandum</p>
+          <p className="section-mark">§ Launch Studio · Offering memorandum</p>
           <h1 className="mt-4 text-display-lg text-ink">
             Draft the <span className="accent">prospectus</span>
             <br className="hidden sm:block" /> for a sealed offering.
@@ -192,9 +201,9 @@ export function LaunchWizard() {
         </div>
         <dl className="grid grid-cols-2 gap-x-6 text-[12px] lg:col-span-4 lg:grid-cols-1">
           {[
-            ["Network", NETWORK],
+            ["Network", networkName(NETWORK)],
             ["Settlement", "Uniform clearing price"],
-            ["Day-one credit", "10.0 – 15.0% of raise"],
+            ["Day-one credit", "10 to 15% of raise"],
             ["Creator ceiling", "2.00% of supply"],
           ].map(([k, v]) => (
             <div key={k} className="flex items-baseline justify-between gap-3 border-b border-rule py-2 last:border-b-0 lg:last:border-b">
@@ -224,12 +233,12 @@ export function LaunchWizard() {
               >
                 {step === 0 && (
                   <div>
-                    <SectionHead mark="§ 01 — Identity & quote asset" title="Name the" accent="issue." lede="How the token will appear in the lobby, and the asset bidders escrow and holders are paid in." />
+                    <SectionHead mark="§ 01 · Identity & quote asset" title="Name the" accent="issue." lede="How the token will appear in the lobby, and the asset bidders escrow and holders are paid in." />
                     <div className="mt-8 space-y-8">
                       <Clause n="1.1" label="Name of issue" htmlFor="tok-name" hint={`${f.name.length}/32`} error={f.name ? issues.name : undefined}>
                         <input id="tok-name" className={clsx(lineInput, "font-display text-2xl font-semibold tracking-[-0.02em] sm:text-3xl")} maxLength={32} placeholder="Quiet Money" value={f.name} onChange={(e) => set("name", e.target.value)} autoComplete="off" />
                       </Clause>
-                      <Clause n="1.2" label="Ticker" htmlFor="tok-ticker" hint="A–Z, 0–9" error={f.ticker ? issues.ticker : undefined}>
+                      <Clause n="1.2" label="Ticker" htmlFor="tok-ticker" hint="A to Z, 0 to 9" error={f.ticker ? issues.ticker : undefined}>
                         <div className="flex items-baseline gap-1">
                           <span className="num text-xl text-ink-muted">$</span>
                           <input id="tok-ticker" className={clsx(lineInput, "num text-xl uppercase")} maxLength={10} placeholder="QUIET" value={f.ticker} onChange={(e) => set("ticker", e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} autoComplete="off" />
@@ -238,8 +247,35 @@ export function LaunchWizard() {
                       <Clause n="1.3" label="Description" htmlFor="tok-desc" hint={`${f.description.length}/280`} error={issues.description}>
                         <textarea id="tok-desc" className={clsx(lineInput, "min-h-[84px] resize-y text-[15px] leading-relaxed")} maxLength={280} placeholder="What is this token about?" value={f.description} onChange={(e) => set("description", e.target.value)} />
                       </Clause>
-                      <Clause n="1.4" label={<>Image or metadata URI <span className="font-normal text-ink-muted">— optional</span></>} htmlFor="tok-uri" error={f.imageUri ? issues.imageUri : undefined}>
-                        <input id="tok-uri" className={clsx(lineInput, "num text-sm")} placeholder="https://…" value={f.imageUri} onChange={(e) => set("imageUri", e.target.value)} autoComplete="off" />
+                      <Clause n="1.4" label={<>Token image <span className="font-normal text-ink-muted">(optional)</span></>} hint="square, shown round" error={f.imageUri ? issues.imageUri : undefined}>
+                        <ImageUploader
+                          value={f.imageUri}
+                          meta={imageMeta}
+                          ticker={f.ticker}
+                          onChange={(url, meta) => {
+                            setImageMeta(meta);
+                            set("imageUri", url);
+                          }}
+                        />
+                        {!IS_MAINNET && (
+                          <details className="mt-3 text-[12px]">
+                            <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-ink-slate underline decoration-rule-strong underline-offset-4 hover:text-ink">Advanced: use an image link instead</summary>
+                            <label htmlFor="tok-uri" className="sr-only">Image link</label>
+                            <input
+                              id="tok-uri"
+                              className={clsx(lineInput, "num text-sm")}
+                              placeholder="https://"
+                              value={f.imageUri.startsWith("data:") ? "" : f.imageUri}
+                              onChange={(e) => {
+                                setImageMeta(null);
+                                set("imageUri", e.target.value);
+                              }}
+                              autoComplete="off"
+                            />
+                            <p className="fine mt-1">Test networks only. Mainnet launches use uploaded images.</p>
+                          </details>
+                        )}
+                        {!f.imageUri && <p className="fine mt-2">No image? The lobby shows your ticker&apos;s initials.</p>}
                       </Clause>
                       <Clause n="1.5" label="Quote asset">
                         <QuoteAssetList value={f.quoteAsset} onChange={(s) => set("quoteAsset", s)} />
@@ -272,7 +308,7 @@ export function LaunchWizard() {
 
                 {step === 1 && (
                   <div>
-                    <SectionHead mark="§ 02 — Sealed auction parameters" title="Set the" accent="terms." lede="Bids are sealed commitments: count and time are public, sizes and prices are not. Everyone who clears pays the same price." />
+                    <SectionHead mark="§ 02 · Sealed auction parameters" title="Set the" accent="terms." lede="Bids are sealed commitments: count and time are public, sizes and prices are not. Everyone who clears pays the same price." />
                     <div className="mt-8 space-y-9">
                       <Clause n="2.1" label="Creator allocation" htmlFor="creator-cap" hint={<span className="text-ink">{(input.creatorAllocationBps / 100).toFixed(2)}% <span className="text-ink-muted">· {fmtCompact(creatorTokens, 2)} tokens</span></span>} error={issues.creatorAllocationBps}>
                         <Scale
@@ -294,19 +330,17 @@ export function LaunchWizard() {
                       <Clause n="2.2" label="Commit window" htmlFor="duration" hint={<span className="text-ink">{minutes(f.commitDurationSec)} <span className="text-ink-muted">+ {REVEAL_SEC / 60} min reveal</span></span>} error={issues.commitDurationSec}>
                         <Scale
                           id="duration"
-                          min={MIN_DUR}
+                          min={MIN_COMMIT_DURATION_SEC_MAINNET}
                           max={MAX_COMMIT_DURATION_SEC}
                           step={60}
                           value={f.commitDurationSec}
                           onChange={(v) => set("commitDurationSec", v)}
-                          ticks={IS_MAINNET ? [900, 1200, 1500, 1800] : [120, 600, 900, 1200, 1500, 1800]}
+                          ticks={[900, 1200, 1500, 1800]}
                           tickLabel={(t) => `${t / 60}m`}
-                          zone={IS_MAINNET ? undefined : { from: MIN_COMMIT_DURATION_SEC_DEVNET, to: MIN_COMMIT_DURATION_SEC_MAINNET, label: `${NETWORK} only` }}
-                          marks={IS_MAINNET ? [] : [{ at: MIN_COMMIT_DURATION_SEC_MAINNET, label: "mainnet min." }]}
                           valueText={`${Math.round(f.commitDurationSec / 60)} minutes`}
                         />
                         <p className="text-[12px] leading-relaxed text-ink-muted">
-                          15–30 minutes on mainnet{!IS_MAINNET && <>; down to 2 minutes on <span className="num">{NETWORK}</span> for testing</>}. A {REVEAL_SEC / 60}-minute reveal window follows; the relayer can auto-reveal for bidders.
+                          15 to 30 minutes. A {REVEAL_SEC / 60}-minute reveal window follows; the relayer can auto-reveal for bidders.
                         </p>
                       </Clause>
 
@@ -354,7 +388,7 @@ export function LaunchWizard() {
                                   <input id={`px-${k}`} className={clsx(lineInput, "num text-right text-[13px] sm:text-[15px]")} inputMode="decimal" value={f[k]} onChange={(e) => setPricing(k, e.target.value)} />
                                   <span className="num w-10 shrink-0 text-[11px] text-ink-muted sm:w-12">{f.quoteAsset}</span>
                                 </div>
-                                {issues[k] && <p role="alert" className="num mt-1 text-right text-[11px] text-burn">— {issues[k]}</p>}
+                                {issues[k] && <p role="alert" className="num mt-1 text-right text-[11px] text-burn">{issues[k]}</p>}
                                 <span className="num mt-0.5 block text-right text-[11px] text-ink-muted sm:hidden">{hint}</span>
                               </div>
                               <span className="num hidden text-right text-[11px] text-ink-muted sm:block">{hint}</span>
@@ -368,7 +402,7 @@ export function LaunchWizard() {
 
                 {step === 2 && (
                   <div>
-                    <SectionHead mark="§ 03 — Review" title="Summary of" accent="terms." lede="Read it once more. Deploying opens the commit window immediately." />
+                    <SectionHead mark="§ 03 · Review" title="Summary of" accent="terms." lede="Read it once more. Deploying opens the commit window immediately." />
 
                     <section aria-labelledby="credit-h" className="card-night relative mt-8 overflow-hidden p-6 sm:p-8">
                       <svg aria-hidden viewBox="0 0 200 200" className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 text-night-rule motion-safe:animate-ring">
@@ -405,8 +439,14 @@ export function LaunchWizard() {
 
                     <dl className="mt-8 grid border-t border-ink sm:grid-cols-2 sm:gap-x-8">
                       <div>
-                        <Term k="Issuer">{f.name || "—"}</Term>
-                        <Term k="Ticker">${f.ticker || "—"}</Term>
+                        <Term k="Token image">
+                          <span className="flex items-center gap-3">
+                            <TokenAvatar src={f.imageUri} ticker={f.ticker || "··"} size={36} />
+                            <span className="text-ink-slate">{f.imageUri ? (imageMeta?.inline ? "Inline" : isUploadedImageUrl(f.imageUri) ? "Uploaded" : "Linked") : "None, initials shown"}</span>
+                          </span>
+                        </Term>
+                        <Term k="Issuer">{f.name || "n/a"}</Term>
+                        <Term k="Ticker">{f.ticker ? `$${f.ticker}` : "n/a"}</Term>
                         <Term k="Quote asset">{f.quoteAsset} <span className="text-ink-muted">· {QUOTE_ASSETS[f.quoteAsset].name.replace(" (tokenized)", "")}</span></Term>
                         <Term k="Total supply">{fmtInt(f.totalSupply)}</Term>
                         <Term k="Offered">{fmtCompact(forSale, 2)} <span className="text-ink-muted">({(f.auctionSupplyBps / 100).toFixed(1)}%)</span></Term>
@@ -420,7 +460,7 @@ export function LaunchWizard() {
                         <Term k="Floor / tick">{fmtPrice(input.floorPrice)} / {fmtPrice(input.tickSize)}</Term>
                         <Term k="Target raise">{fmtAmount(input.targetRaise)} {f.quoteAsset}</Term>
                         <Term k="Clearing cap">{fmtAmount(input.clearingCap)} {f.quoteAsset}</Term>
-                        <Term k="Network">{NETWORK}</Term>
+                        <Term k="Network">{networkName(NETWORK)}</Term>
                       </div>
                     </dl>
 
@@ -438,7 +478,7 @@ export function LaunchWizard() {
                       <div role="alert" className="mt-6 border-l-2 border-burn bg-burn-tint/60 px-4 py-3 text-[12px] text-burn">
                         <p className="font-medium">Correct before deploying</p>
                         <ul className="num mt-1 space-y-0.5">
-                          {Object.entries(issues).map(([k, v]) => <li key={k}>{FIELD_LABEL[k] ?? k} — {v}</li>)}
+                          {Object.entries(issues).map(([k, v]) => <li key={k}>{FIELD_LABEL[k] ?? k}: {v}</li>)}
                         </ul>
                       </div>
                     )}
@@ -474,9 +514,7 @@ export function LaunchWizard() {
             <div className="card p-5 sm:p-6">
               <p className="eyebrow">Running summary</p>
               <div className="mt-4 flex items-start gap-3">
-                <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep">
-                  <span className="num text-[13px] text-ink">{(f.ticker || "··").slice(0, 2)}</span>
-                </span>
+                <TokenAvatar src={f.imageUri} ticker={f.ticker || "··"} size={44} eager />
                 <div className="min-w-0">
                   <p className="truncate text-display-sm text-ink">{f.name || <span className="text-ink-muted">Untitled issue</span>}</p>
                   <p className="num mt-0.5 text-[12px] text-ink-muted">${f.ticker || "TICKER"} · quoted in {f.quoteAsset}</p>

@@ -52,7 +52,7 @@ export function RingDiagram({ className }: { className?: string }) {
         <circle cx="200" cy="200" r="124" stroke="#2E3FE0" strokeOpacity="0.45" strokeWidth="1" strokeDasharray="1 9" />
       </g>
       <text className={label} fill="#E9ECFF">
-        <textPath href="#ring-path-mid" startOffset="17%">helius privacy ring · deposit · refunds · payouts</textPath>
+        <textPath href="#ring-path-mid" startOffset="17%">helius privacy ring · private deposits · withdrawals</textPath>
       </text>
 
       {/* commitment */}

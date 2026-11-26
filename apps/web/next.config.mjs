@@ -60,6 +60,9 @@ const nextConfig = {
     config.resolve.alias = { ...(config.resolve.alias ?? {}), ...walletAliases };
     // Optional native deps pulled in by wallet adapters / ws.
     config.externals = [...(Array.isArray(config.externals) ? config.externals : []), "pino-pretty", "lokijs", "encoding"];
+    // Helius Privacy Rings SDK (lazy chunk): @lightprotocol/hasher.rs "browser-fat" inlines its wasm, but its
+    // wasm-bindgen init keeps an unused `new URL("*.wasm", import.meta.url)` default that webpack can't resolve.
+    config.module.rules.push({ test: /[\\/]@lightprotocol[\\/]hasher\.rs[\\/].*\.m?js$/, parser: { url: false } });
     return config;
   },
 };

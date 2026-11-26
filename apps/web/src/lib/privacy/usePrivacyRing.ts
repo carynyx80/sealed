@@ -3,11 +3,12 @@
 // decryption, shield / unshield. Demo + unsupported deployments use the simulated ring (never real funds).
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { QUOTE_ASSETS, type PrivacyStatusResponse, type QuoteAssetSymbol } from "@sealed/shared";
+import { QUOTE_ASSETS, type QuoteAssetSymbol } from "@sealed/shared";
+import type { PrivacyStatus as PrivacyStatusResponse } from "./contract";
 import { atomsToUi, simulatedViewingKey, uiToAtoms, type EncryptedBalance, type PrivacyRingClient } from "@sealed/defi";
 import { errorMessage } from "../defi/config";
 import { DEMO_ENABLED } from "../config";
-import { cachedPrivacyStatus, fetchPrivacyStatus, privacyOwner, ringFor } from "./ring";
+import { cachedPrivacyStatus, fetchPrivacyStatus, privacyOwner, privateFeaturesOn, ringFor } from "./ring";
 
 export type PrivacyRingStatus = "unavailable" | "idle" | "proving" | "submitting" | "done" | "error";
 export interface ShieldedBalance { symbol: QuoteAssetSymbol; amount: number | null; encrypted: boolean }
@@ -51,6 +52,12 @@ export function invalidateShieldedBalance(owner: string, symbol: QuoteAssetSymbo
 }
 
 const decimals = (s: QuoteAssetSymbol) => QUOTE_ASSETS[s].decimals;
+
+// Development only (stripped from production builds): lets a local browser session preview the enabled private
+// surfaces against a mocked status, e.g. `window.__sealedPrivacyStatus({ enabled: true, ... })`.
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+  (window as unknown as { __sealedPrivacyStatus?: (s: PrivacyStatusResponse) => void }).__sealedPrivacyStatus = (ring) => emit({ ring });
+}
 
 /* ----------------------------------------------------------------------------------------- hook */
 
@@ -168,6 +175,9 @@ export function usePrivacyRing() {
     unshield,
     /* additive extras */
     loading: ring === null,
+    /** Real Helius Privacy Ring features (SDK) are switched on for this deployment. */
+    privateEnabled: privateFeaturesOn(ring),
+    statusRaw: ring,
     network: ring?.network ?? client.network,
     ringId: ring?.ringId,
     reason: ring?.reason,

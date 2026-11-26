@@ -77,7 +77,7 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
     <section className="card overflow-hidden" aria-labelledby="commit-title">
       <div className="p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="section-mark">§ Auction — Commit</p>
+          <p className="section-mark">§ Auction · Commit</p>
           <CommitRevealBadge status={launch.status} />
         </div>
         <h2 id="commit-title" className="mt-3 font-display text-display-md text-ink">
@@ -189,7 +189,7 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
             </div>
             <div>
               <dt className="text-[10px] uppercase tracking-[0.08em] text-ink-muted">Public</dt>
-              <dd className="mt-1 text-ink-slate">{privateDeposit ? "deposit · shielded" : `deposit ${deposit > 0 ? fmtAmount(deposit) : "—"}`}</dd>
+              <dd className="mt-1 text-ink-slate">{privateDeposit ? "deposit · shielded" : deposit > 0 ? `deposit ${fmtAmount(deposit)}` : "deposit n/a"}</dd>
               <dd className="mt-0.5 text-ink-slate">commitment hash</dd>
             </div>
           </dl>
@@ -249,7 +249,7 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
 
       {/* plain-language clearing explainer */}
       <div className="border-t border-rule bg-paper-deep/60 p-5 sm:p-6">
-        <p className="section-mark">How you pay — Uniform clearing</p>
+        <p className="section-mark">How you pay · Uniform clearing</p>
         <p className="mt-2 font-display text-[1.05rem] font-semibold leading-snug tracking-[-0.015em] text-ink">
           Everyone who wins pays the <span className="accent">same</span> price.
         </p>

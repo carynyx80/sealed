@@ -7,6 +7,7 @@ import { fmtAmount, fmtInt } from "@/lib/format";
 import { useReducedMotion } from "@/components/motion/reduced";
 import { SPRING } from "../motion/spring";
 import { LobbyCountdown, fakeHex, hash32 } from "./Ticker";
+import { TokenAvatar } from "../ui/TokenAvatar";
 
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const ROWS = 7;
@@ -60,8 +61,9 @@ export function SealedBook({ launch }: { launch: LaunchSummary | null }) {
       >
         {/* masthead */}
         <div className="flex items-center justify-between gap-3 bg-ink px-4 py-2.5 text-paper sm:px-5">
-          <span className="truncate font-mono text-[10.5px] uppercase tracking-[0.08em]">
-            Sealed book <span className="text-paper/40">/</span> {launch ? `$${launch.ticker}` : "awaiting lot"}
+          <span className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.08em]">
+            {launch && <TokenAvatar src={launch.imageUri} ticker={launch.ticker} size={20} tone="dark" />}
+            <span className="truncate">Sealed book <span className="text-paper/40">/</span> {launch ? `$${launch.ticker}` : "awaiting lot"}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-[0.08em] text-paper/70">
             <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-signal-bright" /> {reveal ? "Reveal" : "Commit"} window
@@ -77,8 +79,8 @@ export function SealedBook({ launch }: { launch: LaunchSummary | null }) {
           <dl className="grid grid-cols-2 gap-x-5 gap-y-1.5 text-right">
             <dt className="eyebrow">Bids</dt>
             <dt className="eyebrow">Wallets</dt>
-            <dd className="num text-lg leading-none">{a ? fmtInt(count) : "—"}</dd>
-            <dd className="num text-lg leading-none">{a ? fmtInt(a.escrowedWallets) : "—"}</dd>
+            <dd className="num text-lg leading-none">{a ? fmtInt(count) : "…"}</dd>
+            <dd className="num text-lg leading-none">{a ? fmtInt(a.escrowedWallets) : "…"}</dd>
           </dl>
         </div>
 
@@ -124,7 +126,7 @@ export function SealedBook({ launch }: { launch: LaunchSummary | null }) {
         {/* fine print */}
         <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-rule bg-paper px-4 py-3 sm:px-5">
           <span className="text-[11px] text-ink-slate">
-            Escrowed (public) <span className="num text-ink">{a && launch ? `${fmtAmount(a.totalEscrowed)} ${launch.quoteAsset}` : "—"}</span>
+            Escrowed (public) <span className="num text-ink">{a && launch ? `${fmtAmount(a.totalEscrowed)} ${launch.quoteAsset}` : "…"}</span>
           </span>
           <span className="fine">Prices &amp; sizes hidden until reveal¹</span>
         </div>

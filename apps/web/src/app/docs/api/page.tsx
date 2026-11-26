@@ -7,34 +7,34 @@ import { A, Accent, C, DocHeader, H2, H3, Note, P, StatusBadge, Table, UL } from
 export const metadata: Metadata = { title: "API reference" };
 
 const PUBLIC: Array<[string, string, string]> = [
-  ["GET", API_ROUTES.health, "HealthResponse — network, isDemo, db, cache, redacted rpc, programId, uptime, version. Also /health."],
-  ["GET", API_ROUTES.stats, "ProtocolStats — volume, fees, credit deployed/repaid, solvency, burns, payouts, counts."],
-  ["GET", `${API_ROUTES.launches}?status=&quote=&limit=`, "LaunchListResponse. status: a LaunchStatus or auctions | vaults | graduated; quote: a symbol, stocks or all; limit 1–200 (50)."],
+  ["GET", API_ROUTES.health, "HealthResponse: network, isDemo, db, cache, redacted rpc, programId, uptime, version. Also /health."],
+  ["GET", API_ROUTES.stats, "ProtocolStats: volume, fees, credit deployed/repaid, solvency, burns, payouts, counts."],
+  ["GET", `${API_ROUTES.launches}?status=&quote=&limit=`, "LaunchListResponse. status: a LaunchStatus or auctions | vaults | graduated; quote: a symbol, stocks or all; limit 1 to 200 (50)."],
   ["GET", API_ROUTES.launch(":idOrMint"), "LaunchSummary, 404 if unknown."],
   ["GET", `${API_ROUTES.trades(":idOrMint")}?limit=`, "{ trades: Trade[] }"],
   ["GET", `${API_ROUTES.chart(":idOrMint")}?interval=1m|5m|1h`, "{ points: PricePoint[] }"],
   ["POST", API_ROUTES.launches, `Offchain mode with a bearer token (required when not in demo): creates a real launch with creator = session wallet. On mainnet the commit window must be ${MAINNET_COMMIT_WINDOW} and the quote asset SOL or USDC (rolling out). Demo without a token: in-memory demo launch. Onchain mode, not demo: 501 \"sign client-side\" with create_launch args in atoms. 400 on invalid input (e.g. > 200 bps).`],
-  ["GET", API_ROUTES.auction(":idOrMint"), "{ launch, serverTimeTs } — public aggregates only."],
+  ["GET", API_ROUTES.auction(":idOrMint"), "{ launch, serverTimeTs }, public aggregates only."],
   ["POST", API_ROUTES.demoBid(":idOrMint"), "Demo only (403 otherwise; disabled on mainnet). { commitment, deposit, wallet? }; 409 if the commit window is closed."],
   ["GET", API_ROUTES.vault(":mint"), "{ launch, recentBuybacks (30), serverTimeTs }"],
-  ["GET", API_ROUTES.rewards(":mint", ":wallet"), "HolderReward — staked, claimable, claimed, eligible (false for snipers)."],
+  ["GET", API_ROUTES.rewards(":mint", ":wallet"), "HolderReward: staked, claimable, claimed, eligible (false for snipers)."],
   ["GET", API_ROUTES.revenue, "{ stats, recentBuybacks, ledger, daily (14 days) }"],
   ["GET", API_ROUTES.relayerPubkey, "{ pubkey (base64 x25519), relayerAddress }"],
   ["POST", API_ROUTES.relayerReveals, "SealedRevealEnvelope → { accepted, id }. 400 malformed / wrong key / bad payload, 401 bad signature, 404, 409 window closed."],
-  ["GET", API_ROUTES.privacyStatus, "PrivacyStatusResponse — available, simulated, ringId, escrowFunding, reason."],
+  ["GET", API_ROUTES.privacyStatus, "PrivacyStatusResponse: available, simulated, ringId, escrowFunding, reason."],
   ["POST", API_ROUTES.privacyRpc, "{ method, params } → raw Helius JSON-RPC (8 whitelisted methods, 120/min/IP)."],
   ["POST", "/api/rpc", "Browser RPC proxy (rolling out). JSON-RPC 2.0 body { jsonrpc, id, method, params } for an allowlisted set of Solana methods; others are rejected. Rate-limited per client (429). The RPC provider key stays on the server."],
   ["GET", API_ROUTES.llms, "text/plain agent guide, generated from live config and shared constants."],
 ];
 
 const CUSTODY: Array<[string, string, string, string]> = [
-  ["GET", CUSTODY_ROUTES.info, "CustodyInfoResponse — companyWallet, network, mode, payoutsEnabled, proofOfReserves[] (cached ~30 s)", "—"],
-  ["POST", CUSTODY_ROUTES.nonce, "{ wallet } → { nonce, message, expiresTs } (nonce valid 5 min; 429 when rate-limited)", "—"],
-  ["POST", CUSTODY_ROUTES.verify, "{ wallet, nonce, signature (base58) } → { token, wallet, expiresTs } (7-day session; 401 bad/expired/replayed nonce)", "—"],
+  ["GET", CUSTODY_ROUTES.info, "CustodyInfoResponse: companyWallet, network, mode, payoutsEnabled, proofOfReserves[] (cached ~30 s)", "none"],
+  ["POST", CUSTODY_ROUTES.nonce, "{ wallet } → { nonce, message, expiresTs } (nonce valid 5 min; 429 when rate-limited)", "none"],
+  ["POST", CUSTODY_ROUTES.verify, "{ wallet, nonce, signature (base58) } → { token, wallet, expiresTs } (7-day session; 401 bad/expired/replayed nonce)", "none"],
   ["GET", "/api/auth/session", "→ { wallet } for a live token, else 401", "bearer"],
   ["POST", "/api/auth/logout", "revokes the presented token → { ok: true }", "bearer"],
-  ["GET", CUSTODY_ROUTES.me, "AccountResponse — wallet, balances (available / locked), depositRef, companyWallet, network, sniperFlags", "bearer"],
-  ["GET", CUSTODY_ROUTES.depositInstructions(":asset" as never), "DepositInstructions — companyWallet, memo, asset, mint, minConfirmations, note. 400 for an unknown asset or one with no mint on this network", "bearer"],
+  ["GET", CUSTODY_ROUTES.me, "AccountResponse: wallet, balances (available / locked), depositRef, companyWallet, network, sniperFlags", "bearer"],
+  ["GET", CUSTODY_ROUTES.depositInstructions(":asset" as never), "DepositInstructions: companyWallet, memo, asset, mint, minConfirmations, note. 400 for an unknown asset or one with no mint on this network", "bearer"],
   ["GET", CUSTODY_ROUTES.deposits, "→ { deposits: DepositRecord[] } (latest 100)", "bearer"],
   ["POST", CUSTODY_ROUTES.deposits, "{ signature } nudges detection → 200 DepositRecord; 202 not yet finalized or not found (picked up automatically later); 404 the transaction holds no deposit for your memo; 400 failed tx; 503 no RPC configured", "bearer"],
   ["GET", CUSTODY_ROUTES.withdrawals, "→ { withdrawals: WithdrawalRecord[] } (latest 100)", "bearer"],
@@ -43,7 +43,7 @@ const CUSTODY: Array<[string, string, string, string]> = [
   ["POST", CUSTODY_ROUTES.reveal, "{ launchId, maxPrice, bidAmount, salt } (atoms as decimal strings, salt 64 hex) → { revealed: true }", "bearer"],
   ["POST", CUSTODY_ROUTES.swap, "{ launchId, side, amountIn, minAmountOut } → { tradeId, amountIn, amountOut, fee, price, isSniper }. Optional Idempotency-Key header", "bearer"],
   ["POST", CUSTODY_ROUTES.claim(":launchId"), "after clearing → { tokens, refund }", "bearer"],
-  ["POST", CUSTODY_ROUTES.stake, "{ launchId, amount } — negative amount unstakes → { staked, eligible }. Optional Idempotency-Key", "bearer"],
+  ["POST", CUSTODY_ROUTES.stake, "{ launchId, amount }; a negative amount unstakes → { staked, eligible }. Optional Idempotency-Key", "bearer"],
   ["POST", CUSTODY_ROUTES.claimRewards(":launchId"), "→ { amount }", "bearer"],
   ["GET", `${CUSTODY_ROUTES.adminWithdrawals}?status=`, "operator queue (default pending_approval, queued, sending) → { withdrawals, payoutsEnabled }. Requires ADMIN_TOKEN", "x-admin-token"],
   ["POST", CUSTODY_ROUTES.adminWithdrawals, "{ id, action: approve | reject, reason? } → WithdrawalRecord. Approve moves pending_approval → queued; reject unlocks funds", "x-admin-token"],
@@ -110,7 +110,7 @@ export default function ApiReference() {
       <H3 id="ex-launch">Example: a launch in reveal</H3>
       <CodeBlock
         lang="json"
-        title="GET /api/launches?status=auctions&limit=1 (devnet demo, trimmed)"
+        title="GET /api/launches?status=auctions&limit=1 (trimmed)"
         code={`{
   "launches": [{
     "id": "Ccrm8zMN6fJFrHGnm9dHHKAquAPTJdJsX2xj7LgGKZXw",
@@ -125,7 +125,7 @@ export default function ApiReference() {
       "targetRaise": 231.61, "clearingCap": 347.415, "clearingPrice": null, "totalRaised": null
     },
     "market": null, "vault": null, "credit": null,
-    "network": "devnet", "isDemo": true
+    "network": "mainnet", "isDemo": false
   }],
   "total": 5
 }`}
@@ -169,7 +169,7 @@ export default function ApiReference() {
       />
       <CodeBlock
         lang="json"
-        title="POST /api/account/deposits — 202 while the transaction is not final yet"
+        title="POST /api/account/deposits: 202 while the transaction is not final yet"
         code={`{ "id": "<signature>", "signature": "<signature>", "asset": "SOL", "amount": 0, "status": "detected",
   "ts": 1795692450, "reason": "not yet finalized (or not found); it will be picked up automatically" }`}
       />

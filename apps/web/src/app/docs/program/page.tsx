@@ -8,24 +8,24 @@ const snake = (s: string) => s.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
 
 /** Caller + account list per instruction, transcribed from programs/sealed-launchpad/idl/sealed_launchpad.json (* = signer). */
 const IX_META: Record<keyof typeof INSTRUCTIONS, { caller: string; accounts: string; emits: string }> = {
-  initializeProtocol: { caller: "admin, once", accounts: "admin*, protocol, system_program", emits: "—" },
-  fundCreditPool: { caller: "anyone", accounts: "funder*, protocol, quote_mint, credit_pool, credit_vault, funder_quote", emits: "—" },
+  initializeProtocol: { caller: "admin, once", accounts: "admin*, protocol, system_program", emits: "none" },
+  fundCreditPool: { caller: "anyone", accounts: "funder*, protocol, quote_mint, credit_pool, credit_vault, funder_quote", emits: "none" },
   createLaunch: { caller: "creator", accounts: "creator*, protocol, mint_authority, token_mint*, quote_mint, launch, escrow, stake_vault, rewards_vault, creator_token", emits: "LaunchCreated" },
   commitBid: { caller: "bidder, commit window", accounts: "bidder*, launch, bid, escrow, bidder_quote", emits: "BidCommitted" },
   revealBid: { caller: "anyone with the preimage, reveal window", accounts: "payer*, launch, bidder, bid", emits: "BidRevealed" },
   clearAuction: { caller: "anyone, after reveal_end", accounts: "cranker*, launch", emits: "AuctionCleared" },
-  claimOrRefund: { caller: "bidder, after clear", accounts: "bidder*, protocol, launch, bid (closed), token_mint, mint_authority, escrow, bidder_quote, bidder_token, treasury_quote, position, stake_vault, anti_snipe", emits: "—" },
+  claimOrRefund: { caller: "bidder, after clear", accounts: "bidder*, protocol, launch, bid (closed), token_mint, mint_authority, escrow, bidder_quote, bidder_token, treasury_quote, position, stake_vault, anti_snipe", emits: "none" },
   graduateAndOpenCredit: { caller: "anyone, after clear", accounts: "cranker*, protocol, launch, token_mint, mint_authority, quote_mint, escrow, pool, pool_quote, pool_token, buyback_vault, fee_collector, credit_pool, credit_vault", emits: "Graduated (+ FlywheelActivated if credit = 0)" },
   swap: { caller: "anyone, live", accounts: "user*, protocol, launch, token_mint, pool, pool_quote, pool_token, fee_collector, user_quote, user_token, anti_snipe", emits: "SwapEvent, SniperFlagged" },
   executeBuybackDrip: { caller: "anyone, when due", accounts: "cranker*, launch, token_mint, pool, pool_quote, pool_token, buyback_vault", emits: "BuybackDrip" },
   distributeFees: { caller: "anyone, live", accounts: "cranker*, protocol, launch, credit_pool, credit_vault, fee_collector, rewards_vault, platform_ops_quote, treasury_quote", emits: "FeesDistributed, FlywheelActivated" },
-  stake: { caller: "holder (not a sniper)", accounts: "owner*, launch, position, stake_vault, owner_token, anti_snipe", emits: "—" },
-  unstake: { caller: "holder", accounts: "owner*, launch, position, stake_vault, owner_token", emits: "—" },
-  claimRewards: { caller: "holder (not a sniper)", accounts: "owner*, launch, position, rewards_vault, owner_quote, anti_snipe", emits: "—" },
+  stake: { caller: "holder (not a sniper)", accounts: "owner*, launch, position, stake_vault, owner_token, anti_snipe", emits: "none" },
+  unstake: { caller: "holder", accounts: "owner*, launch, position, stake_vault, owner_token", emits: "none" },
+  claimRewards: { caller: "holder (not a sniper)", accounts: "owner*, launch, position, rewards_vault, owner_quote, anti_snipe", emits: "none" },
 };
 
 const SEED_SUFFIX: Record<keyof typeof SEEDS, string> = {
-  protocol: "—",
+  protocol: "",
   creditPool: "quote_mint",
   launch: "token_mint",
   bid: "launch, bidder",
@@ -43,7 +43,7 @@ const SEED_SUFFIX: Record<keyof typeof SEEDS, string> = {
 
 const EVENTS: Array<[string, string]> = [
   ["LaunchCreated", "launch, mint, creator, quote_mint"],
-  ["BidCommitted", "launch, bid_count, total_escrowed — aggregates only"],
+  ["BidCommitted", "launch, bid_count, total_escrowed (aggregates only)"],
   ["BidRevealed", "launch, revealed_count"],
   ["AuctionCleared", "launch, clearing_price, total_raised, tokens_sold"],
   ["Graduated", "launch, slot, credit_line"],
@@ -70,12 +70,12 @@ export default function ProgramReference() {
         lede="The Anchor program is the roadmap execution mode: every rule on these pages enforced by Solana instead of by Sealed's backend. It builds, and its unit and lifecycle tests pass locally, but it is not deployed anywhere yet."
       >
         <StatusBadge status="chain-pending" />
-        <StatusBadge status="planned" label="Onchain mode — roadmap" />
+        <StatusBadge status="planned" label="Onchain mode · roadmap" />
       </DocHeader>
 
       <Note title="Deployment status" tone="warn">
         <p>
-          Program id <C>{PROGRAM_ID}</C> (keypair in <C>target/deploy</C>) has <strong>no account on devnet</strong> as of 2026-11-26. <C>anchor build</C>{" "}
+          Program id <C>{PROGRAM_ID}</C> (keypair in <C>target/deploy</C>) has <strong>no deployed account</strong> as of 2026-11-26. <C>anchor build</C>{" "}
           succeeds locally, but nothing has been deployed. Anchor 0.32, Solana 2.2. The IDL is committed at <C>programs/sealed-launchpad/idl/sealed_launchpad.json</C>.
         </p>
       </Note>
@@ -93,7 +93,7 @@ export default function ProgramReference() {
           <C key="n">{snake(k)}</C>,
           IX_META[k].caller,
           <span key="a" className="font-mono text-[12px]">
-            {INSTRUCTIONS[k].args.length ? INSTRUCTIONS[k].args.join(", ") : "—"}
+            {INSTRUCTIONS[k].args.length ? INSTRUCTIONS[k].args.join(", ") : "none"}
           </span>,
           <span key="c" className="font-mono text-[12px]">
             {IX_META[k].accounts}
@@ -150,7 +150,7 @@ export default function ProgramReference() {
           ...(Object.keys(SEEDS) as Array<keyof typeof SEEDS>).map((k) => [
             k,
             <span key="s" className="font-mono text-[12px]">
-              &quot;{SEEDS[k]}&quot;{SEED_SUFFIX[k] !== "—" ? `, ${SEED_SUFFIX[k]}` : ""}
+              &quot;{SEEDS[k]}&quot;{SEED_SUFFIX[k] ? `, ${SEED_SUFFIX[k]}` : ""}
             </span>,
           ]),
           ["creditVault (program-only)", <span key="s" className="font-mono text-[12px]">&quot;credit_vault&quot;, quote_mint</span>],
@@ -167,7 +167,7 @@ export default function ProgramReference() {
         dense
         head={["Code", "Name"]}
         rows={[...PROGRAM_ERRORS, ...EXTRA_ERRORS].map((n, i) => [<N key="c">{6000 + i}</N>, <C key="n">{n}</C>])}
-        caption="6000–6022 follow PROGRAM_ERRORS in program.ts; 6023–6027 are program-only."
+        caption="6000 to 6022 follow PROGRAM_ERRORS in program.ts; 6023 to 6027 are program-only."
       />
 
       <H2 id="tests" n="8.7">Tests</H2>

@@ -36,6 +36,9 @@ COPY programs/sealed-launchpad/idl programs/sealed-launchpad/idl
 RUN pnpm --filter @sealed/shared build \
  && pnpm --filter @sealed/api exec prisma generate \
  && pnpm --filter @sealed/api exec tsc -p tsconfig.json
+# Fail the build if sharp's prebuilt linux-x64 (glibc) binary + bundled libvips were not installed
+# (pnpm picks the platform optional dep @img/sharp-linux-x64 at install time inside this container).
+RUN cd apps/api && node -e "import('sharp').then(async ({default: s}) => { await s({create:{width:64,height:64,channels:3,background:'#000'}}).webp().toBuffer(); console.log('sharp ok, libvips', s.versions.vips); })"
 
 # Note: dev deps are intentionally kept — the `prisma` CLI is needed at boot for `db push`.
 

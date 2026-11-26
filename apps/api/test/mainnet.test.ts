@@ -243,12 +243,13 @@ describe("mainnet app (offchain, in-memory ledger injected)", () => {
     const r = await app.inject({ method: "POST", url: "/api/account/withdrawals", headers: { authorization: `Bearer ${token}` }, payload: { asset: "USDC", amount: 1, destination: wallet } });
     assert.equal(r.statusCode, 201, r.body);
     assert.equal(r.json().status, "pending_approval");
-    assert.match(r.json().reason, /ADMIN_TOKEN/);
+    assert.match(r.json().reason, /manual approval/);
     assert.equal((await app.inject({ method: "GET", url: "/api/admin/withdrawals", headers: { "x-admin-token": "x" } })).statusCode, 503);
     const info = (await app.inject({ method: "GET", url: "/api/custody/info" })).json();
     assert.equal(info.network, "mainnet");
     assert.equal(info.payoutsEnabled, false);
-    assert.match(info.payoutsReason, /COMPANY_WALLET_SECRET_KEY/);
+    assert.match(info.payoutsReason, /automatic payouts unavailable/);
+    assert.doesNotMatch(String(info.payoutsReason), /[A-Z]{3,}_[A-Z_]+/); // never leak env var names
     assert.deepEqual(info.proofOfReserves.map((x: { asset: string }) => x.asset), ["SOL", "USDC"]);
   });
 });

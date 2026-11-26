@@ -31,7 +31,7 @@ export function RewardsCard({ launch }: { launch: LaunchSummary }) {
   return (
     <section className="card p-5 sm:p-6" aria-label="Your claimable rewards">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2">
-        <p className="section-mark">§ Rewards — Yours</p>
+        <p className="section-mark">§ Rewards · Yours</p>
         <AntiSnipeBadge eligible={reward ? reward.eligible : null} />
       </div>
       <h2 className="mt-2 font-display text-display-sm text-ink">Claimable rewards</h2>

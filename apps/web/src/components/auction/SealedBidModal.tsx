@@ -95,7 +95,7 @@ export function SealedBidModal({ open, onClose, launch, args, status, error, onC
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <span className="section-mark">§ Sealed bid — ${launch.ticker}</span>
+                <span className="section-mark">§ Sealed bid · ${launch.ticker}</span>
                 <h3 id="sealed-bid-title" className="mt-2 font-display text-display-md text-ink">{done ? <>Your bid is <span className="accent">sealed</span></> : <>Seal your <span className="accent">bid</span></>}</h3>
               </div>
               <button onClick={() => !busy && onClose()} className="rounded-full border border-rule p-2 text-ink-slate transition hover:border-rule-strong hover:text-ink" aria-label="Close dialog">

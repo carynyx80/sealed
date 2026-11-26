@@ -158,7 +158,7 @@ export function ClaimPanel({ launch: L, variant }: { launch: LaunchSummary; vari
   }
   return (
     <section className="card min-w-0 p-5 sm:p-6" aria-labelledby="claim-title">
-      <p className="section-mark">§ Auction — Settlement</p>
+      <p className="section-mark">§ Auction · Settlement</p>
       <h2 id="claim-title" className="mt-3 font-display text-display-sm text-ink">
         {receipt ? <>Your allocation is <span className="accent">in</span></> : <>Claim your <span className="accent">allocation</span></>}
       </h2>

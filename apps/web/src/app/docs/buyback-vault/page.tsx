@@ -31,7 +31,7 @@ export default function BuybackVault() {
             A buyback budget on <Accent>day one</Accent>, that nobody can withdraw.
           </>
         }
-        lede="At graduation the Protocol Credit Pool advances a fee-credit line of 10–15% of the raise into a vault that can only buy the token and burn it. Pool fees repay the line later."
+        lede="At graduation the Protocol Credit Pool advances a fee-credit line of 10 to 15% of the raise into a vault that can only buy the token and burn it. Pool fees repay the line later."
       >
         <StatusBadge status="demo" />
         <StatusBadge status="offchain-passing" label="Offchain ledger · tests passing" />
@@ -49,7 +49,7 @@ export default function BuybackVault() {
           <N key="b">{CREDIT_TIERS[t]}</N>,
           <N key="p">{pct(CREDIT_TIERS[t])}</N>,
         ])}
-        caption="CREDIT_TIERS in @sealed/shared constants.ts. credit_bps outside 1,000–1,500 is rejected (InvalidCreditBps)."
+        caption="CREDIT_TIERS in @sealed/shared constants.ts. credit_bps outside 1,000 to 1,500 is rejected (InvalidCreditBps)."
       />
       <P>
         The cap by available liquidity means a thin Credit Pool advances less, never more than it holds. <C>max_credit_per_launch</C> is set once in{" "}
@@ -61,7 +61,7 @@ export default function BuybackVault() {
       <P>
         The vault is spent in <N>{DEFAULT_DRIP_COUNT}</N> equal slices by default, one every <N>{DEFAULT_DRIP_INTERVAL_SEC}</N> s (allowed{" "}
         <N>
-          {MIN_DRIP_INTERVAL_SEC}–{MAX_DRIP_INTERVAL_SEC}
+          {MIN_DRIP_INTERVAL_SEC} to {MAX_DRIP_INTERVAL_SEC}
         </N>{" "}
         s). The last drip sweeps whatever remains, so the vault ends at exactly zero.
       </P>
@@ -87,7 +87,7 @@ export default function BuybackVault() {
       <Ledger
         items={[
           { k: "Onchain mode", s: "chain-pending", v: <>The vault is a token account at PDA <C>[&quot;buyback_vault&quot;, launch]</C> whose authority is the launch PDA. The only instruction that moves funds out is <C>execute_buyback_drip</C>, which sends them to the pool&apos;s quote reserve. There is no admin, creator or arbitrary-destination path.</> },
-          { k: "Tests that cover it", v: <>Anchor tests &ldquo;exposes exactly the contract instructions — no vault withdraw path&rdquo; and &ldquo;buyback vault cannot be withdrawn with a forged authority&rdquo; (both pass in the 18/18 anchor run).</> },
+          { k: "Tests that cover it", v: <>Anchor tests &ldquo;exposes exactly the contract instructions, no vault withdraw path&rdquo; and &ldquo;buyback vault cannot be withdrawn with a forged authority&rdquo; (both pass in the 18/18 anchor run).</> },
           { k: "Bounded cranks", v: <>Drips are permissionless but gated by <C>DripNotDue</C> and <C>VaultEmpty</C>. A hostile caller can only run a drip that is already due.</> },
           { k: "Offchain mode", s: "offchain-passing", v: <>The vault is a ledger account whose only allowed posting is a drip into the pool. This is a <strong>policy enforced by Sealed&apos;s backend</strong>, not by a program: in custodial mode you trust the operator to keep it. See <A href="/docs/custody">Custody</A>.</> },
         ]}

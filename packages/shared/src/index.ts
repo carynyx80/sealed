@@ -12,3 +12,4 @@ export * from "./relayer.js";
 export * from "./demo.js";
 export * from "./program.js";
 export * from "./custody.js";
+export * from "./uploads.js";

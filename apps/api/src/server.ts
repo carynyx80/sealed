@@ -29,7 +29,10 @@ import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
 import { custodyRoutes } from "./routes/custody.js";
 import { rpcProxyRoutes, type RpcProxyOptions } from "./routes/rpc.js";
+import { uploadRoutes } from "./routes/uploads.js";
+import { createImageStore, type ImageStore } from "./uploads/imageStore.js";
 import { buildCustody, type CustodyDeps, type CustodyRuntime } from "./offchain/custody/index.js";
+import { PrivacyRuntime, type PrivacyDeps } from "./offchain/privacy/service.js";
 import { CompositeStore } from "./offchain/readModel.js";
 import { createOffchainRuntime, startOffchainScheduler } from "./offchain/runtime.js";
 import { MemoryStore } from "./store/index.js";
@@ -49,9 +52,13 @@ export interface BuildOptions {
   offchainRepo?: OffchainRepo;
   /** RPC proxy overrides (tests: mocked upstream). */
   rpcProxy?: RpcProxyOptions;
+  /** Inject the token image store (tests). Default: Postgres when DATABASE_URL, else in-memory LRU. */
+  images?: ImageStore;
+  /** Privacy Ring overrides (tests: mocked SDK port / env). */
+  privacy?: PrivacyDeps;
 }
 
-export type App = FastifyInstance & { ctx: AppContext; hub: WsHub; custody: CustodyRuntime };
+export type App = FastifyInstance & { ctx: AppContext; hub: WsHub; custody: CustodyRuntime; privacy: PrivacyRuntime };
 
 export async function buildServer(opts: BuildOptions = {}): Promise<App> {
   const cfg = opts.config ?? loadConfig();
@@ -72,7 +79,8 @@ export async function buildServer(opts: BuildOptions = {}): Promise<App> {
   const store: Store = offchain || demoStore ? new CompositeStore(baseStore, demoStore, offchain?.engine ?? null) : baseStore;
   if (store !== baseStore) await store.init();
   if (relayer.ephemeral && !cfg.isDemo) app.log.warn("relayer: RELAYER_BOX_SEED / RELAYER_SECRET_KEY not set — using ephemeral keys (reveals will not survive restarts)");
-  const ctx: AppContext = { cfg, store, cache, bus, relayer, startedAt: Date.now(), offchain };
+  const images = opts.images ?? (await createImageStore(cfg.databaseUrl, app.log));
+  const ctx: AppContext = { cfg, store, cache, bus, relayer, startedAt: Date.now(), offchain, images };
   const hub = new WsHub(ctx, app.log);
 
   await app.register(cors, { origin: cfg.corsOrigin, methods: ["GET", "POST", "OPTIONS"] });
@@ -94,14 +102,22 @@ export async function buildServer(opts: BuildOptions = {}): Promise<App> {
   await rewardRoutes(app, ctx);
   await revenueRoutes(app, ctx);
   await relayerRoutes(app, ctx);
-  await privacyRoutes(app, ctx);
   await llmsRoutes(app, ctx);
   const custody = await buildCustody(cfg, ctx.offchain?.ledger ?? null, app.log, opts.custody);
+  // Helius Privacy Rings (PRIVACY_RING_ENABLED, default off): identity + availability probe, never spends on boot.
+  const privacy = PrivacyRuntime.create(cfg, custody, app.log, opts.privacy);
+  await privacy.boot();
+  if (privacy.config.enabled) {
+    custody.payouts?.setPrivatePayouts(privacy.payoutHandler(), (s) => privacy.shieldedHoldings(s));
+    custody.reserves.setExtraHoldings((s) => privacy.shieldedHoldings(s));
+  }
+  await privacyRoutes(app, ctx, undefined, privacy);
   await authRoutes(app, ctx, custody);
-  await accountRoutes(app, ctx, custody);
+  await accountRoutes(app, ctx, custody, privacy);
   await custodyRoutes(app, ctx, custody);
-  await adminRoutes(app, ctx, custody);
+  await adminRoutes(app, ctx, custody, privacy);
   await tradeRoutes(app, ctx);
+  await uploadRoutes(app, ctx);
   await rpcProxyRoutes(app, ctx, opts.rpcProxy);
   await registerWs(app, hub);
 
@@ -111,6 +127,7 @@ export async function buildServer(opts: BuildOptions = {}): Promise<App> {
     stops.push(startRevealRelayer(ctx, app.log));
     stops.push(startBuybackKeeper(ctx, app.log));
     if (custody.config.workers) stops.push(custody.start());
+    if (custody.config.workers && privacy.config.enabled) stops.push(privacy.start());
     if (offchain) stops.push(startOffchainScheduler(offchain.engine, app.log, cfg.offchainTickMs));
     startIndexer(ctx, app.log).then((s) => stops.push(s)).catch((err) => app.log.error({ err }, "indexer failed to start"));
   }
@@ -118,13 +135,14 @@ export async function buildServer(opts: BuildOptions = {}): Promise<App> {
   app.addHook("onClose", async () => {
     stops.forEach((s) => s());
     await custody.close();
+    await images.close().catch(() => undefined);
     hub.stop();
     await store.close().catch(() => undefined);
     await offchain?.repo.close().catch(() => undefined);
     await cache.close().catch(() => undefined);
   });
 
-  return Object.assign(app, { ctx, hub, custody }) as App;
+  return Object.assign(app, { ctx, hub, custody, privacy }) as App;
 }
 
 async function main() {

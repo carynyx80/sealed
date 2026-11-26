@@ -7,6 +7,7 @@ import { useReducedMotion } from "@/components/motion/reduced";
 import { fmtAgo, fmtAmount, fmtCompact, fmtUsd, shortAddr, solscanTx } from "@/lib/format";
 import { SPRING } from "../motion/spring";
 import { ArrowUpRight } from "../ui/Icons";
+import { TokenAvatar } from "../ui/TokenAvatar";
 
 export const utcStamp = (ts: number) => {
   const iso = new Date(ts * 1000).toISOString();
@@ -55,7 +56,10 @@ function Row({ id, children, reduce }: { id: string; children: ReactNode; reduce
   );
 }
 
-export function BuybackTable({ rows, network, now }: { rows: BuybackEvent[]; network: Network; now: number | null }) {
+/** launchId to imageUri, so ledger rows can show each token's mark. */
+export type TokenImages = Record<string, string>;
+
+export function BuybackTable({ rows, network, now, images = {} }: { rows: BuybackEvent[]; network: Network; now: number | null; images?: TokenImages }) {
   const reduce = useReducedMotion();
   return (
     <table className="w-full table-fixed text-[12px]">
@@ -72,8 +76,9 @@ export function BuybackTable({ rows, network, now }: { rows: BuybackEvent[]; net
         <AnimatePresence initial={false}>
           {rows.map((b) => (
             <Row key={b.id} id={b.id} reduce={reduce}>
-              <td className={clsx(td, "num text-ink-muted")} title={utcStamp(b.ts)}>{now === null ? "—" : fmtAgo(b.ts, now)}</td>
+              <td className={clsx(td, "num text-ink-muted")} title={utcStamp(b.ts)}>{now === null ? "…" : fmtAgo(b.ts, now)}</td>
               <td className={clsx(td, "truncate")}>
+                <TokenAvatar src={images[b.launchId]} ticker={b.ticker} size={18} className="mr-1.5 align-[-4px]" />
                 <span className="font-medium text-ink">${b.ticker}</span>
                 <span className="num ml-1.5 hidden text-[10px] text-ink-muted sm:inline">#{b.dripIndex}</span>
               </td>
@@ -90,7 +95,7 @@ export function BuybackTable({ rows, network, now }: { rows: BuybackEvent[]; net
   );
 }
 
-export function CreditLedgerTable({ rows, network, now }: { rows: CreditLedgerEntry[]; network: Network; now: number | null }) {
+export function CreditLedgerTable({ rows, network, now, images = {} }: { rows: CreditLedgerEntry[]; network: Network; now: number | null; images?: TokenImages }) {
   const reduce = useReducedMotion();
   return (
     <table className="w-full table-fixed text-[12px]">
@@ -107,12 +112,15 @@ export function CreditLedgerTable({ rows, network, now }: { rows: CreditLedgerEn
         <AnimatePresence initial={false}>
           {rows.map((e) => (
             <Row key={e.id} id={e.id} reduce={reduce}>
-              <td className={clsx(td, "num hidden text-ink-muted sm:table-cell")} title={utcStamp(e.ts)}>{now === null ? "—" : fmtAgo(e.ts, now)}</td>
+              <td className={clsx(td, "num hidden text-ink-muted sm:table-cell")} title={utcStamp(e.ts)}>{now === null ? "…" : fmtAgo(e.ts, now)}</td>
               <td className={clsx(td, "truncate")}>
                 <span className={clsx("mr-2 inline-block h-1.5 w-1.5 -translate-y-px", KIND[e.kind].mark)} aria-hidden />
                 <span className="text-ink-soft">{KIND[e.kind].label}</span>
               </td>
-              <td className={clsx(td, "truncate font-medium text-ink")}>${e.ticker}</td>
+              <td className={clsx(td, "truncate font-medium text-ink")}>
+                <TokenAvatar src={images[e.launchId]} ticker={e.ticker} size={18} className="mr-1.5 hidden align-[-4px] sm:inline-flex" />
+                ${e.ticker}
+              </td>
               <td className={clsx(td, "text-right")}>
                 <span className="num block truncate text-ink">{fmtAmount(e.amount)} <span className="text-ink-muted">{e.quoteAsset}</span></span>
                 <span className="num block text-[10px] text-ink-muted">≈ {fmtUsd(e.amount * QUOTE_ASSETS[e.quoteAsset].demoUsdPrice)}</span>

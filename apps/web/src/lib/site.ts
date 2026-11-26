@@ -3,7 +3,7 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.sealed
 export const SITE_HOST = new URL(SITE_URL).host;
 export const SITE_NAME = "Sealed";
 export const SITE_TAGLINE = "Sealed-Block Launchpad on Solana";
-export const SITE_TITLE = `${SITE_NAME} — ${SITE_TAGLINE}`;
+export const SITE_TITLE = `${SITE_NAME} · ${SITE_TAGLINE}`;
 export const SITE_DESCRIPTION =
   "Sealed-bid token launches on Solana with one uniform clearing price, day-one fee-credit buybacks, auto-repay and a permanent holder flywheel.";
 export const SITE_KEYWORDS = ["Solana", "launchpad", "sealed-bid auction", "commit-reveal", "uniform price", "buyback", "token launch", "flywheel"];
@@ -19,4 +19,4 @@ export const SOCIAL = {
 };
 
 /** Static, indexable routes (token pages are dynamic and excluded). */
-export const STATIC_ROUTES = ["/", "/launch", "/revenue", "/account", "/docs"] as const;
+export const STATIC_ROUTES = ["/", "/how-it-works", "/launch", "/revenue", "/account", "/docs"] as const;

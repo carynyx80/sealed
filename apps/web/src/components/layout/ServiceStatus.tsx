@@ -1,5 +1,5 @@
 "use client";
-// "Service unavailable — retrying" band, shown under the nav whenever the data source is "offline" (mainnet with
+// "Service unavailable · retrying" band, shown under the nav whenever the data source is "offline" (mainnet with
 // the Sealed API unreachable). Mainnet never falls back to demo data, so this is the honest state: live figures,
 // launches and balances are withheld until the API answers again; nothing is simulated in the meantime.
 import { useEffect, useState } from "react";
@@ -40,7 +40,7 @@ export function ServiceStatus() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-burn-bright opacity-60 motion-reduce:hidden" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-burn-bright" />
               </span>
-              <span className="text-[13px] font-semibold">Service unavailable — retrying</span>
+              <span className="text-[13px] font-semibold">Service unavailable · retrying</span>
             </span>
             <span className="min-w-0 flex-1 text-[12px] leading-relaxed text-night-muted">
               The Sealed API isn&apos;t responding. Live launches, prices and balances are paused; nothing shown is simulated.

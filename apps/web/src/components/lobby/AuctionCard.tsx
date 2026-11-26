@@ -57,7 +57,7 @@ export function AuctionCard({ launch, index }: { launch: LaunchSummary; index?: 
     <Link href={`/token/${launch.mint}`} className="block h-full rounded-card focus:outline-none focus-visible:ring-2 focus-visible:ring-signal/40">
       <SpringCard className="flex h-full flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-rule px-5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-muted">
-          <span>Lot {index !== undefined ? String(index + 1).padStart(2, "0") : "—"} · <span className={reveal ? "text-burn" : "text-ink"}>{PHASE_LABEL[launch.status]}</span></span>
+          <span>{index !== undefined && <>Lot {String(index + 1).padStart(2, "0")} · </>}<span className={reveal ? "text-burn" : "text-ink"}>{PHASE_LABEL[launch.status]}</span></span>
           <QuoteBadge symbol={launch.quoteAsset} />
         </div>
         <div className="flex flex-1 flex-col p-5">

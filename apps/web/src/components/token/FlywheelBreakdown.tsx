@@ -119,7 +119,7 @@ function Phase({ n, title, when, state, items, amounts, q, showAmounts }: { n: s
                     {fmtAmount(amounts[s.key] ?? 0)} <span className="text-[10px]">{q}</span>
                   </>
                 ) : (
-                  "—"
+                  "n/a"
                 )}
               </dd>
               <dd className={clsx("num w-10 text-right", muted ? "text-ink-muted" : "text-ink")}>{s.bps / 100}%</dd>

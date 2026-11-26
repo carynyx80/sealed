@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
 import clsx from "clsx";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import type { Network, ProtocolStats } from "@sealed/shared";
-import { useNow, useRevenue } from "@/lib/live";
-import { IS_MAINNET, NETWORK } from "@/lib/config";
+import { useLaunches, useNow, useRevenue } from "@/lib/live";
+import { IS_MAINNET, NETWORK, networkName } from "@/lib/config";
 import { fmtAgo, fmtInt, fmtUsd } from "@/lib/format";
 import { RollingNumber } from "../motion/RollingNumber";
 import { FadeIn } from "../motion/FadeIn";
@@ -15,6 +15,8 @@ import { BuybackTable, CreditLedgerTable, utcStamp } from "./Ledgers";
 
 export function RevenueDashboard() {
   const { data } = useRevenue();
+  const launches = useLaunches().data;
+  const images = useMemo(() => Object.fromEntries((launches ?? []).filter((l) => l.imageUri).map((l) => [l.id, l.imageUri])), [launches]);
   const now = useNow();
   const network: Network = IS_MAINNET ? "mainnet" : data?.stats.network ?? NETWORK;
   const s = data?.stats;
@@ -24,7 +26,7 @@ export function RevenueDashboard() {
       {/* masthead */}
       <header className="grid gap-8 border-b border-ink pb-8 lg:grid-cols-12 lg:items-end">
         <div className="lg:col-span-8">
-          <p className="section-mark">§ Public ledger — Statement of protocol revenue</p>
+          <p className="section-mark">§ Public ledger · Statement of protocol revenue</p>
           <h1 className="mt-4 text-display-lg text-ink">
             Revenue, credit
             <br /> &amp; <span className="accent">burn.</span>
@@ -34,9 +36,9 @@ export function RevenueDashboard() {
           </p>
         </div>
         <dl className="grid grid-cols-2 gap-x-6 text-[12px] lg:col-span-4 lg:grid-cols-1">
-          <MetaRow k="As of">{s ? utcStamp(s.updatedTs).slice(11) : "—"}</MetaRow>
-          <MetaRow k="Date">{s ? utcStamp(s.updatedTs).slice(0, 10) : "—"}</MetaRow>
-          <MetaRow k="Network">{network}</MetaRow>
+          <MetaRow k="As of">{s ? utcStamp(s.updatedTs).slice(11) : "…"}</MetaRow>
+          <MetaRow k="Date">{s ? utcStamp(s.updatedTs).slice(0, 10) : "…"}</MetaRow>
+          <MetaRow k="Network">{networkName(network)}</MetaRow>
           <MetaRow k="Source">
             <span className="inline-flex items-center gap-1.5">
               <span className={clsx("h-1.5 w-1.5 rounded-full", s ? "bg-gain motion-safe:animate-pulse-soft" : "bg-rule-strong")} />
@@ -53,7 +55,7 @@ export function RevenueDashboard() {
           {/* § 01 headline figures */}
           <section aria-labelledby="h-figures" className="mt-10">
             <div className="flex items-baseline justify-between gap-4">
-              <h2 id="h-figures" className="section-mark">§ 01 — Headline figures, cumulative</h2>
+              <h2 id="h-figures" className="section-mark">§ 01 · Headline figures, cumulative</h2>
               <span className="num hidden text-[11px] text-ink-muted sm:inline">USD unless stated</span>
             </div>
             <div className="mt-3 grid gap-px border-y border-ink bg-rule sm:grid-cols-2 lg:grid-cols-4">
@@ -77,7 +79,7 @@ export function RevenueDashboard() {
             </div>
             <ol className="mt-4 grid gap-x-8 gap-y-1 text-[11px] leading-relaxed text-ink-muted sm:grid-cols-2">
               <li><span className="num mr-1.5">1</span>1% pool fee on every trade, routed to each token&apos;s fee-collector PDA.</li>
-              <li><span className="num mr-1.5">2</span>Fee-credit lines of 10–15% of raise, advanced into locked buyback vaults at graduation.</li>
+              <li><span className="num mr-1.5">2</span>Fee-credit lines of 10 to 15% of raise, advanced into locked buyback vaults at graduation.</li>
               <li><span className="num mr-1.5">3</span>Solvency = credit-pool assets ÷ outstanding credit; ≥ 1.00× is fully covered.</li>
               <li><span className="num mr-1.5">4</span>Platform token, bought on the open market from flywheel fees and burned permanently.</li>
             </ol>
@@ -87,7 +89,7 @@ export function RevenueDashboard() {
           <FadeIn as="section" className="card-night mt-12 overflow-hidden">
             <div className="grid gap-10 p-6 sm:p-10 lg:grid-cols-12">
               <div className="lg:col-span-5">
-                <p className="num text-[11px] uppercase tracking-[0.08em] text-night-muted">§ 02 — Fee waterfall</p>
+                <p className="num text-[11px] uppercase tracking-[0.08em] text-night-muted">§ 02 · Fee waterfall</p>
                 <h2 className="mt-4 text-display-md text-night-text">
                   Fees repay the credit first, then <span className="accent">pay holders</span> for good.
                 </h2>
@@ -97,14 +99,14 @@ export function RevenueDashboard() {
               </div>
               <div className="space-y-8 lg:col-span-7">
                 <Waterfall
-                  title="Priority 1 — until credit is 100% repaid"
+                  title="Priority 1 · until credit is 100% repaid"
                   parts={[
                     { pct: 80, label: "Credit repayment", tone: "bg-night-text" },
                     { pct: 20, label: "Platform burn & ops", tone: "bg-burn" },
                   ]}
                 />
                 <Waterfall
-                  title="Priority 2 — permanent flywheel"
+                  title="Priority 2 · permanent flywheel"
                   parts={[
                     { pct: 50, label: "Holder payouts", tone: "bg-gain" },
                     { pct: 35, label: "Platform buyback & burn", tone: "bg-burn" },
@@ -141,12 +143,12 @@ export function RevenueDashboard() {
           <div className="mt-12 grid gap-12 lg:grid-cols-2 lg:gap-10">
             <FadeIn as="section" className="min-w-0">
               <LedgerHead mark="§ 04" title="Recent buybacks" count={Math.min(12, data.recentBuybacks.length)} now={now} ts={data.recentBuybacks[0]?.ts} />
-              <BuybackTable rows={data.recentBuybacks.slice(0, 12)} network={network} now={now} />
+              <BuybackTable rows={data.recentBuybacks.slice(0, 12)} network={network} now={now} images={images} />
               <p className="mt-3 text-[11px] text-ink-muted">Programmatic vault drips: quote asset spent on the open market, tokens received burned in the same transaction.</p>
             </FadeIn>
             <FadeIn as="section" className="min-w-0" delay={0.05}>
               <LedgerHead mark="§ 05" title="Credit ledger" count={Math.min(12, data.ledger.length)} now={now} ts={data.ledger[0]?.ts} />
-              <CreditLedgerTable rows={data.ledger.slice(0, 12)} network={network} now={now} />
+              <CreditLedgerTable rows={data.ledger.slice(0, 12)} network={network} now={now} images={images} />
               <p className="mt-3 text-[11px] text-ink-muted">Advances out of, and repayments into, the Protocol Credit Pool, with flywheel distributions once a line is repaid.</p>
             </FadeIn>
           </div>
@@ -154,7 +156,7 @@ export function RevenueDashboard() {
           <footer className="mt-14 flex flex-col gap-2 border-t border-ink pt-4 text-[11px] text-ink-muted sm:flex-row sm:items-baseline sm:justify-between">
             <p>
               {s.isDemo ? "Simulated figures on " : "Indexed from "}
-              <span className="num text-ink-slate">{network}</span>. Transaction links open Solscan{network === "mainnet" ? "" : <> with <span className="num">?cluster={network === "localnet" ? "custom" : "devnet"}</span></>}.
+              <span className="num text-ink-slate">{networkName(network)}</span>. Transaction links open Solscan.
             </p>
             <p className="num">
               Compiled {utcStamp(s.updatedTs)} · <Link className="underline decoration-rule-strong underline-offset-4 hover:text-ink" href="/">Lobby</Link>
@@ -238,11 +240,11 @@ function LedgerHead({ mark, title, count, now, ts }: { mark: string; title: stri
   return (
     <div className="mb-1 flex items-end justify-between gap-3">
       <div>
-        <p className="section-mark">{mark} — {count} most recent</p>
+        <p className="section-mark">{mark} · {count} most recent</p>
         <h2 className="mt-2 text-display-sm text-ink">{title}</h2>
       </div>
       <p className="num pb-1 text-right text-[11px] text-ink-muted">
-        {ts && now !== null ? <>last entry {fmtAgo(ts, now)}</> : "—"}
+        {ts && now !== null ? <>last entry {fmtAgo(ts, now)}</> : null}
       </p>
     </div>
   );

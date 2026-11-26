@@ -2,8 +2,8 @@ import type { FastifyInstance } from "fastify";
 import {
   COMPANY_WALLET,
   DepositClaimSchema,
+  PrivateWithdrawRequestSchema,
   QUOTE_ASSETS,
-  WithdrawRequestSchema,
   isQuoteAssetSymbol,
   quoteAssetDisabledReason,
   type AccountResponse,
@@ -17,10 +17,11 @@ import { depositToDto } from "../offchain/custody/deposits.js";
 import type { CustodyRuntime } from "../offchain/custody/index.js";
 import { redact } from "../offchain/custody/rpc.js";
 import { CustodyError } from "../offchain/custody/withdrawals.js";
+import type { PrivacyRuntime } from "../offchain/privacy/service.js";
 
 const SMALL_BODY = 4 * 1024;
 
-export async function accountRoutes(app: FastifyInstance, ctx: AppContext, custody: CustodyRuntime) {
+export async function accountRoutes(app: FastifyInstance, ctx: AppContext, custody: CustodyRuntime, privacy?: PrivacyRuntime) {
   const claimLimit = new RateLimiter(10);
   const withdrawLimit = new RateLimiter(10);
 
@@ -88,11 +89,32 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext, custo
   }));
 
   app.post("/api/account/withdrawals", { bodyLimit: SMALL_BODY, preHandler: requireAuth }, async (req, reply) => {
-    const p = WithdrawRequestSchema.safeParse(req.body ?? {});
+    const p = PrivateWithdrawRequestSchema.safeParse(req.body ?? {});
     if (!p.success) return sendError(reply, 400, "invalid withdrawal request", zodDetails(p.error));
     if (!withdrawLimit.hit(req.wallet!)) return sendError(reply, 429, "too many withdrawal requests, slow down");
+    const { privateTo, ...pub } = p.data;
+    if (privateTo !== undefined) {
+      // Private payout (Helius Privacy Ring confidential transfer): same limits / approval / idempotency as public.
+      if (!privacy || !privacy.enabled) return reply.code(503).send({ enabled: false, reason: privacy?.reason ?? "Private withdrawals are turned off on this deployment." });
+      if (!privacy.supports(pub.asset)) return sendError(reply, 400, `${pub.asset} cannot be withdrawn privately`);
+      let chk;
+      try {
+        chk = await privacy.checkRecipient(privateTo);
+      } catch (err) {
+        req.log.warn({ err: redact((err as Error).message) }, "privacy: recipient check failed");
+        return sendError(reply, 503, "Privacy Ring temporarily unreachable, try again shortly");
+      }
+      if (!chk.ok) return sendError(reply, 400, chk.reason);
+      try {
+        const w = await custody.withdrawals.request(req.wallet!, { ...pub, privateTo: chk.normalized });
+        return reply.code(201).send(custody.withdrawals.dto(w));
+      } catch (e) {
+        if (e instanceof CustodyError) return sendError(reply, e.statusCode, e.message);
+        throw e;
+      }
+    }
     try {
-      const w = await custody.withdrawals.request(req.wallet!, p.data);
+      const w = await custody.withdrawals.request(req.wallet!, pub);
       return reply.code(201).send(custody.withdrawals.dto(w));
     } catch (e) {
       if (e instanceof CustodyError) return sendError(reply, e.statusCode, e.message);

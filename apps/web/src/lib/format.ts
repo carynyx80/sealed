@@ -3,11 +3,14 @@ import { explorerAccountUrl, explorerTxUrl } from "./config";
 
 const SUBSCRIPT = "₀₁₂₃₄₅₆₇₈₉";
 
+/** Typographic minus (U+2212) for negative values instead of an ASCII hyphen. */
+const minus = (s: string): string => s.replace(/^-/, "\u2212");
+
 /** Compact number: 1.2K, 3.4M, 5.6B. */
 export function fmtCompact(n: number, digits = 1): string {
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "n/a";
   const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
+  const sign = n < 0 ? "\u2212" : "";
   if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(digits)}B`;
   if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(digits)}M`;
   if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(digits)}K`;
@@ -15,22 +18,22 @@ export function fmtCompact(n: number, digits = 1): string {
 }
 
 export function fmtInt(n: number): string {
-  return Number.isFinite(n) ? Math.round(n).toLocaleString("en-US") : "—";
+  return Number.isFinite(n) ? Math.round(n).toLocaleString("en-US") : "n/a";
 }
 
 export function fmtUsd(n: number, compact = true): string {
-  if (!Number.isFinite(n)) return "—";
-  if (compact && Math.abs(n) >= 10_000) return `$${fmtCompact(n, 2)}`;
-  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (!Number.isFinite(n)) return "n/a";
+  if (compact && Math.abs(n) >= 10_000) return n < 0 ? `\u2212$${fmtCompact(-n, 2)}` : `$${fmtCompact(n, 2)}`;
+  return n < 0 ? `\u2212$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** Amount of a quote asset, e.g. "4.20". */
 export function fmtAmount(n: number, digits?: number): string {
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "n/a";
   const abs = Math.abs(n);
   if (abs >= 100_000 && digits === undefined) return fmtCompact(n, 2);
   const d = digits ?? (abs === 0 ? 2 : abs >= 1000 ? 0 : abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6);
-  return n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+  return minus(n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }));
 }
 
 export function fmtQuote(n: number, symbol: QuoteAssetSymbol | string, digits?: number): string {
@@ -53,9 +56,9 @@ export function fmtPrice(p: number): string {
 }
 
 export function fmtPct(n: number, digits = 1, signed = false): string {
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "n/a";
   const s = signed && n > 0 ? "+" : "";
-  return `${s}${n.toFixed(digits)}%`;
+  return `${s}${minus(n.toFixed(digits))}%`;
 }
 
 /** 01:42, or 1:02:03 when ≥ 1h. */

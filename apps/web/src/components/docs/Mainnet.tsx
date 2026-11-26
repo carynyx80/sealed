@@ -17,7 +17,7 @@ export const solscanAddress = (address: string) => `https://solscan.io/account/$
 export const COMPANY_WALLET_EXPLORER = explorerAddress(COMPANY_WALLET);
 
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
-export const MAINNET_COMMIT_WINDOW = `${MIN_COMMIT_DURATION_SEC_MAINNET / 60}–${MAX_COMMIT_DURATION_SEC / 60} min`;
+export const MAINNET_COMMIT_WINDOW = `${MIN_COMMIT_DURATION_SEC_MAINNET / 60} to ${MAX_COMMIT_DURATION_SEC / 60} min`;
 export const STOCK_SYMBOLS = STOCK_QUOTE_ASSETS.map((q) => q.symbol).join(", ");
 
 /** Prominent disclosure for real funds. Render near the top of any page that talks about depositing. */
@@ -76,7 +76,7 @@ export function MainnetRollout() {
         { k: "Admin approvals", s: "rolling", v: <>Approving or rejecting withdrawals and seeding the credit pool require <C>ADMIN_TOKEN</C> (header <C>x-admin-token</C>); without it the admin routes refuse every request.</> },
         { k: "Auction timing", s: "rolling", v: <>Launches on mainnet require a {MAINNET_COMMIT_WINDOW} commit window, enforced by the API.</> },
         { k: "Launched tokens", s: "rolling", v: "Custodial Sealed ledger balances. Trade, stake and claim them on Sealed; on-chain withdrawal of launched tokens is not available yet. Only SOL and USDC withdraw." },
-        { k: "Anchor program", s: "planned", v: "Roadmap only. Not deployed to mainnet or devnet." },
+        { k: "Anchor program", s: "planned", v: "Roadmap only. Not deployed." },
       ]}
     />
   );

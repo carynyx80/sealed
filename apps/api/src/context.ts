@@ -6,6 +6,7 @@ import type { EventBus } from "./events.js";
 import type { RelayerKeys } from "./services/solana.js";
 import type { Store } from "./store/index.js";
 import type { OffchainRuntime } from "./offchain/runtime.js";
+import type { ImageStore } from "./uploads/imageStore.js";
 
 export interface AppContext {
   cfg: AppConfig;
@@ -16,6 +17,8 @@ export interface AppContext {
   startedAt: number;
   /** Offchain custodial ledger + engine (EXECUTION_MODE=offchain). null when unavailable (e.g. mainnet DB down). */
   offchain?: OffchainRuntime | null;
+  /** Token image store (Postgres, or in-memory LRU without DATABASE_URL). */
+  images?: ImageStore;
 }
 
 export function sendError(reply: FastifyReply, code: number, error: string, details?: unknown) {

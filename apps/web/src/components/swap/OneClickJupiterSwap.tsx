@@ -30,7 +30,7 @@ import {
   type PoolReserves,
 } from "@sealed/defi";
 import { demoSignature, errorMessage, sleep } from "@/lib/defi/config";
-import { DEMO_ENABLED, explorerTxUrl } from "@/lib/config";
+import { DEMO_ENABLED, explorerTxUrl, networkName } from "@/lib/config";
 import { confirmSignature } from "@/lib/solana/tx";
 import { getSealedClient, launchKeys } from "@/lib/defi/program";
 import { custodyTrade, openDeposit, tokenAssetId, useCustodyBalance, useCustodySession } from "@/lib/custody";
@@ -43,7 +43,7 @@ const SLIPPAGE_BPS = 100;
 const TOKEN_DECIMALS = 6;
 
 function fmt(n: number, max = 6): string {
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "n/a";
   if (n !== 0 && Math.abs(n) < 10 ** -max) return n.toExponential(2);
   return n.toLocaleString("en-US", { maximumFractionDigits: max });
 }
@@ -109,7 +109,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
     const inMint = resolveQuoteAsset(payWith, launch.network).mint;
     const outMint = resolveQuoteAsset(launch.quoteAsset, launch.network).mint;
     if (!inMint || !outMint) {
-      setJupError(`${payWith} is not configured on ${launch.network}`);
+      setJupError(`${payWith} is not configured on ${networkName(launch.network)}`);
       return;
     }
     const ctrl = { cancelled: false };
@@ -185,7 +185,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
         setAmount("");
       } catch (e) {
         const m = errorMessage(e);
-        setMessage(/slippage|min.?amount/i.test(m) ? "Price moved beyond 1% slippage — try again" : m);
+        setMessage(/slippage|min.?amount/i.test(m) ? "Price moved beyond 1% slippage. Try again." : m);
         setPhase("error");
       }
       return;
@@ -239,7 +239,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
       setPhase("filled");
     } catch (e) {
       const code = programErrorName(e);
-      setMessage(code === "SlippageExceeded" ? "Price moved beyond 1% slippage — try again" : code ? `${code}: ${errorMessage(e)}` : errorMessage(e));
+      setMessage(code === "SlippageExceeded" ? "Price moved beyond 1% slippage. Try again." : code ? `${code}: ${errorMessage(e)}` : errorMessage(e));
       setPhase("error");
     }
   }
@@ -273,7 +273,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
       className="w-full rounded-card border border-rule bg-sheet p-5 text-ink shadow-card sm:p-6"
     >
       <div className="mb-4 flex items-baseline justify-between gap-3">
-        <p className="section-mark min-w-0">§ Trade — Swap</p>
+        <p className="section-mark min-w-0">§ Trade · Swap</p>
         <span className="shrink-0 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted">
           {offchain ? "Internal ledger" : launch.isDemo ? "Demo · simulated fills" : isMainnet ? "Pool · Jupiter" : "Internal pool"}
         </span>

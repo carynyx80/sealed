@@ -28,7 +28,7 @@ export function Clause({ n, label, hint, error, htmlFor, children, className }: 
         {children}
         {error && (
           <p role="alert" className="num mt-1.5 text-[11px] text-burn">
-            — {error}
+            {error}
           </p>
         )}
       </div>
@@ -70,7 +70,7 @@ export function StepRail({ steps, step, onGo }: { steps: readonly string[]; step
                 <span className={clsx("num flex items-center gap-1.5 text-[11px] tracking-[0.08em]", state === "todo" ? "text-ink-muted" : "text-ink")}>
                   § {STEP_ROMAN[i]}
                   {state === "done" && <CheckIcon width={11} height={11} className="text-gain" />}
-                  <span className="hidden text-ink-muted sm:inline">— {state === "done" ? "complete" : state === "current" ? "in draft" : "pending"}</span>
+                  <span className="hidden text-ink-muted sm:inline">· {state === "done" ? "complete" : state === "current" ? "in draft" : "pending"}</span>
                 </span>
                 <span className={clsx("mt-1 block truncate text-[13px] font-medium sm:text-base", state === "todo" ? "text-ink-muted" : "text-ink", state === "done" && "group-hover:underline group-hover:underline-offset-4")}>{s}</span>
               </button>

@@ -257,9 +257,11 @@ export const api = {
    * Create a launch. Off mainnet, if the API is unreachable, the launch is added to the local demo world.
    * On mainnet an unreachable API is an error: no local/demo launch is ever created.
    */
-  async createLaunch(input: CreateLaunchInput): Promise<{ launch: LaunchSummary; offline: boolean }> {
+  async createLaunch(input: CreateLaunchInput, opts: { token?: string | null } = {}): Promise<{ launch: LaunchSummary; offline: boolean }> {
     try {
-      const launch = await request<LaunchSummary>(API_ROUTES.launches, { method: "POST", body: JSON.stringify(input) }, 8000);
+      // A signed-in creator's session token makes the API attribute the launch (and its uploaded image) to that wallet.
+      const headers = opts.token ? { Authorization: `Bearer ${opts.token}` } : undefined;
+      const launch = await request<LaunchSummary>(API_ROUTES.launches, { method: "POST", body: JSON.stringify(input), headers }, 8000);
       return { launch, offline: false };
     } catch (e) {
       if (e instanceof ApiError && e.status >= 400 && e.status < 500) throw e;

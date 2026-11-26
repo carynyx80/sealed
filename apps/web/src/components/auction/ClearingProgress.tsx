@@ -56,7 +56,7 @@ export function ClearingProgress({ launch, className }: { launch: LaunchSummary;
       </ol>
       {launch.status === "reveal" && (
         <p className="text-[12px] text-ink-slate">
-          <span className="num text-ink">{fmtInt(a.revealedCount)}</span> of <span className="num">{fmtInt(a.bidCount)}</span> bids revealed — the auto-reveal relayer submits sealed reveals the moment the window opens.
+          <span className="num text-ink">{fmtInt(a.revealedCount)}</span> of <span className="num">{fmtInt(a.bidCount)}</span> bids revealed. The auto-reveal relayer submits sealed reveals the moment the window opens.
         </p>
       )}
     </div>

@@ -5,7 +5,7 @@ export default function NotFound() {
   return (
     <section className="grid gap-10 border-b border-rule py-20 sm:py-28 md:grid-cols-12 md:items-end">
       <div className="md:col-span-7">
-        <p className="section-mark">§ 404 — Not found</p>
+        <p className="section-mark">§ 404 · Not found</p>
         <h1 className="mt-6 text-display-xl text-ink">
           Still <span className="accent">sealed.</span>
         </h1>

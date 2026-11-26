@@ -15,13 +15,17 @@
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",
     "@fastify/cors": "10.0.1",
+    "@fastify/multipart": "10.1.7",
     "@fastify/websocket": "11.0.1",
+    "@heliuslabs/spr": "0.9.0-alpha",
     "@prisma/client": "5.22.0",
     "@sealed/shared": "workspace:*",
+    "@solana/kit": "8.6.0",
     "@solana/web3.js": "1.98.0",
     "bs58": "6.0.0",
     "fastify": "5.1.0",
     "ioredis": "5.4.1",
+    "sharp": "0.35.5",
     "tweetnacl": "1.0.3",
     "zod": "3.23.8"
   },

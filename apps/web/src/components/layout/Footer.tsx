@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { DEMO_ENABLED, IS_MAINNET, NETWORK_LABEL } from "@/lib/config";
+import { DEMO_ENABLED, IS_MAINNET } from "@/lib/config";
 import { Wordmark } from "./Wordmark";
 
 const NOTES = [
   "Bids are committed as keccak256(bidder, max_price, amount, salt). Only the escrowed total and bid count are public until reveal.",
   "All winning bids clear at one uniform price. Bids below clearing are refunded in full via claim_or_refund.",
-  "The fee-credit line (10–15% of raise) sits in a non-withdrawable vault. The program can only swap-to-burn or drip to holders.",
+  "The fee-credit line (10 to 15% of raise) sits in a non-withdrawable vault. The program can only swap-to-burn or drip to holders.",
   "Until repaid, 80% of fees repay the Credit Pool. After: 50% holders · 35% platform burn · 15% treasury. Graduation-slot buyers earn 0%.",
   "Custodial mode: deposits are held by Sealed's company wallet and balances and trades are recorded offchain by Sealed. Withdrawals are sent from the company wallet and may need manual approval above limits. Proof of reserves is live on /account.",
 ];
@@ -27,6 +27,7 @@ export function Footer() {
               <ul className="mt-3 space-y-1 text-sm [&_a]:inline-flex [&_a]:min-h-[32px] [&_a]:items-center">
                 <li><Link className="text-ink-slate hover:text-ink" href="/">Lobby</Link></li>
                 <li><Link className="text-ink-slate hover:text-ink" href="/launch">Launch Studio</Link></li>
+                <li><Link className="text-ink-slate hover:text-ink" href="/how-it-works">How it works</Link></li>
                 <li><Link className="text-ink-slate hover:text-ink" href="/revenue">Revenue &amp; Burn</Link></li>
                 <li><Link className="text-ink-slate hover:text-ink" href="/docs">Docs</Link></li>
                 <li><Link className="text-ink-slate hover:text-ink" href="/account">Account</Link></li>
@@ -57,7 +58,7 @@ export function Footer() {
           <span>
             {IS_MAINNET
               ? "Solana mainnet · Custodial: Sealed holds deposited funds · Not investment advice"
-              : `Experimental software · Not investment advice · ${NETWORK_LABEL}${DEMO_ENABLED ? " & demo data are simulated" : ""}`}
+              : `Experimental software · Not investment advice${DEMO_ENABLED ? " · Demo data is simulated" : ""}`}
           </span>
           <span>Set in Schibsted Grotesk, Libre Caslon &amp; Fragment Mono</span>
         </div>

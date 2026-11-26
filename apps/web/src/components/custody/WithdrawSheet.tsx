@@ -16,9 +16,13 @@ import { errorMessage } from "@/lib/defi/config";
 import { fmtUsd, shortAddr } from "@/lib/format";
 import { Sheet } from "./Sheet";
 import { CustodyGate } from "./SignInButton";
-import { DisclosureList, PayoutsPausedNotice, StatusChip, assetUsd, cleanAmount, explorerTx, payoutsPausedCopy } from "./parts";
+import { DisclosureList, StatusChip, assetUsd, cleanAmount, explorerTx } from "./parts";
 import { quoteAssetOffered } from "@/lib/quoteAssets";
 import { ArrowUpRight } from "../ui/Icons";
+import { usePrivacyRing } from "@/lib/privacy/usePrivacyRing";
+import { useShieldedIdentity } from "@/lib/privacy/session";
+import { isPrivateAsset } from "@/lib/privacy/contract";
+import { PrivateWithdrawOption } from "../privacy/PrivateWithdrawOption";
 
 function validAddress(a: string): boolean {
   try {
@@ -31,7 +35,7 @@ function validAddress(a: string): boolean {
 export function WithdrawSheet({ open, onClose, asset }: { open: boolean; onClose: () => void; asset: QuoteAssetSymbol }) {
   const [busy, setBusy] = useState(false);
   return (
-    <Sheet open={open} onClose={onClose} locked={busy} mark="§ Account — Withdraw" title={<>Withdraw to a <span className="accent">wallet</span></>}>
+    <Sheet open={open} onClose={onClose} locked={busy} mark="§ Account · Withdraw" title={<>Withdraw to a <span className="accent">wallet</span></>}>
       <CustodyGate offline="full" why="Sign in so Sealed knows which ledger account to pay out from.">
         <WithdrawBody key={String(open)} initialAsset={asset} busy={busy} setBusy={setBusy} />
       </CustodyGate>
@@ -55,6 +59,14 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
   const [amount, setAmount] = useState("");
   const [dest, setDest] = useState(s.wallet ?? "");
   const [err, setErr] = useState<string | null>(null);
+  // Confidential payout to the user's own Shielded Address (Helius Privacy Ring), when enabled for this network.
+  const ring = usePrivacyRing();
+  const shielded = useShieldedIdentity();
+  const [privateOut, setPrivateOut] = useState(false);
+  const [sentPrivate, setSentPrivate] = useState(false);
+  const privateAvailable = ring.privateEnabled && isPrivateAsset(asset);
+  const usePrivate = privateAvailable && privateOut;
+  const privateTo = usePrivate && shielded.phase === "ready" ? shielded.shieldedAddress : null;
 
   useEffect(() => {
     if (!dest && s.wallet) setDest(s.wallet);
@@ -66,7 +78,7 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
   const overAuto = usd > WITHDRAWAL_LIMITS.autoApproveMaxUsd;
   const destOk = validAddress(dest);
   const over = n > bal.available + 1e-12;
-  const canSubmit = n > 0 && !over && destOk && !busy;
+  const canSubmit = n > 0 && !over && destOk && !busy && (!usePrivate || !!privateTo);
   const live = submitted ? withdrawals.data?.find((w) => w.id === submitted.id) ?? submitted : null;
 
   useEffect(() => {
@@ -77,8 +89,9 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
     setBusy(true);
     setErr(null);
     try {
-      const rec = await custodyFetch<WithdrawalRecord>(CUSTODY_ROUTES.withdrawals, { method: "POST", wallet: s.wallet, body: { asset, amount: n, destination: dest } });
+      const rec = await custodyFetch<WithdrawalRecord>(CUSTODY_ROUTES.withdrawals, { method: "POST", wallet: s.wallet, body: { asset, amount: n, destination: usePrivate && s.wallet ? s.wallet : dest, ...(privateTo ? { privateTo } : {}) } });
       setSubmitted(rec);
+      setSentPrivate(!!privateTo);
       setAmount("");
       invalidateCustody(s.wallet);
     } catch (e) {
@@ -94,15 +107,14 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
         <dl className="grid grid-cols-2 border-y border-ink text-sm">
           <div className="border-b border-rule py-3 pr-3"><dt className="eyebrow">Amount</dt><dd className="num mt-1">{live.amount} {live.asset}</dd></div>
           <div className="border-b border-l border-rule py-3 pl-3"><dt className="eyebrow">Status</dt><dd className="mt-1"><StatusChip status={live.status} /></dd></div>
-          <div className="col-span-2 py-3"><dt className="eyebrow">Destination</dt><dd className="num mt-1 break-all text-[13px]">{live.destination}</dd></div>
+          <div className="col-span-2 py-3"><dt className="eyebrow">Destination</dt><dd className="num mt-1 break-all text-[13px]">{sentPrivate ? "Your shielded address · amount hidden on-chain" : live.destination}</dd></div>
         </dl>
         <p className="mt-3 text-[13px] leading-relaxed text-ink-slate">
           {live.status === "sent" ? (
-            <>Sent from the company wallet.</>
+            <>{sentPrivate ? "Sent privately from Sealed's shielded balance to yours." : "Sent from the company wallet."}</>
           ) : live.status === "pending_approval" ? (
             <>
-              This withdrawal is waiting for manual approval by Sealed
-              {info?.payoutsEnabled === false ? ` (${payoutsPausedCopy(info.payoutsReason).toLowerCase()})` : " (above the automatic limit, or payouts are paused)"}. The amount stays locked until it&apos;s approved or rejected.
+              This withdrawal is being reviewed by Sealed. The amount stays locked until it&apos;s sent or returned.
             </>
           ) : live.status === "failed" || live.status === "rejected" ? (
             <span className="text-burn">{live.status === "failed" ? "The payout failed" : "The withdrawal was rejected"}{live.reason ? `: ${live.reason}` : "."} The amount was returned to your balance.</span>
@@ -122,7 +134,6 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
 
   return (
     <div>
-      {info?.payoutsEnabled === false && <PayoutsPausedNotice reason={info.payoutsReason} compact className="mb-4" />}
       {quoteRows.length === 0 && account.data && (
         <p className="mb-4 rounded-field border border-rule bg-paper-deep/60 p-3 text-[12px] text-ink-slate">You have no withdrawable balance yet.</p>
       )}
@@ -172,7 +183,9 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
         {over && <p className="mt-1 text-[12px] text-burn">More than your available balance.</p>}
       </div>
 
-      <div className="mt-4">
+      {privateAvailable && <PrivateWithdrawOption id={shielded} checked={privateOut} onChange={setPrivateOut} />}
+
+      <div className={clsx("mt-4", usePrivate && "hidden")}>
         <label htmlFor="wd-dest" className="label">Destination wallet</label>
         <input id="wd-dest" className={clsx("input num text-[13px]", dest && !destOk && "!border-burn")} value={dest} onChange={(e) => setDest(e.target.value.trim())} autoComplete="off" spellCheck={false} />
         <p className="fine mt-1.5">
@@ -180,11 +193,9 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
         </p>
       </div>
 
-      {(overAuto || info?.payoutsEnabled === false) && n > 0 && (
+      {overAuto && n > 0 && (
         <p className="mt-4 rounded-field border border-signal/20 bg-signal-tint/50 p-3 text-[12px] leading-relaxed text-signal-ink">
-          {info?.payoutsEnabled === false
-            ? `${payoutsPausedCopy(info.payoutsReason)}, so this withdrawal will wait for manual approval.`
-            : "This amount is above the automatic limit and will wait for manual approval."}
+          This amount is above the automatic limit and will be reviewed before it is sent.
         </p>
       )}
       {err && <p className="mt-4 rounded-field border border-burn/20 bg-burn-tint p-3 text-[12px] text-burn">{err}</p>}
@@ -192,7 +203,11 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
       <button type="button" className="btn-primary mt-5 min-h-[48px] w-full" disabled={!canSubmit} onClick={() => void submit()}>
         {busy ? "Requesting…" : `Withdraw ${n > 0 ? n : ""} ${asset}`}
       </button>
-      <p className="fine mt-2">Paid out from Sealed&apos;s company wallet; arrival is visible on Solscan once sent.</p>
+      <p className="fine mt-2">
+        {usePrivate
+          ? "Sent from Sealed's shielded balance to yours. Solscan shows the transfer and both addresses, not the amount."
+          : <>Paid out from Sealed&apos;s company wallet; arrival is visible on Solscan once sent.</>}
+      </p>
     </div>
   );
 }

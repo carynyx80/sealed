@@ -28,17 +28,17 @@ export default function Architecture() {
       <CodeBlock
         lang="text"
         title="layout"
-        code={`packages/shared            @sealed/shared — types, Zod schemas, PDAs, clearing / fee / commitment math,
+        code={`packages/shared            @sealed/shared: types, Zod schemas, PDAs, clearing / fee / commitment math,
                            custody contract (custody.ts), demo world, REST + WS contract
-packages/defi              @sealed/defi — Anchor client, Jupiter v6, Raydium adapter (optional),
+packages/defi              @sealed/defi: Anchor client, Jupiter v6, Raydium adapter (optional),
                            internal-CPMM quotes, encrypted bid vault, Privacy Ring clients
-programs/sealed-launchpad  Anchor program sealed_launchpad (onchain mode, roadmap) + tests + devnet init
-apps/api                   @sealed/api — Fastify REST + /ws, Prisma/Postgres, Redis, workers, /llms.txt
+programs/sealed-launchpad  Anchor program sealed_launchpad (onchain mode, roadmap) + tests + init script
+apps/api                   @sealed/api: Fastify REST + /ws, Prisma/Postgres, Redis, workers, /llms.txt
   src/offchain/            custodial ledger, engine, SIWS auth, custody (deposit watcher, withdrawals,
                            payouts, reserves); routes in src/routes/{trade,auth,account,custody,admin}.ts
-apps/web                   @sealed/web — Next.js 15 App Router, Tailwind, framer-motion, these docs
-tests                      @sealed/e2e — invariant/property tests, black-box API e2e, web smoke
-scripts                    deploy-devnet.sh · deploy-api.sh · deploy-web.sh · verify.sh`}
+apps/web                   @sealed/web: Next.js 15 App Router, Tailwind, framer-motion, these docs
+tests                      @sealed/e2e: invariant/property tests, black-box API e2e, web smoke
+scripts                    deploy-api.sh · deploy-web.sh · verify.sh`}
       />
       <CodeBlock
         lang="text"
@@ -89,7 +89,7 @@ sealed_launchpad (Rust) mirrors constants.ts and clearing/fees/commitment intege
         items={[
           { k: "Postgres (Prisma)", v: <>Models: Launch, Bid, RevealPayload, Trade, BuybackEvent, CreditLedger, HolderReward, ProtocolStats (<C>apps/api/prisma/schema.prisma</C>). Custodial tables: User, AuthNonce, Session, Deposit, Withdrawal, LedgerAccount, LedgerTransaction, LedgerEntry, OffchainLaunch, OffchainBid, OffchainPosition, OffchainAntiSnipe. <C>prisma db push</C> runs on container boot when <C>DATABASE_URL</C> is set.</> },
           { k: "Memory store", v: "Used when DATABASE_URL is unset (demo). Not durable; a custodial deployment must use Postgres." },
-          { k: "Redis", v: <>Response cache (1–2 s TTLs on lists, stats, revenue) and the keeper job queue. Falls back to an in-process map when <C>REDIS_URL</C> is unset.</> },
+          { k: "Redis", v: <>Response cache (1 to 2 s TTLs on lists, stats, revenue) and the keeper job queue. Falls back to an in-process map when <C>REDIS_URL</C> is unset.</> },
           { k: "Browser", v: "Encrypted bid salts in IndexedDB; a client-side demo world takes over if the API is unreachable." },
         ]}
       />

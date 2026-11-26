@@ -422,3 +422,19 @@ model OffchainAntiSnipe {
   @@id([launchId, wallet])
   @@index([wallet])
 }
+
+// Token images uploaded via POST /api/uploads/token-image, served at GET /api/images/<id>.webp.
+// Always normalised server-side: 512×512 WebP, metadata stripped. Deduped per owner by sha256 of the output.
+model TokenImage {
+  id        String   @id // 16 random bytes, hex
+  owner     String // uploader wallet (base58)
+  mime      String   @default("image/webp")
+  bytes     Bytes
+  width     Int
+  height    Int
+  sha256    String // hex sha256 of `bytes` (also the HTTP ETag)
+  createdAt DateTime @default(now())
+
+  @@unique([owner, sha256])
+  @@index([owner, createdAt])
+}

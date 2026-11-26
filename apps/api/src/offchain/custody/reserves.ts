@@ -16,6 +16,13 @@ export class ReservesService {
   private cache: { at: number; rows: Row[] } | null = null;
   private lastOnchain = new Map<string, bigint>();
   private inflight: Promise<Row[]> | null = null;
+  /** Company holdings outside the public wallet (Privacy Ring shielded balance), added to `onchain`. */
+  private extraHoldings: (symbol: string) => bigint = () => 0n;
+
+  setExtraHoldings(fn: (symbol: string) => bigint): void {
+    this.extraHoldings = fn;
+    this.cache = null;
+  }
 
   constructor(
     private readonly cfg: CustodyConfig,
@@ -64,6 +71,13 @@ export class ReservesService {
             this.log.warn({ asset: a.symbol, err: (err as Error).message }, "custody: liabilities query failed");
           }
         }
+        let extra = 0n;
+        try {
+          extra = this.extraHoldings(a.symbol);
+        } catch {
+          extra = 0n;
+        }
+        onchain += extra;
         const on = fromAtoms(onchain, a.decimals);
         const li = fromAtoms(liab, a.decimals);
         return { asset: a.symbol, onchain: on, liabilities: li, ratio: liab === 0n ? 1 : Number((onchain * 1_000_000n) / liab) / 1_000_000, asOfTs };

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { COMPANY_WALLET } from "@sealed/shared";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { COMPANY_WALLET_EXPLORER, MAINNET_COMMIT_WINDOW, RealFundsDisclosure } from "@/components/docs/Mainnet";
-import { A, Accent, C, DocHeader, H2, H3, Note, OL, P, StatusBadge, Table, UL } from "@/components/docs/Prose";
+import { A, Accent, C, DocHeader, H2, H3, Note, OL, P, Table, UL } from "@/components/docs/Prose";
 
 export const metadata: Metadata = { title: "Deploy" };
 
@@ -11,7 +11,7 @@ const API_ENV: Array<[string, string, string]> = [
   ["COMPANY_WALLET", COMPANY_WALLET, "Public address that receives deposits and is reported in proof of reserves."],
   ["COMPANY_WALLET_SECRET_KEY", "secret · operator-set", "Signs mainnet withdrawals from the company wallet. Unset → payoutsEnabled=false, no payout worker runs and every withdrawal stays queued (funds locked) until it is set or the withdrawal is rejected. Never commit it; store it only in the Railway secret store."],
   ["ADMIN_TOKEN", "secret", "Required on mainnet. Value of the x-admin-token header for /api/admin/withdrawals (list / approve / reject) and /api/admin/credit-pool/seed. Unset → admin routes answer 503. Use a long random value."],
-  ["DEPOSIT_CONFIRMATIONS", "finalized", "\"finalized\" or an integer 1–1000 of confirmed-slot depth before a deposit is credited."],
+  ["DEPOSIT_CONFIRMATIONS", "finalized", "\"finalized\" or an integer from 1 to 1000 of confirmed-slot depth before a deposit is credited."],
   ["CUSTODY_WORKERS", "true", "Run the deposit watcher and payout worker. Default: WORKERS_ENABLED and not demo. Set it to true explicitly on mainnet."],
   ["SIWS_DOMAIN", "www.sealedsol.xyz", "Domain shown in, and checked against, the sign-in message. Must match the site users sign in on (the code default is sealed.app)."],
   ["DEPOSIT_POLL_MS / PAYOUT_POLL_MS / OFFCHAIN_TICK_MS", "15000 / 10000 / 2000", "Deposit watcher, payout worker and offchain scheduler cadence."],
@@ -19,8 +19,8 @@ const API_ENV: Array<[string, string, string]> = [
   ["DEMO_MODE", "false", "Must be false on mainnet (demo is disabled there). If unset it defaults to true when SOLANA_RPC_URL is unset; HELIUS_API_KEY alone does not turn demo off."],
   ["DATABASE_URL", "${{Postgres.DATABASE_URL}}", "Postgres: the ledger of record for real funds. Required for custody; turn on automated backups."],
   ["REDIS_URL", "${{Redis.REDIS_URL}}", "Cache and job queue; in-process fallback."],
-  ["SOLANA_RPC_URL / SOLANA_WS_URL", "—", "Explicit RPC; wins over HELIUS_API_KEY."],
-  ["NETWORK", "mainnet", "mainnet | devnet | localnet. mainnet enables SOL and USDC only and enforces the mainnet commit window."],
+  ["SOLANA_RPC_URL / SOLANA_WS_URL", "unset", "Explicit RPC; wins over HELIUS_API_KEY."],
+  ["NETWORK", "mainnet", "mainnet | localnet. mainnet enables SOL and USDC only and enforces the mainnet commit window."],
   ["PROGRAM_ID", "71geDP…5Tpy", "Onchain mode program id (roadmap; not deployed, unused in offchain mode)."],
   ["RELAYER_SECRET_KEY", "secret", "base58 fee payer for reveal_bid (onchain). Keep it small."],
   ["RELAYER_BOX_SEED", "secret · 32-byte hex", "x25519 key users seal reveals to. Unset → ephemeral keys that do not survive restarts."],
@@ -29,16 +29,16 @@ const API_ENV: Array<[string, string, string]> = [
   ["PORT / HOST", "4000 / 0.0.0.0", "Railway injects PORT."],
   ["JUPITER_API_URL", "https://quote-api.jup.ag/v6", "Jupiter v6 base."],
   ["WORKERS_ENABLED / DEMO_TICK_MS", "true / 1000", "In-process workers; demo simulation tick."],
-  ["IDL_PATH", "—", "Defaults to programs/sealed-launchpad/idl/sealed_launchpad.json."],
+  ["IDL_PATH", "unset", "Defaults to programs/sealed-launchpad/idl/sealed_launchpad.json."],
 ];
 
 const WEB_ENV: Array<[string, string]> = [
   ["NEXT_PUBLIC_API_URL", "https://<railway-domain> (no trailing slash)"],
   ["NEXT_PUBLIC_WS_URL", "wss://<railway-domain>/ws"],
-  ["NEXT_PUBLIC_NETWORK", "mainnet on production. devnet | localnet show the Devnet / Demo label"],
+  ["NEXT_PUBLIC_NETWORK", "mainnet on production. localnet shows the Demo label"],
   ["NEXT_PUBLIC_RPC_URL", "optional public RPC; the web app reaches Solana through the API's POST /api/rpc proxy (rolling out), so no provider key belongs here"],
   ["NEXT_PUBLIC_PROGRAM_ID", "onchain mode program id (roadmap)"],
-  ["NEXT_PUBLIC_JUPITER_API_URL, NEXT_PUBLIC_DEVNET_MINTS", "optional overrides"],
+  ["NEXT_PUBLIC_JUPITER_API_URL", "optional override"],
 ];
 
 export default function Deploy() {
@@ -68,8 +68,8 @@ export default function Deploy() {
       />
       <Note title="Current deployment status" tone="signal">
         <p>
-          Web: live on Vercel (Next 15.0.8, React 19.0.9). API: live on Railway with Postgres and Redis and <C>EXECUTION_MODE=offchain</C>. The switch from
-          devnet to <strong>mainnet is rolling out</strong>: <C>NETWORK=mainnet</C>, <C>DEMO_MODE=false</C>, custody workers on, and the operator secrets{" "}
+          Web: live on Vercel (Next 15.0.8, React 19.0.9). API: live on Railway with Postgres and Redis and <C>EXECUTION_MODE=offchain</C>. The
+          <strong>mainnet launch is rolling out</strong>: <C>NETWORK=mainnet</C>, <C>DEMO_MODE=false</C>, custody workers on, and the operator secrets{" "}
           <C>COMPANY_WALLET_SECRET_KEY</C>, <C>HELIUS_API_KEY</C> and <C>ADMIN_TOKEN</C> set. Work through the{" "}
           <A href="#mainnet-checklist">mainnet readiness checklist</A> below. Program: roadmap, not deployed.
         </p>
@@ -159,7 +159,7 @@ open http://localhost:3000/docs`}
           <C>NEXT_PUBLIC_NETWORK=mainnet</C>, with <C>NEXT_PUBLIC_API_URL</C> and <C>NEXT_PUBLIC_WS_URL</C> pointing at the Railway API. Redeploy afterwards:
           these values are inlined at build time.
         </li>
-        <li>The site shows no Devnet / Demo label, no demo launches, and no in-browser demo fallback when the API is unreachable.</li>
+        <li>The site shows no Demo label, no demo launches, and no in-browser demo fallback when the API is unreachable.</li>
         <li>No RPC provider key in any <C>NEXT_PUBLIC_*</C> variable; the browser goes through <C>POST /api/rpc</C>.</li>
       </UL>
       <H3 id="checklist-behaviour">Behaviour to verify (rolling out)</H3>
@@ -207,22 +207,6 @@ docker run -p 4000:4000 sealed-api`} />
         </li>
       </OL>
 
-      <H2 id="devnet" n="11.6">Program on devnet (onchain mode, roadmap)</H2>
-      <StatusBadge status="chain-pending" />
-      <P>
-        The Anchor program is the future non-custodial mode. It is not deployed to devnet or mainnet, and the mainnet custodial backend does not use it.
-      </P>
-      <CodeBlock
-        lang="bash"
-        title="deploy-devnet.sh"
-        code={`solana-keygen new -o ~/.config/solana/id.json   # then fund with ~5 devnet SOL
-scripts/deploy-devnet.sh`}
-      />
-      <P>
-        The script refuses mainnet RPCs, runs <C>anchor build</C> (and <C>anchor keys sync</C> if ids differ), <C>anchor deploy</C> using{" "}
-        <C>target/deploy/sealed_launchpad-keypair.json</C>, copies the IDL to <C>programs/sealed-launchpad/idl/</C>, runs <C>scripts/init-devnet.ts</C> (protocol
-        config, credit pools, mock quote mints) and writes <C>PROGRAM_ID</C> / <C>NEXT_PUBLIC_PROGRAM_ID</C> into the env files.
-      </P>
       <Note title="Before you go live" tone="warn">
         <p>
           Never run a public mainnet deployment with DEMO_MODE=true: demo-bid and unauthenticated in-memory launch creation are enabled in demo. Mainnet

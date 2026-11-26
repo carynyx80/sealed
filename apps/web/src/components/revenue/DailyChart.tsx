@@ -66,9 +66,9 @@ export function DailyChart({ daily }: { daily: RevenueResponse["daily"] }) {
     <div>
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <p className="section-mark">§ 03 — Daily, last {daily.length} days</p>
+          <p className="section-mark">§ 03 · Daily, last {daily.length} days</p>
           <p className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="num text-3xl tracking-[-0.03em] text-ink sm:text-4xl">{selDay ? fmtUsd(selDay[metric], false) : "—"}</span>
+            <span className="num text-3xl tracking-[-0.03em] text-ink sm:text-4xl">{selDay ? fmtUsd(selDay[metric], false) : "…"}</span>
             <span className="num text-[12px] text-ink-muted">
               {selDay ? dayLabel(selDay.date) : ""} {hover === null && "· latest"} · {m.label.toLowerCase()}
             </span>

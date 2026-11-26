@@ -90,7 +90,7 @@ export function ConnectButton({ className }: { className?: string }) {
             <div className="mb-1 border-b border-rule px-3 pb-2.5 pt-1.5">
               <div className="eyebrow flex items-center justify-between gap-2">
                 <span className="truncate">{wallet?.adapter.name ?? "Wallet"}</span>
-                <span className="shrink-0 text-ink-muted">{NETWORK_LABEL}</span>
+                {NETWORK_LABEL && <span className="shrink-0 text-ink-muted">{NETWORK_LABEL}</span>}
               </div>
               <div className="num mt-1 break-all text-xs leading-snug text-ink-slate">{address}</div>
             </div>

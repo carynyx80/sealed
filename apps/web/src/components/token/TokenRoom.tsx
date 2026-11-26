@@ -4,6 +4,7 @@ import clsx from "clsx";
 import type { ReactNode } from "react";
 import { CREDIT_TIERS, NUM_PRICE_TICKS, QUOTE_ASSETS, type LaunchSummary } from "@sealed/shared";
 import { useLaunchRoom, useNow } from "@/lib/live";
+import { networkName } from "@/lib/config";
 import { fmtAmount, fmtCompact, fmtInt, fmtPct, fmtPrice, fmtTime, fmtUsd, shortAddr, solscanAccount } from "@/lib/format";
 import { OneClickJupiterSwap } from "../swap/OneClickJupiterSwap";
 import { CommitBidCard } from "../auction/CommitBidCard";
@@ -49,7 +50,7 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
   if (!data?.launch) {
     return (
       <div className="py-24 sm:py-32">
-        <p className="section-mark">§ Token room — 404</p>
+        <p className="section-mark">§ Token room · 404</p>
         <h1 className="mt-4 max-w-3xl font-display text-display-lg text-ink">
           No launch at this <span className="accent">address.</span>
         </h1>
@@ -75,7 +76,7 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
             <>
               <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(3))}>
                 <SectionHead
-                  mark="01 — Price"
+                  mark="01 · Price"
                   title={<><span className="num">{L.ticker}</span><span className="text-ink-muted"> / </span><span className="num">{L.quoteAsset}</span></>}
                   aside={<ChartLegend />}
                 />
@@ -87,7 +88,7 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
               <div className="contents xl:grid xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] xl:items-start xl:gap-6">
                 <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(5))}>
                   <SectionHead
-                    mark="02 — Tape"
+                    mark="02 · Tape"
                     title="Trades & buybacks"
                     aside={
                       <span className="inline-flex items-center gap-1.5">
@@ -106,13 +107,13 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
                   </p>
                 </FadeIn>
                 <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(8))} delay={0.04}>
-                  <SectionHead mark="03 — Particulars" title="Market" />
+                  <SectionHead mark="03 · Particulars" title="Market" />
                   <MarketParticulars launch={L} />
                 </FadeIn>
               </div>
 
               <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(7))}>
-                <SectionHead mark="04 — Fees" title={<>Holder <span className="accent">flywheel</span></>} aside={<span>1% pool fee · Fee Collector PDA</span>} />
+                <SectionHead mark="04 · Fees" title={<>Holder <span className="accent">flywheel</span></>} aside={<span>1% pool fee · Fee Collector PDA</span>} />
                 <div className="mt-4">
                   <FlywheelBreakdown launch={L} />
                 </div>
@@ -124,7 +125,7 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
               <AuctionTerms launch={L} offchain={offchain} className={ord(3)} />
               <AfterAuction launch={L} className={ord(4)} />
               <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(5))}>
-                <SectionHead mark="04 — Fees" title={<>Holder <span className="accent">flywheel</span></>} aside={<span>from the first trade</span>} />
+                <SectionHead mark="04 · Fees" title={<>Holder <span className="accent">flywheel</span></>} aside={<span>from the first trade</span>} />
                 <div className="mt-4">
                   <FlywheelBreakdown launch={L} />
                 </div>
@@ -160,7 +161,7 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
           ) : (
             <section className={clsx("card min-w-0 p-5 sm:p-6", ord(1))}>
               <div className="flex items-center justify-between gap-2">
-                <p className="section-mark">§ Auction — {L.status === "clearing" ? "Clearing" : "Closed"}</p>
+                <p className="section-mark">§ Auction · {L.status === "clearing" ? "Clearing" : "Closed"}</p>
                 <CommitRevealBadge status={L.status} />
               </div>
               <h2 className="mt-3 font-display text-display-sm text-ink">
@@ -202,7 +203,7 @@ function Masthead({ launch: L }: { launch: LaunchSummary }) {
           <a href={solscanAccount(L.mint, L.network)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 transition-colors hover:text-ink">
             mint {shortAddr(L.mint, 4)} <ArrowUpRight width={11} height={11} strokeWidth={1.25} />
           </a>
-          <span className="hidden sm:inline">· {L.network}</span>
+          <span className="hidden sm:inline">· {networkName(L.network)}</span>
           <span className="hidden sm:inline">· as of <span className="num text-ink-slate">{now === null ? "--:--:--" : fmtTime(now)}</span></span>
         </div>
       </div>
@@ -210,7 +211,7 @@ function Masthead({ launch: L }: { launch: LaunchSummary }) {
       <div className="grid gap-x-10 gap-y-6 pt-6 sm:pt-8 lg:grid-cols-12">
         <div className="min-w-0 lg:col-span-7">
           <div className="flex flex-wrap items-center gap-2">
-            <TokenAvatar src={L.imageUri} ticker={L.ticker} size={36} />
+            <TokenAvatar src={L.imageUri} ticker={L.ticker} size={36} eager />
             <CommitRevealBadge status={L.status} />
             <QuoteBadge symbol={L.quoteAsset} showKind />
             {L.isDemo && <span className="rounded-full border border-dashed border-rule-strong px-2.5 py-1 font-mono text-[10px] uppercase leading-none tracking-[0.06em] text-ink-muted">Demo</span>}
@@ -289,7 +290,7 @@ function KeyFigures({ launch: L }: { launch: LaunchSummary }) {
         ["Total escrowed", <RollingNumber key="e" value={a.totalEscrowed} />, q],
         ["For sale", fmtCompact(a.tokensForSale), L.ticker],
         ["Floor", fmtPrice(a.floorPrice), q],
-        ["Target · cap", `${fmtCompact(a.targetRaise)}–${fmtCompact(a.clearingCap)}`, q],
+        ["Target · cap", `${fmtCompact(a.targetRaise)} to ${fmtCompact(a.clearingCap)}`, q],
       ];
   return (
     <FadeIn delay={0.04} className="mt-8">
@@ -357,7 +358,7 @@ function SealedBook({ launch: L, className }: { launch: LaunchSummary; className
   const rows = Math.min(8, Math.max(3, a.bidCount));
   return (
     <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", className)}>
-      <SectionHead mark="01 — Order book" title={<>The book is <span className="accent">sealed</span></>} aside={<PrivacyBadge />} />
+      <SectionHead mark="01 · Order book" title={<>The book is <span className="accent">sealed</span></>} aside={<PrivacyBadge />} />
       <p className="mt-3 max-w-xl text-[13px] leading-relaxed text-ink-slate">
         Every bid is a keccak256 commitment. Nobody (not the creator, not the protocol) can read a price or a size until the reveal window, so there is nothing to copy or front-run.
       </p>
@@ -400,7 +401,7 @@ function AuctionTerms({ launch: L, offchain, className }: { launch: LaunchSummar
   const revealMin = Math.round((a.revealEndTs - a.commitEndTs) / 60);
   return (
     <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", className)}>
-      <SectionHead mark="02 — Terms" title="Auction terms" aside={<span>{offchain ? "enforced by Sealed's ledger" : "enforced on-chain"}</span>} />
+      <SectionHead mark="02 · Terms" title="Auction terms" aside={<span>{offchain ? "enforced by Sealed's ledger" : "enforced on-chain"}</span>} />
       <div className="mt-4 grid gap-x-10 md:grid-cols-2">
         <dl>
           <LedgerRow k="Floor price" v={`${fmtPrice(a.floorPrice)} ${q}`} />
@@ -423,7 +424,7 @@ function AfterAuction({ launch: L, className }: { launch: LaunchSummary; classNa
   const pct = CREDIT_TIERS[L.creditTier] / 100;
   return (
     <FadeIn className={clsx("card-night min-w-0 p-5 sm:p-7", className)}>
-      <SectionHead night mark="03 — At graduation" title={<>Day-one <span className="accent">buyback</span> credit</>} aside={<span className="uppercase">{L.creditTier} tier</span>} />
+      <SectionHead night mark="03 · At graduation" title={<>Day-one <span className="accent">buyback</span> credit</>} aside={<span className="uppercase">{L.creditTier} tier</span>} />
       <div className="mt-6 grid items-end gap-6 sm:grid-cols-[auto_minmax(0,1fr)]">
         <p className="num text-[clamp(3.5rem,9vw,6rem)] leading-[0.85] tracking-[-0.05em] text-night-text">
           {pct.toFixed(pct % 1 ? 1 : 0)}

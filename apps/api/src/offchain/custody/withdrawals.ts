@@ -6,6 +6,7 @@ import type { CustodyConfig } from "./config.js";
 import { ledgerErrorCode, type CustodyLedger } from "./ledgerPort.js";
 import { StaticPriceService, type PriceQuote, type PriceService } from "./prices.js";
 import type { CustodyRepo, WithdrawalRec } from "./repo.js";
+import { PRIVATE_DEST_PREFIX, privateRecipientOf } from "../privacy/port.js";
 
 /** Smallest SOL payout: keeps new destination accounts above the rent-exempt minimum (890,880 lamports). */
 export const MIN_SOL_WITHDRAWAL_LAMPORTS = 1_000_000n;
@@ -18,16 +19,26 @@ export class CustodyError extends Error {
 }
 
 export function withdrawalToDto(w: WithdrawalRec, decimals: number): WithdrawalRecord {
+  const privateTo = privateRecipientOf(w.destination);
   return {
     id: w.id,
     asset: w.asset,
     amount: fromAtoms(w.amountAtoms, decimals),
-    destination: w.destination,
+    destination: privateTo ?? w.destination,
+    ...(privateTo ? { privateTo } : {}),
     status: w.status,
     ...(w.signature && (w.status === "sent" || w.status === "sending") ? { signature: w.signature } : {}),
     ts: Math.floor(w.createdAt.getTime() / 1000),
     ...(w.reason ? { reason: w.reason } : {}),
   };
+}
+
+/** `privateTo` (already validated by the privacy runtime) → private payout; stored as destination `spr:<privateTo>`. */
+export interface WithdrawInput {
+  asset: QuoteAssetSymbol;
+  amount: number;
+  destination: string;
+  privateTo?: string;
 }
 
 export class WithdrawalService {
@@ -53,7 +64,7 @@ export class WithdrawalService {
    * Auto-approved (status `queued`) if ≤ autoApproveMaxUsd and within the 24h per-wallet cap, else `pending_approval`.
    * `queued` rows are sent by the PayoutWorker only when payouts are enabled; otherwise they wait.
    */
-  async request(wallet: string, input: { asset: QuoteAssetSymbol; amount: number; destination: string }): Promise<WithdrawalRec> {
+  async request(wallet: string, input: WithdrawInput): Promise<WithdrawalRec> {
     // Serialize per wallet (in-process) so concurrent requests cannot both slip under the daily cap.
     const prev = this.walletQueue.get(wallet) ?? Promise.resolve();
     const run = prev.catch(() => undefined).then(() => this.requestInner(wallet, input));
@@ -66,12 +77,18 @@ export class WithdrawalService {
   }
   private walletQueue = new Map<string, Promise<unknown>>();
 
-  private async requestInner(wallet: string, input: { asset: QuoteAssetSymbol; amount: number; destination: string }): Promise<WithdrawalRec> {
+  private async requestInner(wallet: string, input: WithdrawInput): Promise<WithdrawalRec> {
     if (!this.ledger) throw new CustodyError(503, "ledger unavailable");
     const a = this.asset(input.asset);
     if (!a) throw new CustodyError(400, `${input.asset} is not withdrawable on ${this.cfg.network}`);
-    if (!isValidDestination(input.destination)) throw new CustodyError(400, "destination must be a valid on-curve Solana wallet address");
-    if (input.destination === this.cfg.companyWallet) throw new CustodyError(400, "destination cannot be the company wallet");
+    const isPrivate = input.privateTo !== undefined;
+    if (isPrivate) {
+      if (!input.privateTo || input.privateTo.length > 160) throw new CustodyError(400, "invalid privateTo");
+    } else {
+      if (!isValidDestination(input.destination)) throw new CustodyError(400, "destination must be a valid on-curve Solana wallet address");
+      if (input.destination === this.cfg.companyWallet) throw new CustodyError(400, "destination cannot be the company wallet");
+    }
+    const destination = isPrivate ? `${PRIVATE_DEST_PREFIX}${input.privateTo}` : input.destination;
     let atoms: bigint;
     try {
       atoms = toAtoms(input.amount, a.decimals);
@@ -95,7 +112,7 @@ export class WithdrawalService {
     const usedToday = await this.repo.withdrawnUsdSince(wallet, new Date(now.getTime() - DAY_MS));
     const { autoApproveMaxUsd, dailyPerWalletUsd } = WITHDRAWAL_LIMITS;
     let reason: string | null = null;
-    if (this.cfg.manualApprovalOnly) reason = "manual approval required (ADMIN_TOKEN not configured on mainnet)";
+    if (this.cfg.manualApprovalOnly) reason = "manual approval required";
     else if (!quote) reason = `no fresh ${a.symbol} USD price: manual approval required`;
     else if (usdValue > autoApproveMaxUsd) reason = `above auto-approve limit ($${autoApproveMaxUsd})`;
     else if (usedToday + usdValue > dailyPerWalletUsd) reason = `daily limit ($${dailyPerWalletUsd}) exceeded`;
@@ -103,13 +120,13 @@ export class WithdrawalService {
     const id = randomUUID();
 
     try {
-      await this.ledger.debitForWithdrawal(wallet, a.symbol, atoms, `wd:${id}:lock`, { type: "withdrawal_lock", withdrawalId: id, destination: input.destination });
+      await this.ledger.debitForWithdrawal(wallet, a.symbol, atoms, `wd:${id}:lock`, { type: "withdrawal_lock", withdrawalId: id, destination });
     } catch (e) {
       if (ledgerErrorCode(e) === "INSUFFICIENT_FUNDS") throw new CustodyError(400, "insufficient available balance");
       throw e;
     }
     const rec: WithdrawalRec = {
-      id, wallet, asset: a.symbol, mint: a.mint, amountAtoms: atoms, destination: input.destination, usdValue,
+      id, wallet, asset: a.symbol, mint: a.mint, amountAtoms: atoms, destination, usdValue,
       status: needsApproval ? "pending_approval" : "queued",
       reason,
       signature: null, rawTx: null, blockhash: null, lastValidBlockHeight: null, attempts: 0, approvedBy: null,

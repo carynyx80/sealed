@@ -120,8 +120,8 @@ export function PreimageLayout() {
       <dl className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2">
         {segs.map((s) => (
           <div key={s.name} className="flex min-w-0 items-baseline gap-3 border-b border-rule pb-2">
-            <dt className="num w-14 shrink-0 text-[11px] text-ink-muted">
-              {s.from}–{s.from + s.bytes - 1}
+            <dt className="num w-16 shrink-0 text-[11px] text-ink-muted">
+              {s.from} to {s.from + s.bytes - 1}
             </dt>
             <dd className="min-w-0 text-[13px] text-ink-soft">
               <span className="font-mono text-ink">{s.name}</span> · {s.note}
@@ -406,7 +406,7 @@ export function Sequence({ lanes, steps }: { lanes: string[]; steps: Array<{ fro
               <p className="mt-1 text-[13px] leading-snug text-ink-soft">
                 <span className="num mr-2 text-[10.5px] text-ink-muted">{String(i + 1).padStart(2, "0")}</span>
                 {s.label}
-                {s.note && <span className="text-ink-muted"> — {s.note}</span>}
+                {s.note && <span className="text-ink-muted">: {s.note}</span>}
               </p>
             </li>
           );

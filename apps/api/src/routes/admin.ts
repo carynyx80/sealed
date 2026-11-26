@@ -8,6 +8,7 @@ import { toAtoms } from "../offchain/custody/chain.js";
 import type { CustodyRuntime } from "../offchain/custody/index.js";
 import { ledgerErrorCode } from "../offchain/custody/ledgerPort.js";
 import { CustodyError } from "../offchain/custody/withdrawals.js";
+import type { PrivacyRuntime } from "../offchain/privacy/service.js";
 
 const SMALL_BODY = 4 * 1024;
 const STATUSES = ["queued", "pending_approval", "sending", "sent", "failed", "rejected"] as const;
@@ -36,7 +37,7 @@ const TestClockSchema = z.object({ advanceSec: z.number().int().min(1).max(30 * 
 const digest = (s: string) => createHash("sha256").update(s, "utf8").digest();
 
 /** Admin routes, gated by header `x-admin-token` == ADMIN_TOKEN (constant-time compare). Disabled if unset. */
-export async function adminRoutes(app: FastifyInstance, ctx: AppContext, custody: CustodyRuntime) {
+export async function adminRoutes(app: FastifyInstance, ctx: AppContext, custody: CustodyRuntime, privacy?: PrivacyRuntime) {
   const failLimit = new RateLimiter(10);
   const expected = custody.config.adminToken ? digest(custody.config.adminToken) : null;
 
@@ -50,6 +51,20 @@ export async function adminRoutes(app: FastifyInstance, ctx: AppContext, custody
       return sendError(reply, 401, "unauthorized");
     }
   }
+
+  /** Privacy Ring operator view (probe detail, registration). */
+  app.get("/api/admin/privacy", { preHandler: requireAdmin }, async (_req, reply) => {
+    if (!privacy || !privacy.config.enabled) return reply.code(503).send({ enabled: false, reason: privacy?.reason ?? "Private deposits and withdrawals are turned off on this deployment." });
+    await privacy.refresh();
+    return privacy.adminStatus();
+  });
+
+  /** Register the company shielded address in the User Registry (company wallet pays rent + fee; 409 without SOL). */
+  app.post("/api/admin/privacy/register", { bodyLimit: SMALL_BODY, preHandler: requireAdmin }, async (_req, reply) => {
+    if (!privacy || !privacy.config.enabled) return reply.code(503).send({ enabled: false, reason: privacy?.reason ?? "Private deposits and withdrawals are turned off on this deployment." });
+    const r = await privacy.register();
+    return reply.code(r.code).send(r.body);
+  });
 
   app.get<{ Querystring: { status?: string } }>("/api/admin/withdrawals", { preHandler: requireAdmin }, async (req, reply) => {
     const s = req.query.status;

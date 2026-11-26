@@ -62,7 +62,7 @@ export default function SealedAuction() {
         code={`import { computeCommitment, randomSalt, tickPrice, toHex } from "@sealed/shared";
 
 const floor = 100n, tick = 10n;              // quote atoms per whole token
-const maxPrice = tickPrice(floor, tick, 5);  // 150 — must sit on the grid
+const maxPrice = tickPrice(floor, tick, 5);  // 150, must sit on the grid
 const salt = randomSalt();                   // 32 bytes; keep it secret, keep it safe
 
 const commitment = computeCommitment({
@@ -105,7 +105,7 @@ console.log(toHex(commitment));              // 64 hex chars`}
         />
       </Figure>
       <UL>
-        <li>The relayer can learn your bid early (it holds the key) and can withhold your reveal — you can always reveal yourself.</li>
+        <li>The relayer can learn your bid early (it holds the key) and can withhold your reveal, but you can always reveal yourself.</li>
         <li>It cannot change your bid (the keccak check binds it) and, onchain, cannot move funds (it only pays fees).</li>
       </UL>
 
@@ -126,7 +126,7 @@ console.log(toHex(commitment));              // 64 hex chars`}
           <C>(S × P / UNIT − B_above) / bucket[marginal]</C> (<C>full_above</C>).
         </li>
       </OL>
-      <Formula caption="settleBid — per bid, at claim time">
+      <Formula caption="settleBid: per bid, at claim time">
         spent = bid_amount × fill_num / fill_den · tokens = spent × UNIT / P · refund = deposit − spent
       </Formula>
 

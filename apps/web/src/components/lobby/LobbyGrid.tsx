@@ -95,7 +95,7 @@ export function LobbyGrid() {
     <section id="lobby" className="scroll-mt-24 pt-20 sm:pt-28">
       <div className="grid gap-6 lg:grid-cols-12 lg:items-end">
         <div className="lg:col-span-7">
-          <p className="section-mark">§ 04 — The lobby</p>
+          <p className="section-mark">§ 04 · The lobby</p>
           <h2 className="mt-4 text-display-lg text-ink">
             What&apos;s on the <span className="accent">block</span> today
           </h2>

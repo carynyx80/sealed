@@ -7,11 +7,12 @@ import {
   type PrivacyRingClient,
   type SimulatedRingStorage,
 } from "@sealed/defi";
-import type { PrivacyStatusResponse } from "@sealed/shared";
 import { API_BASE, NETWORK } from "../defi/config";
-import { DEMO_ENABLED } from "../config";
+import { DEMO_ENABLED, NETWORK as BUILD_NETWORK } from "../config";
+import { PRIVACY_ROUTES, type PrivacyStatus } from "./contract";
 
-export const PRIVACY_STATUS_PATH = "/api/privacy/status";
+type PrivacyStatusResponse = PrivacyStatus;
+export const PRIVACY_STATUS_PATH = PRIVACY_ROUTES.status;
 const SIM_KEY = "sealed-privacy-ring-sim:v1";
 
 const localRingStorage = (): SimulatedRingStorage => ({
@@ -63,13 +64,22 @@ export function privacyOwner(wallet: string | null | undefined): string {
  * Mainnet: the ring is simply unavailable (never simulated, never real funds through a fake path).
  */
 export const FALLBACK_STATUS: PrivacyStatusResponse = DEMO_ENABLED
-  ? { available: true, network: NETWORK, simulated: true, escrowFunding: true, reason: "Privacy status endpoint unreachable — using the simulated ring" }
+  ? { available: true, network: NETWORK, simulated: true, escrowFunding: true, reason: "Privacy status endpoint unreachable. Using the simulated ring." }
   : { available: false, network: NETWORK, simulated: false, escrowFunding: false, reason: "Privacy Ring status is unavailable right now" };
 
 /** Mainnet never runs a simulated ring, even if a misconfigured API reports one. */
 function normalizeStatus(s: PrivacyStatusResponse): PrivacyStatusResponse {
   if (DEMO_ENABLED || !s.simulated) return s;
-  return { ...s, available: false, simulated: false, escrowFunding: false, reason: "Privacy Ring is not live on mainnet yet" };
+  return { ...s, available: false, simulated: false, enabled: false, escrowFunding: false, reason: "Privacy Ring is not live on mainnet yet" };
+}
+
+/**
+ * The real (SDK-backed) private features: shielded identity, private balance, shield, private deposit and private
+ * withdrawal. Only when the API says they are enabled, the ring is real (never simulated), and the API runs on the
+ * same network this build targets. Otherwise every private surface stays hidden.
+ */
+export function privateFeaturesOn(s: PrivacyStatusResponse | null | undefined): boolean {
+  return !!s && s.enabled === true && s.available && !s.simulated && s.network === BUILD_NETWORK;
 }
 
 let statusPromise: Promise<PrivacyStatusResponse> | null = null;

@@ -24,7 +24,13 @@ export const IS_MAINNET = NETWORK === "mainnet";
  */
 export const DEMO_ENABLED = !IS_MAINNET;
 
-export const NETWORK_LABEL: string = IS_MAINNET ? "Mainnet" : NETWORK === "localnet" ? "Localnet" : "Devnet";
+/** User-visible network badge text: "Mainnet" on mainnet builds, empty elsewhere (test clusters are never named in the UI). */
+export const NETWORK_LABEL: string = IS_MAINNET ? "Mainnet" : "";
+
+/** User-visible name for a network value in running text. Test clusters are shown generically, never by cluster name. */
+export function networkName(network?: Network | string | null): string {
+  return network === "mainnet" ? "mainnet" : "test network";
+}
 
 /** Explicit RPC override (e.g. a dedicated provider URL). Never put a secret API key here: it ships to browsers. */
 const rawRpc = process.env.NEXT_PUBLIC_RPC_URL || undefined;

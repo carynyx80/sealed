@@ -207,4 +207,12 @@ export interface PrivacyStatusResponse {
   escrowFunding?: boolean;
   /** Human-readable reason when something is unavailable. */
   reason?: string;
+  /** Custodial private deposits/payouts live (PRIVACY_RING_ENABLED + probe + registration). Additive. */
+  enabled?: boolean;
+  /** Company registered Solana owner address to send confidential transfers to (see PrivateDepositInfo). */
+  companyShieldedAddress?: string;
+  /** base58 of the company's 99-byte `ShieldedAddress.toBytes()` (recipient without a registry lookup). */
+  companyShieldedAddressBytes?: string;
+  /** Whether the company shielded address is published in the User Registry. */
+  companyRegistered?: boolean;
 }

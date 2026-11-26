@@ -8,6 +8,7 @@ import type { CustodyLedger } from "./ledgerPort.js";
 import type { CustodyRepo, WithdrawalRec } from "./repo.js";
 import { redact, type SolanaRpc } from "./rpc.js";
 import type { WithdrawalService } from "./withdrawals.js";
+import { isPrivateDestination, type SignedPrivateTx } from "../privacy/port.js";
 
 export const MAX_PAYOUT_ATTEMPTS = 3;
 
@@ -23,6 +24,24 @@ const LAMPORTS = 1_000_000_000;
 /** Extra finalized blocks past lastValidBlockHeight before we treat an unlanded tx as dead (RPC-node skew). */
 export const EXPIRY_MARGIN_BLOCKS = 32;
 
+/**
+ * Branch for withdrawals with `privateTo` (destination `spr:<recipient>`): a Helius Privacy Ring confidential
+ * transfer from the company shielded balance (offchain/privacy/service.ts). Same idempotency as public payouts:
+ * built + signed, persisted (signature, rawTx, lastValidBlockHeight) and moved queued → sending BEFORE broadcast,
+ * reconciled by signature. Only ONE private payout is in flight at a time (the SDK must sync past a spend before the
+ * next one is built).
+ */
+export interface PrivatePayoutHandler {
+  /** Fee headroom (company public SOL, not owed to users) one private payout needs. */
+  costLamports: bigint;
+  /** Hold reason (user-safe) or null to proceed. May sync the company wallet. */
+  hold(w: WithdrawalRec, asset: CustodyAsset): Promise<string | null>;
+  build(w: WithdrawalRec, asset: CustodyAsset): Promise<SignedPrivateTx>;
+  settled(outcome: "finalized" | "failed" | "expired" | "discarded"): void;
+}
+export const PRIVATE_PAYOUT_UNAVAILABLE = "Private payouts are temporarily unavailable; your withdrawal stays queued.";
+const PRIVATE_PAYOUT_WAITING = "Waiting for an earlier private payout to finalize.";
+
 export interface CompanySigner {
   signer: Keypair | null;
   payoutsEnabled: boolean;
@@ -34,7 +53,7 @@ export interface CompanySigner {
  * parse failure payouts are refused and only the derived pubkey (public) is reported.
  */
 export function loadCompanySigner(secret: string | undefined, companyWallet: string, log?: FastifyBaseLogger): CompanySigner {
-  if (!secret) return { signer: null, payoutsEnabled: false, reason: "COMPANY_WALLET_SECRET_KEY not configured: withdrawals stay queued" };
+  if (!secret) return { signer: null, payoutsEnabled: false, reason: "automatic payouts unavailable" };
   const kp = keypairFromSecret(secret);
   if (!kp) {
     log?.error("custody: COMPANY_WALLET_SECRET_KEY could not be parsed (expected base58 or JSON byte array) — payouts disabled");
@@ -82,6 +101,15 @@ export class PayoutWorker {
   private tickSpend = 0n;
   private healthCache: { at: number; h: FeePayerHealth } | null = null;
   private healthInflight: Promise<FeePayerHealth | null> | null = null;
+  private privatePayouts: PrivatePayoutHandler | null = null;
+  /** Company holdings outside the public wallet (shielded ring balance), counted toward the SOL fee surplus. */
+  private extraHoldings: (symbol: string) => bigint = () => 0n;
+
+  /** Attach the Privacy Ring branch (server.ts, when PRIVACY_RING_ENABLED). */
+  setPrivatePayouts(handler: PrivatePayoutHandler | null, extraHoldings?: (symbol: string) => bigint): void {
+    this.privatePayouts = handler;
+    if (extraHoldings) this.extraHoldings = extraHoldings;
+  }
 
   constructor(
     private readonly repo: CustodyRepo,
@@ -100,9 +128,9 @@ export class PayoutWorker {
    * Token payouts also need the company ATA to hold the amount. Returns a hold reason, or null to proceed.
    * Throws on RPC/ledger failure (the caller retries later; nothing is sent).
    */
-  async payoutHold(w: WithdrawalRec, asset: CustodyAsset): Promise<{ reason: string | null; costLamports: bigint }> {
+  async payoutHold(w: WithdrawalRec, asset: CustodyAsset, baseCost: bigint = PAYOUT_FEE_BUFFER_LAMPORTS): Promise<{ reason: string | null; costLamports: bigint }> {
     const company = this.signer.publicKey.toBase58();
-    let cost = PAYOUT_FEE_BUFFER_LAMPORTS;
+    let cost = baseCost;
     if (asset.mint !== null) {
       const destAta = ata(w.destination, asset.mint).toBase58();
       if (!(await this.rpc.getAccountExists(destAta, "confirmed"))) cost += TOKEN_ACCOUNT_RENT_LAMPORTS;
@@ -110,7 +138,7 @@ export class PayoutWorker {
       if (held < w.amountAtoms) return { reason: `company wallet ${asset.symbol} balance below payout amount`, costLamports: cost };
     }
     const [balance, solLiab] = await Promise.all([this.rpc.getBalance(company, "confirmed"), this.ledger.liabilities("SOL")]);
-    const surplus = balance - solLiab;
+    const surplus = balance + this.extraHoldings("SOL") - solLiab;
     const required = cost + FEE_PAYER_RESERVE_LAMPORTS + this.tickSpend;
     if (surplus < required) {
       this.log.error(
@@ -130,7 +158,7 @@ export class PayoutWorker {
         try {
           const [balance, solLiab] = await Promise.all([this.rpc.getBalance(this.signer.publicKey.toBase58(), "confirmed"), this.ledger.liabilities("SOL")]);
           const required = PAYOUT_FEE_BUFFER_LAMPORTS + TOKEN_ACCOUNT_RENT_LAMPORTS + FEE_PAYER_RESERVE_LAMPORTS;
-          const surplus = balance - solLiab;
+          const surplus = balance + this.extraHoldings("SOL") - solLiab;
           const h: FeePayerHealth = {
             ok: surplus >= required,
             solBalance: Number(balance) / LAMPORTS,
@@ -201,6 +229,7 @@ export class PayoutWorker {
       if (f) await this.withdrawals.release(f, "asset not configured");
       return;
     }
+    if (isPrivateDestination(w.destination)) return this.sendPrivate(w, asset);
     // Fee-payer / balance health BEFORE signing anything: hold (stay queued, with a reason) instead of failing.
     const hold = await this.payoutHold(w, asset);
     if (hold.reason) {
@@ -225,6 +254,41 @@ export class PayoutWorker {
     }
   }
 
+  /** Private branch of send(): same persist-before-broadcast contract as the public path. */
+  private async sendPrivate(w: WithdrawalRec, asset: CustodyAsset): Promise<void> {
+    const setReason = async (reason: string) => {
+      if (w.reason !== reason) await this.repo.transitionWithdrawal(w.id, ["queued"], { reason });
+    };
+    const handler = this.privatePayouts;
+    if (!handler) return setReason(PRIVATE_PAYOUT_UNAVAILABLE);
+    const inflight = (await this.repo.listWithdrawalsByStatus(["sending"], 500)).some((x) => x.id !== w.id && isPrivateDestination(x.destination));
+    if (inflight) return setReason(PRIVATE_PAYOUT_WAITING);
+    const fee = await this.payoutHold({ ...w, destination: this.signer.publicKey.toBase58() }, { ...asset, mint: null }, handler.costLamports);
+    if (fee.reason) return setReason(fee.reason);
+    const hold = await handler.hold(w, asset);
+    if (hold) return setReason(hold);
+    const signed = await handler.build(w, asset);
+    const claimed = await this.repo.transitionWithdrawal(w.id, ["queued"], {
+      status: "sending", signature: signed.signature, rawTx: signed.rawTx, blockhash: signed.blockhash,
+      lastValidBlockHeight: signed.lastValidBlockHeight, attempts: w.attempts + 1, reason: null,
+    });
+    if (!claimed) {
+      handler.settled("discarded"); // never broadcast; drop the build's note reservation
+      return;
+    }
+    this.tickSpend += fee.costLamports;
+    this.log.info({ withdrawalId: w.id, signature: signed.signature, attempt: claimed.attempts }, "custody: private payout broadcasting");
+    try {
+      await this.rpc.sendRawTransaction(signed.rawTx);
+    } catch (err) {
+      this.log.warn({ withdrawalId: w.id, signature: signed.signature, err: redact((err as Error).message) }, "custody: private payout send error (reconciling by signature)");
+    }
+  }
+
+  private privateSettled(w: WithdrawalRec, outcome: "finalized" | "failed" | "expired"): void {
+    if (isPrivateDestination(w.destination)) this.privatePayouts?.settled(outcome);
+  }
+
   async reconcile(w: WithdrawalRec): Promise<void> {
     if (!w.signature || !w.rawTx || w.lastValidBlockHeight == null) {
       // Should not happen (persisted atomically with the status) — treat as never broadcast.
@@ -236,6 +300,7 @@ export class PayoutWorker {
       if (st.err != null) {
         const f = await this.repo.transitionWithdrawal(w.id, ["sending"], { status: "failed", reason: `transaction failed on-chain: ${JSON.stringify(st.err).slice(0, 160)}` });
         if (f) await this.withdrawals.release(f, "payout failed on-chain");
+        this.privateSettled(w, "failed");
         this.log.error({ withdrawalId: w.id, signature: w.signature }, "custody: payout failed on-chain, funds unlocked");
         return;
       }
@@ -244,6 +309,7 @@ export class PayoutWorker {
           type: "withdrawal_settle", withdrawalId: w.id, signature: w.signature, destination: w.destination,
         });
         await this.repo.transitionWithdrawal(w.id, ["sending"], { status: "sent", sentAt: new Date() });
+        this.privateSettled(w, "finalized");
         this.log.info({ withdrawalId: w.id, signature: w.signature }, "custody: payout finalized");
       }
       return; // processed/confirmed: wait for finality
@@ -257,10 +323,12 @@ export class PayoutWorker {
     if (w.attempts >= MAX_PAYOUT_ATTEMPTS) {
       const f = await this.repo.transitionWithdrawal(w.id, ["sending"], { status: "failed", reason: `not landed after ${w.attempts} attempts` });
       if (f) await this.withdrawals.release(f, "payout expired");
+      this.privateSettled(w, "expired");
       this.log.error({ withdrawalId: w.id }, "custody: payout expired after max attempts, funds unlocked");
       return;
     }
     await this.repo.transitionWithdrawal(w.id, ["sending"], { status: "queued", signature: null, rawTx: null, blockhash: null, lastValidBlockHeight: null });
+    this.privateSettled(w, "expired");
     this.log.warn({ withdrawalId: w.id, attempt: w.attempts }, "custody: payout blockhash expired unlanded — re-queued");
   }
 }

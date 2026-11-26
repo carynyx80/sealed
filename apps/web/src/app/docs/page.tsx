@@ -44,10 +44,10 @@ export default function DocsOverview() {
           buyback drips, fee splits and holder rewards in a Postgres double-entry ledger. You sign in with your wallet, deposit by sending SOL or USDC to
           the company wallet <A href={COMPANY_WALLET_EXPLORER}>{COMPANY_WALLET}</A>, trade against your internal balance and withdraw SOL or USDC back
           on-chain. Launched tokens stay as Sealed ledger balances for now. The Anchor program in this repo is the <strong>future non-custodial mode</strong>{" "}
-          (&ldquo;Onchain mode — roadmap&rdquo;) and is not deployed. Read <A href="/docs/custody">Custody</A> before you deposit.
+          (&ldquo;Onchain mode · roadmap&rdquo;) and is not deployed. Read <A href="/docs/custody">Custody</A> before you deposit.
         </p>
         <p>
-          The switch from devnet to mainnet is <strong>rolling out</strong>: demo mode is disabled on mainnet, only SOL and USDC are enabled as quote assets,
+          The mainnet launch is <strong>rolling out</strong>: demo mode is disabled on mainnet, only SOL and USDC are enabled as quote assets,
           and mainnet launches need a {MAINNET_COMMIT_WINDOW} commit window. Check <C>network</C> in <C>/api/health</C> and <C>payoutsEnabled</C> in{" "}
           <C>/api/custody/info</C> before depositing.
         </p>
@@ -67,7 +67,7 @@ export default function DocsOverview() {
         Most launches reward whoever lands the first transaction. Sealed replaces the race with a sealed-bid auction. During a fixed commit window
         bidders lock collateral and submit only a keccak hash of their bid. Nobody sees prices or sizes. In the reveal window the bids are opened, and
         the auction clears at a single price that everyone pays. The proceeds seed a pool, and a credit line of{" "}
-        {pct(CREDIT_TIERS.standard)}–{pct(CREDIT_TIERS.premier)} of the raise starts buying and burning the token from the first drip.
+        {pct(CREDIT_TIERS.standard)} to {pct(CREDIT_TIERS.premier)} of the raise starts buying and burning the token from the first drip.
       </P>
       <P>
         The same canonical math runs in both execution modes: <C>computeClearing</C> and <C>settleBid</C> (clearing.ts), <C>splitFees</C> (fees.ts) and{" "}
@@ -93,7 +93,7 @@ export default function DocsOverview() {
             n: "03",
             title: "Graduate + vault",
             body: "The raise and pool supply seed a locked pool. The Credit Pool advances a buyback line that drips into buy-and-burns.",
-            facts: [`credit ${pct(CREDIT_TIERS.standard)}–${pct(CREDIT_TIERS.premier)} of raise`, "drip every 2–5 min"],
+            facts: [`credit ${pct(CREDIT_TIERS.standard)} to ${pct(CREDIT_TIERS.premier)} of raise`, "drip every 2 to 5 min"],
           },
           {
             n: "04",
@@ -125,17 +125,17 @@ export default function DocsOverview() {
       <StatusLegend />
       <H2 id="mainnet" n="0.5">Moving to mainnet</H2>
       <P>
-        These changes make up the switch from devnet to mainnet. They are labelled rolling out until each one can be checked on the hosted API.
+        These changes make up the mainnet launch. They are labelled rolling out until each one can be checked on the hosted API.
       </P>
       <MainnetRollout />
       <H2 id="components" n="0.6">Components</H2>
       <Ledger
         items={[
-          { k: "Demo world", s: "demo", v: "Ticking auctions, buyback countdowns, repayment bars and a trade tape for local development and devnet. Disabled on mainnet: no demo launches and no in-browser fallback." },
+          { k: "Demo world", s: "demo", v: "Ticking auctions, buyback countdowns, repayment bars and a trade tape for local development only. Disabled on mainnet: no demo launches and no in-browser fallback." },
           { k: "Offchain ledger engine and SIWS", s: "offchain-passing", sLabel: "Off-chain · tests passing", v: "Double-entry ledger, auction/clearing/pool/drip/fee/reward engine, SIWS sign-in and the trade, account, custody and admin routes in apps/api/src/offchain and apps/api/src/routes. Deployed on Railway with Postgres and Redis; moving to mainnet." },
           { k: "Deposits and payouts", s: "rolling", v: "Deposit watcher, withdrawal queue, payout worker and proof of reserves are built and tested. On mainnet they need HELIUS_API_KEY and COMPANY_WALLET_SECRET_KEY on the API and a company wallet funded with SOL for fees. Only SOL and USDC withdraw." },
           { k: "Clearing, fee and commitment math", s: "offchain-passing", v: "Shared TypeScript with unit and seeded property tests (shared 7/7, invariants 34 pass + 1 todo)." },
-          { k: "Anchor program", s: "chain-pending", v: "14 instructions. anchor build succeeds; 15/15 Rust unit tests and 18/18 anchor tests (anchor test -- --features test-mode) pass. Roadmap: not deployed to devnet or mainnet." },
+          { k: "Anchor program", s: "chain-pending", v: "14 instructions. anchor build succeeds; 15/15 Rust unit tests and 18/18 anchor tests (anchor test -- --features test-mode) pass. Roadmap: not deployed." },
           { k: "Helius Privacy Rings", s: "simulated", v: "Simulated ring in demo; real status probe and indexer proxy implemented; private escrow funding fails closed on real networks." },
           { k: "Third-party audit", s: "planned", v: "None exists, for the custodial backend or the program." },
         ]}

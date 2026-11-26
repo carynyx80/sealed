@@ -30,7 +30,7 @@ export default function Privacy() {
       >
         <StatusBadge status="simulated" label="Ring · simulated in demo" />
         <StatusBadge status="offchain-passing" label="Status probe + RPC proxy" />
-        <StatusBadge status="planned" label="Private escrow · phases A–C" />
+        <StatusBadge status="planned" label="Private escrow · phases A to C" />
       </DocHeader>
 
       <H2 id="leak" n="6.1">The leak</H2>
@@ -59,7 +59,7 @@ export default function Privacy() {
         <li>Deposits into a ring (public → private) and withdrawals (private → public) publish their amounts. Only private → private transfers hide them.</li>
         <li>Owners read balances locally with an X25519 viewing key. Proofs come from a Helius-hosted prover in a TEE, or a local prover.</li>
         <li>
-          Solana Privacy Program <C>ring1GaLCuJnkUMVkX2JeZLTTX17wKsV4fZmPVzXANW</C>, same id on devnet and mainnet. The Helius docs disagree on whether mainnet
+          Solana Privacy Program <C>ring1GaLCuJnkUMVkX2JeZLTTX17wKsV4fZmPVzXANW</C>, the same id on every cluster. The Helius docs disagree on whether mainnet
           beta is live, so the API probes liveness at runtime.
         </li>
       </UL>
@@ -84,7 +84,7 @@ export default function Privacy() {
           { k: "GET /api/privacy/status", s: "offchain-passing", v: "Live probe via getUserRecords, cached 60 s. Returns simulated: true in demo mode." },
           { k: "POST /api/privacy/rpc", s: "offchain-passing", v: <>Proxies the 8 documented indexer methods; <C>HELIUS_API_KEY</C> never leaves the server; 32 KB body, 120 requests/min/IP.</> },
           { k: "Private deposit toggle (demo)", s: "simulated", v: "A nacl.secretbox ring model funds a shielded escrow; bids are marked privately funded. No real funds." },
-          { k: "Private deposit (devnet / mainnet)", s: "planned", v: "Fails closed: the escrow is a plain SPL token account and cannot receive confidential transfers. The toggle is disabled with the reason." },
+          { k: "Private deposit (mainnet)", s: "planned", v: "Fails closed: the escrow is a plain SPL token account and cannot receive confidential transfers. The toggle is disabled with the reason." },
           { k: "Shield, transfer, withdraw, decrypt", s: "planned", v: "Need @heliuslabs/spr plus a shielded keypair that wallet-adapter cannot yet derive. Behind the HeliusSprBindings seam." },
         ]}
       />

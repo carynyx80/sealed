@@ -6,13 +6,14 @@ import { useLaunches } from "@/lib/live";
 import { useReducedMotion } from "@/components/motion/reduced";
 import { SPRING } from "../motion/spring";
 import { ArrowRight } from "../ui/Icons";
+import { PoweredByHelius } from "./PoweredByHelius";
 import { SealedBook } from "./SealedBook";
 import "./hero.css";
 
 const RAILS = [
   { k: "Uniform clearing", v: "Every winner pays one price", n: "2" },
   { k: "Creator cap", v: "≤ 2% of supply, enforced at launch", n: "" },
-  { k: "Day-one credit", v: "10–15% of raise buys & burns", n: "3" },
+  { k: "Day-one credit", v: "10 to 15% of raise buys & burns", n: "3" },
 ];
 
 export function Hero() {
@@ -39,7 +40,7 @@ export function Hero() {
     <section className="relative overflow-x-clip pb-16 pt-6 sm:pb-24 sm:pt-8">
       {/* dateline */}
       <div {...lift(0)} className="hero-rise flex items-center justify-between gap-4 border-b border-ink pb-2.5 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-slate">
-        <span>§ 00 — Sealed-block launchpad</span>
+        <span>§ 00 · Sealed-block launchpad</span>
         <span className="hidden sm:inline">Solana · Commit → Reveal → Clear → Buy back</span>
         <span className="sm:hidden">Solana</span>
       </div>
@@ -53,7 +54,7 @@ export function Hero() {
           </h1>
 
           <p {...lift(110)} className="hero-rise mt-8 max-w-[34rem] text-[17px] leading-relaxed text-ink-slate">
-            Every token opens with a private commit–reveal auction that clears at a single price — no block-zero snipers, no whale copy-trading. At graduation a locked fee-credit vault starts buying and burning, repays itself from fees, then turns into a flywheel holders keep.
+            Every token opens with a private commit-reveal auction that clears at a single price: no block-zero snipers, no whale copy-trading. At graduation a locked fee-credit vault starts buying and burning, repays itself from fees, then turns into a flywheel holders keep.
           </p>
 
           <div {...lift(170)} className="hero-rise mt-9 flex flex-wrap items-center gap-x-7 gap-y-4">
@@ -74,6 +75,8 @@ export function Hero() {
             ))}
           </motion.dl>
         </div>
+
+        <PoweredByHelius id="helius-credit-m" className="border-t lg:hidden" />
 
         <motion.div {...rise(0.15)} className="w-full max-w-[560px] lg:col-span-5 lg:max-w-none lg:pl-4 lg:pt-3">
           <SealedBook launch={featured} />

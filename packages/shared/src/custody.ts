@@ -87,6 +87,8 @@ export interface WithdrawalRecord {
   signature?: string;
   ts: number;
   reason?: string;
+  /** Set for private payouts (confidential transfer to this Shielded Address); `destination` then equals it. Additive. */
+  privateTo?: string;
 }
 
 // ---------------- trading ----------------
@@ -176,3 +178,78 @@ export const RPC_PROXY_METHODS = [
 export type RpcProxyMethod = (typeof RPC_PROXY_METHODS)[number];
 /** Proxy limits: max JSON-RPC batch size, max body bytes, per-IP requests/min (all methods / sendTransaction). */
 export const RPC_PROXY_LIMITS = { maxBatch: 10, maxBodyBytes: 64 * 1024, perIpPerMin: 120, sendTxPerIpPerMin: 20 } as const;
+
+// ---------------- Helius Solana Privacy Rings (custodial private deposits / payouts; additive) ----------------
+/**
+ * Off-chain message the Helius SPR SDK derives a wallet's shielded keypair from (`ED25519_DERIVATION_MSG` in
+ * `@heliuslabs/spr/keypair`). A wallet must sign the FULL Solana off-chain message v0 bytes produced by
+ * `ed25519DerivationMessage(walletPublicKey)` from `@heliuslabs/spr/keypair` — signing only this string is rejected.
+ * The resulting signature is secret key material (pass it to `LocalKeys.fromDerivationSeed`).
+ */
+export const SPR_DERIVE_MESSAGE = "TSPP/derive/v1";
+
+/** Assets accepted for private deposits / payouts through the Default Ring. */
+export type PrivacyAsset = "SOL" | "USDC";
+
+/** Privacy REST routes. Everything except `status` requires `Authorization: Bearer <token>`; `adminRegister` needs `x-admin-token`. */
+export const PRIVACY_ROUTES = {
+  status: "/api/privacy/status", // GET → PrivacyStatusResponse (+ enabled, companyShieldedAddress, companyRegistered)
+  rpc: "/api/privacy/rpc", // POST {method, params} → Helius SPR indexer proxy
+  /** Keyed passthrough to https://{network}.helius-rpc.com/v1/spr/* — use as the SDK's indexerUrl AND proverUrl. */
+  spr: "/api/privacy/spr",
+  depositInfo: "/api/privacy/deposit-info", // GET → PrivateDepositInfo
+  claimDeposit: "/api/privacy/deposits/claim", // POST {signature} → PrivateDepositClaimResponse
+  deposits: "/api/privacy/deposits", // GET → { deposits: PrivateDepositRecord[] }
+  withdrawals: "/api/account/withdrawals", // POST WithdrawRequest + privateTo → WithdrawalRecord (private payout)
+  adminRegister: "/api/admin/privacy/register", // POST → registers the company shielded address (admin, costs SOL)
+} as const;
+
+/** Returned (HTTP 503) by every privacy route while the feature is off or unavailable. */
+export interface PrivacyDisabledResponse {
+  enabled: false;
+  reason: string;
+}
+
+export interface PrivateDepositInfo {
+  enabled: boolean;
+  reason?: string;
+  /**
+   * Where users send confidential transfers: the company's registered Solana owner address. Pass it as `recipient`
+   * to `buildTransferTransaction` (the SDK resolves its Shielded Address through the User Registry).
+   */
+  companyShieldedAddress: string;
+  /** base58 of `ShieldedAddress.toBytes()` (signing ‖ nullifier ‖ viewing keys), for senders that skip the registry. */
+  companyShieldedAddressBytes?: string;
+  /**
+   * Stable per-user reference (same as AccountResponse.depositRef). Attribution: the transfer must be SENT FROM the
+   * signed-in wallet (its Solana signer is visible in the Default Ring), or carry this reference as the note memo.
+   */
+  reference: string;
+  assets: PrivacyAsset[];
+  network: "mainnet" | "devnet" | "localnet";
+  minAmount: Record<PrivacyAsset, number>;
+}
+
+export const PrivateDepositClaimSchema = z.object({ signature: z.string().min(64).max(100) });
+export interface PrivateDepositClaimResponse {
+  status: "detected" | "credited" | "pending" | "rejected";
+  reason?: string;
+}
+export interface PrivateDepositRecord {
+  id: string;
+  signature: string;
+  asset: QuoteAssetSymbol;
+  amount: number;
+  status: DepositStatus;
+  ts: number;
+  reason?: string;
+}
+
+/** POST /api/account/withdrawals with `privateTo` → confidential transfer instead of a public payout. */
+export const PrivateWithdrawRequestSchema = WithdrawRequestSchema.extend({
+  /**
+   * Recipient Shielded Address: a REGISTERED Solana owner address (base58, 32 bytes), or base58 of
+   * `ShieldedAddress.toBytes()` (99 bytes).
+   */
+  privateTo: z.string().min(32).max(160).regex(/^[1-9A-HJ-NP-Za-km-z]+$/).optional(),
+});

@@ -35,6 +35,10 @@ const EnvSchema = z.object({
   WORKERS_ENABLED: z.preprocess(emptyToUndef, boolish.default(true)),
   EXECUTION_MODE: z.preprocess(emptyToUndef, z.enum(["offchain", "onchain"]).default("offchain")),
   OFFCHAIN_TICK_MS: z.coerce.number().int().positive().default(2000),
+  /** Public base URL of this API (absolute image URLs). Default: derived from the request (x-forwarded-proto/host). */
+  PUBLIC_API_URL: z.preprocess(emptyToUndef, z.string().url().optional()),
+  /** Token image uploads allowed per wallet per hour. */
+  UPLOAD_RATE_LIMIT_PER_HOUR: z.coerce.number().int().positive().default(20),
 });
 
 export interface AppConfig {
@@ -63,6 +67,9 @@ export interface AppConfig {
   offchainTickMs: number;
   jupiterPriceApiUrl: string;
   jupiterApiKey?: string;
+  /** Public API origin (no trailing slash) used for absolute upload URLs; undefined → derived per request. */
+  publicApiUrl?: string;
+  uploadRateLimitPerHour: number;
   /**
    * Configuration problems detected at load time that were corrected fail-safe (e.g. DEMO_MODE forced off on
    * mainnet). buildServer logs each one at ERROR level on startup.
@@ -117,6 +124,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     offchainTickMs: e.OFFCHAIN_TICK_MS,
     jupiterPriceApiUrl: e.JUPITER_PRICE_API_URL.replace(/\/$/, ""),
     jupiterApiKey: e.JUPITER_API_KEY,
+    publicApiUrl: e.PUBLIC_API_URL ? new URL(e.PUBLIC_API_URL).origin : undefined,
+    uploadRateLimitPerHour: e.UPLOAD_RATE_LIMIT_PER_HOUR,
     startupErrors,
     version: "0.1.0",
     ...overrides,

@@ -47,7 +47,7 @@ export function TradeTape({ trades, quote, ticker, network, max = 14 }: { trades
                 className={clsx(COLS, "items-baseline py-2.5 text-[12px] transition-colors hover:bg-paper-deep/60", t.isBuyback && "pl-2.5 hover:bg-gain-tint")}
                 label={`${t.isBuyback ? "Vault buy and burn" : t.side} ${fmtAmount(t.amountQuote)} ${quote}`}
               >
-                <span className="num text-ink-muted">{now === null ? "—" : fmtAgo(t.ts, now)}</span>
+                <span className="num text-ink-muted">{now === null ? "…" : fmtAgo(t.ts, now)}</span>
                 {t.isBuyback ? (
                   <span className="flex min-w-0 items-center gap-1.5 text-gain">
                     <FlameIcon width={12} height={12} className="shrink-0" />
@@ -57,7 +57,7 @@ export function TradeTape({ trades, quote, ticker, network, max = 14 }: { trades
                   <span className="flex min-w-0 items-baseline gap-2">
                     <span className={clsx("w-8 shrink-0 font-mono text-[10px] uppercase tracking-[0.06em]", t.side === "buy" ? "text-ink" : "text-burn")}>{t.side}</span>
                     <span className="num truncate text-ink-slate">{shortAddr(t.wallet)}</span>
-                    {t.isSniper && <span className="hidden font-mono text-[9px] uppercase tracking-[0.06em] text-burn sm:inline" title="Bought in the graduation slot — 0% holder rewards">snipe</span>}
+                    {t.isSniper && <span className="hidden font-mono text-[9px] uppercase tracking-[0.06em] text-burn sm:inline" title="Bought in the graduation slot: 0% holder rewards">snipe</span>}
                   </span>
                 )}
                 <span className="num hidden text-right text-ink-slate sm:block">{fmtPrice(t.price)}</span>
@@ -83,7 +83,7 @@ function RowLink({ signature, network, className, label, children }: { signature
     );
   }
   return (
-    <a href={solscanTx(signature, network)} target="_blank" rel="noreferrer" className={className} aria-label={`${label} — view on Solscan`}>
+    <a href={solscanTx(signature, network)} target="_blank" rel="noreferrer" className={className} aria-label={`${label}, view on Solscan`}>
       {children}
     </a>
   );

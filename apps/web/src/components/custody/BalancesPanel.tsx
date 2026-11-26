@@ -18,7 +18,7 @@ export function BalancesPanel({ className }: { className?: string }) {
     <section className={clsx("card overflow-hidden", className)} aria-labelledby="balances-title">
       <div className="flex flex-wrap items-baseline justify-between gap-3 p-5 sm:p-6">
         <div>
-          <p className="section-mark">§ 01 — Balances</p>
+          <p className="section-mark">§ 01 · Balances</p>
           <h2 id="balances-title" className="mt-2 font-display text-display-sm text-ink">Internal ledger</h2>
         </div>
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted">Held by Sealed · recorded offchain</span>
@@ -101,7 +101,7 @@ function Row({ r }: { r: BalanceRow }) {
         <span className="mr-1 text-[10px] text-ink-muted sm:hidden">locked</span>
         {fmtBal(r.locked)}
       </span>
-      <span role="cell" className="num text-right text-[12px] text-ink-slate sm:text-[13px]">{usd === null ? "—" : fmtUsd(usd, false)}</span>
+      <span role="cell" className="num text-right text-[12px] text-ink-slate sm:text-[13px]">{usd === null ? "n/a" : fmtUsd(usd, false)}</span>
       <span role="cell" className="col-span-2 mt-1 flex justify-end gap-1.5 sm:col-span-1 sm:mt-0">
         {isQuote ? (
           <>

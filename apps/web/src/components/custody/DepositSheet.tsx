@@ -38,6 +38,9 @@ import { Sheet } from "./Sheet";
 import { CustodyGate } from "./SignInButton";
 import { CopyField, DepositSteps, DisclosureList, QrCode, cleanAmount, explorerAccount, explorerTx } from "./parts";
 import { ArrowUpRight } from "../ui/Icons";
+import { usePrivacyRing } from "@/lib/privacy/usePrivacyRing";
+import { takePrivateDepositPreference } from "@/lib/privacy/session";
+import { PrivateDeposit } from "../privacy/PrivateDeposit";
 
 type Phase = "idle" | "building" | "review" | "signing" | "sent" | "error";
 
@@ -47,16 +50,52 @@ export function DepositSheet({ open, onClose, asset: initialAsset, suggested }: 
     if (open) setAsset(initialAsset);
   }, [open, initialAsset]);
   const [phase, setPhase] = useState<Phase>("idle");
+  // Helius Privacy Ring method: only offered when the API enables real private features on this network.
+  const ring = usePrivacyRing();
+  const [method, setMethod] = useState<"standard" | "private">("standard");
+  const [privBusy, setPrivBusy] = useState(false);
+  useEffect(() => {
+    if (open) setMethod(takePrivateDepositPreference() ? "private" : "standard");
+  }, [open]);
+  const showPrivate = ring.privateEnabled;
+  const s = useCustodySession();
   return (
     <Sheet
       open={open}
       onClose={onClose}
-      locked={phase === "signing" || phase === "building"}
-      mark="§ Account — Deposit"
+      locked={phase === "signing" || phase === "building" || privBusy}
+      mark="§ Account · Deposit"
       title={<>Fund your <span className="accent">account</span></>}
     >
       <CustodyGate offline="full" why="Sign in so Sealed can give you your personal deposit memo. It's a message signature, not a transaction.">
-        <DepositBody key={`${asset}-${open}`} asset={asset} setAsset={setAsset} suggested={suggested} phase={phase} setPhase={setPhase} />
+        {showPrivate && (
+          <div role="radiogroup" aria-label="Deposit method" className="mb-4 grid grid-cols-2 gap-1.5 rounded-full border border-rule bg-paper-deep/60 p-1">
+            {([
+              ["standard", "Standard transfer"],
+              ["private", "Private · Privacy Ring"],
+            ] as const).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                role="radio"
+                aria-checked={method === k}
+                disabled={privBusy || phase === "signing" || phase === "building"}
+                onClick={() => setMethod(k)}
+                className={clsx(
+                  "min-h-[40px] rounded-full px-3 text-[12.5px] font-semibold transition",
+                  method === k ? (k === "private" ? "bg-signal text-white" : "bg-ink text-paper") : "text-ink-slate hover:text-ink",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {showPrivate && method === "private" ? (
+          <PrivateDeposit key={`priv-${open}`} wallet={s.wallet} initialAsset={asset} onBusy={setPrivBusy} />
+        ) : (
+          <DepositBody key={`${asset}-${open}`} asset={asset} setAsset={setAsset} suggested={suggested} phase={phase} setPhase={setPhase} />
+        )}
       </CustodyGate>
       <div className="mt-6 border-t border-rule pt-4">
         <p className="section-mark mb-2">§ Custody</p>
@@ -376,7 +415,7 @@ function DepositReview({
   return (
     <div className="mt-4 rounded-field border border-ink bg-white" aria-live="polite">
       <div className="flex items-baseline justify-between gap-3 border-b border-rule px-4 pb-2 pt-3">
-        <p className="eyebrow">Review transfer · {NETWORK_LABEL}</p>
+        <p className="eyebrow">Review transfer{NETWORK_LABEL && ` · ${NETWORK_LABEL}`}</p>
         {IS_MAINNET && <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-burn">Real funds</span>}
       </div>
       <dl className="divide-y divide-rule px-4 text-[13px]">

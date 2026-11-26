@@ -9,7 +9,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
   }, [error]);
   return (
     <section className="border-b border-rule py-20 sm:py-28">
-      <p className="section-mark">§ Error{error.digest ? ` — ${error.digest}` : ""}</p>
+      <p className="section-mark">§ Error{error.digest ? ` · ${error.digest}` : ""}</p>
       <h1 className="mt-6 max-w-3xl text-display-xl text-ink">
         A seal <span className="accent">cracked.</span>
       </h1>

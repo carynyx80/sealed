@@ -35,8 +35,8 @@ export function StatusBadge({ status, label, className }: { status: Status; labe
 export function StatusLegend() {
   const order: Array<[Status, string]> = [
     ["rolling", "Part of the switch to Solana mainnet. Being deployed now; check /api/health and /api/custody/info on the hosted API before relying on it."],
-    ["demo", "Runs in the demo world (local development or a devnet API with DEMO_MODE). Disabled on mainnet. No real funds."],
-    ["chain-pending", "Implemented in the Anchor program. anchor build succeeds, the 15 Rust unit tests and the 18-test anchor suite (with --features test-mode) pass locally. Not deployed to devnet or mainnet."],
+    ["demo", "Runs in the demo world (local development with DEMO_MODE). Disabled on mainnet. No real funds."],
+    ["chain-pending", "Implemented in the Anchor program. anchor build succeeds, the 15 Rust unit tests and the 18-test anchor suite (with --features test-mode) pass locally. Not deployed."],
     ["offchain-passing", "TypeScript implementation with unit, invariant or e2e tests that pass today."],
     ["simulated", "A stand-in that models the behaviour (for example the simulated Privacy Ring)."],
     ["dev", "Built, tested and deployed on Railway, but only active once the operator has set its secret (COMPANY_WALLET_SECRET_KEY for payouts, HELIUS_API_KEY for deposit detection). /api/custody/info reports payoutsEnabled."],
@@ -63,7 +63,7 @@ export function DocHeader({ n, kicker, title, lede, children }: { n: string; kic
   return (
     <header className="border-b border-ink pb-8">
       <p className="section-mark">
-        § {n} — {kicker}
+        § {n} · {kicker}
       </p>
       <h1 className="mt-4 text-display-lg">{title}</h1>
       <p className="mt-5 max-w-[40rem] text-[17px] leading-relaxed text-ink-slate">{lede}</p>

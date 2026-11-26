@@ -90,17 +90,17 @@ export default function HowItWorks() {
 
       <H2 id="setup" n="1.3">Launch setup</H2>
       <P>
-        The creator picks a quote asset — {QUOTE_ASSET_LIST.map((q) => q.symbol).join(", ")} — and the auction parameters. Launched tokens always use{" "}
+        The creator picks a quote asset ({QUOTE_ASSET_LIST.map((q) => q.symbol).join(", ")}) and the auction parameters. Launched tokens always use{" "}
         <N>6</N> decimals and prices are quoted in quote-asset per whole token.
       </P>
       <Table
         head={["Parameter", "Bounds", "Enforced by"]}
         rows={[
-          ["Creator allocation", <N key="a">0 – {pct(MAX_CREATOR_ALLOCATION_BPS)} of supply</N>, "schema (400) + program (CreatorAllocationTooHigh)"],
-          ["Auction supply", <N key="a">{pct(MIN_AUCTION_SUPPLY_BPS)} – {pct(MAX_AUCTION_SUPPLY_BPS)}</N>, "schema + program (InvalidAuctionSupply)"],
-          ["Commit window", <N key="a">{min(MIN_COMMIT_DURATION_SEC_MAINNET)} – {min(MAX_COMMIT_DURATION_SEC)} mainnet · ≥ {min(MIN_COMMIT_DURATION_SEC_DEVNET)} devnet</N>, "program (InvalidDuration); the API enforces the mainnet bound on mainnet (rolling out) and allows 2–30 min elsewhere"],
-          ["Reveal window", <N key="a">60 – 600 s API · 60 – 1,800 s program · default {DEFAULT_REVEAL_DURATION_SEC} s</N>, "schema + program"],
-          ["Drip interval", <N key="a">{MIN_DRIP_INTERVAL_SEC} – {MAX_DRIP_INTERVAL_SEC} s · default {DEFAULT_DRIP_INTERVAL_SEC} s · {DEFAULT_DRIP_COUNT} drips</N>, "program (InvalidDripInterval)"],
+          ["Creator allocation", <N key="a">0 to {pct(MAX_CREATOR_ALLOCATION_BPS)} of supply</N>, "schema (400) + program (CreatorAllocationTooHigh)"],
+          ["Auction supply", <N key="a">{pct(MIN_AUCTION_SUPPLY_BPS)} to {pct(MAX_AUCTION_SUPPLY_BPS)}</N>, "schema + program (InvalidAuctionSupply)"],
+          ["Commit window", <N key="a">{min(MIN_COMMIT_DURATION_SEC_MAINNET)} to {min(MAX_COMMIT_DURATION_SEC)} on mainnet · ≥ {min(MIN_COMMIT_DURATION_SEC_DEVNET)} in local development</N>, "program (InvalidDuration); the API enforces the mainnet bound on mainnet (rolling out) and allows 2 to 30 min in local development"],
+          ["Reveal window", <N key="a">60 to 600 s API · 60 to 1,800 s program · default {DEFAULT_REVEAL_DURATION_SEC} s</N>, "schema + program"],
+          ["Drip interval", <N key="a">{MIN_DRIP_INTERVAL_SEC} to {MAX_DRIP_INTERVAL_SEC} s · default {DEFAULT_DRIP_INTERVAL_SEC} s · {DEFAULT_DRIP_COUNT} drips</N>, "program (InvalidDripInterval)"],
           ["Clearing cap", <span key="a">≥ targetRaise (API) and ≥ floor × tokensForSale (program)</span>, "API superRefine + program (InvalidParams)"],
         ]}
       />
@@ -113,7 +113,7 @@ export default function HowItWorks() {
           { value: fmt(creator / 1e6), unit: "M", label: "to the creator at creation" },
           { value: fmt(auction / 1e6), unit: "M", label: "sold in the sealed auction" },
           { value: fmt(pool / 1e6), unit: "M", label: "seeded into the pool (+ any unsold)" },
-          { value: "0", label: "LP tokens minted — liquidity is locked" },
+          { value: "0", label: "LP tokens minted: liquidity is locked" },
         ]}
       />
 
@@ -161,8 +161,8 @@ export default function HowItWorks() {
       />
       <Note title="Demo mode">
         <p>
-          With no environment set, the API runs <C>DEMO_MODE</C> with an in-memory store and a deterministic demo world; the UI labels it Devnet / Demo.
-          Demo bids go through <C>POST /api/auctions/:id/demo-bid</C> with a real keccak commitment. No real funds move. Demo mode is for local development and devnet only:
+          With no environment set, the API runs <C>DEMO_MODE</C> with an in-memory store and a deterministic demo world; the UI labels it Demo.
+          Demo bids go through <C>POST /api/auctions/:id/demo-bid</C> with a real keccak commitment. No real funds move. Demo mode is for local development only:
           it is disabled on mainnet, where the hosted API (rolling out) serves only real launches with real funds and the web app has no demo fallback.
         </p>
       </Note>

@@ -27,7 +27,7 @@ export function CreditRepayMeter({ credit, quote, compact = false, className }: 
   return (
     <section className={clsx("card p-5 sm:p-6", className)} aria-label="Credit repayment">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="section-mark">§ Credit — Repayment</p>
+        <p className="section-mark">§ Credit · Repayment</p>
         <p className="font-mono text-[11px] text-ink-muted">{fly ? "phase 02" : "phase 01"}</p>
       </div>
 
@@ -37,9 +37,9 @@ export function CreditRepayMeter({ credit, quote, compact = false, className }: 
       </div>
       <p className="mt-2 text-[13px] text-ink-slate">
         {fly ? (
-          <>Flywheel <span className="accent text-ink">active</span> — fees now split 50 / 35 / 15, permanently.</>
+          <>Flywheel <span className="accent text-ink">active</span>: fees now split 50 / 35 / 15, permanently.</>
         ) : (
-          <>&mdash; Flywheel activates at <span className="num text-ink">100%</span>.</>
+          <>Flywheel activates at <span className="num text-ink">100%</span>.</>
         )}
       </p>
 

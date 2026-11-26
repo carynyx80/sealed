@@ -43,7 +43,7 @@ export function LiveCard({ launch, index }: { launch: LaunchSummary; index?: num
     <Link href={`/token/${launch.mint}`} className="block h-full rounded-card focus:outline-none focus-visible:ring-2 focus-visible:ring-signal/40">
       <SpringCard className="flex h-full flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-rule px-5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-muted">
-          <span>No. {index !== undefined ? String(index + 1).padStart(2, "0") : "—"} · <span className={fly ? "text-gain" : "text-ink"}>{PHASE_LABEL[launch.status]}</span></span>
+          <span>{index !== undefined && <>No. {String(index + 1).padStart(2, "0")} · </>}<span className={fly ? "text-gain" : "text-ink"}>{PHASE_LABEL[launch.status]}</span></span>
           <QuoteBadge symbol={launch.quoteAsset} />
         </div>
         <div className="flex flex-1 flex-col p-5">
@@ -59,12 +59,12 @@ export function LiveCard({ launch, index }: { launch: LaunchSummary; index?: num
             <div className="min-w-0">
               <p className="eyebrow">Price</p>
               <p className="mt-1.5 truncate text-[28px] leading-none tracking-[-0.03em]">
-                <span className="num">{m ? fmtPrice(m.price) : "—"}</span> <span className="num text-xs tracking-normal text-ink-muted">{launch.quoteAsset}</span>
+                <span className="num">{m ? fmtPrice(m.price) : "n/a"}</span> <span className="num text-xs tracking-normal text-ink-muted">{launch.quoteAsset}</span>
               </p>
             </div>
             <div className="text-right">
               <p className="eyebrow">24h</p>
-              <div className="mt-1.5">{m ? <ChangeTag pct={m.change24hPct} /> : <span className="num text-xs text-ink-muted">—</span>}</div>
+              <div className="mt-1.5">{m ? <ChangeTag pct={m.change24hPct} /> : <span className="num text-xs text-ink-muted">n/a</span>}</div>
             </div>
           </div>
           {m && <p className="fine mt-1.5">MC <span className="num text-ink-slate">{fmtUsd(m.priceUsd * launch.totalSupply)}</span> · Vol 24h <span className="num text-ink-slate">{fmtUsd(m.volume24h * QUOTE_ASSETS[launch.quoteAsset].demoUsdPrice)}</span></p>}

@@ -16,10 +16,11 @@ import { ServiceStatus } from "./ServiceStatus";
 
 export const NAV_LINKS = [
   { href: "/", label: "Lobby", n: "01" },
-  { href: "/launch", label: "Launch Studio", n: "02" },
-  { href: "/revenue", label: "Revenue & Burn", n: "03" },
-  { href: "/docs", label: "Docs", n: "04" },
-  { href: "/account", label: "Account", n: "05" },
+  { href: "/how-it-works", label: "How it works", n: "02" },
+  { href: "/launch", label: "Launch Studio", n: "03" },
+  { href: "/revenue", label: "Revenue & Burn", n: "04" },
+  { href: "/docs", label: "Docs", n: "05" },
+  { href: "/account", label: "Account", n: "06" },
 ];
 
 export function NetworkBadge({ className }: { className?: string }) {
@@ -31,11 +32,11 @@ export function NetworkBadge({ className }: { className?: string }) {
   return (
     <span
       className={clsx("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-rule bg-sheet px-2.5 py-[5px] font-mono text-[10.5px] uppercase leading-none tracking-[0.06em] text-ink-slate", className)}
-      title={source === "demo" ? "API unreachable — showing a simulated demo world" : source === "offline" ? "Sealed API unreachable — retrying" : undefined}
+      title={source === "demo" ? "API unreachable. Showing a simulated demo world." : source === "offline" ? "Sealed API unreachable. Retrying…" : undefined}
     >
       <span className={clsx("h-1.5 w-1.5 rounded-full", IS_MAINNET && source !== "offline" ? "bg-gain" : "bg-burn")} />
       {NETWORK_LABEL}
-      {suffix && <span className="text-ink-muted">/ {suffix}</span>}
+      {suffix && <span className={NETWORK_LABEL ? "text-ink-muted" : undefined}>{NETWORK_LABEL ? `/ ${suffix}` : suffix}</span>}
     </span>
   );
 }
@@ -94,7 +95,7 @@ export function NavBar() {
     <header className="sticky top-0 z-40 border-b border-rule bg-paper">
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6" aria-label="Main">
         <div className="flex min-w-0 items-center gap-4 lg:gap-6">
-          <Link href="/" className="flex min-h-[44px] shrink-0 items-center" aria-label="Sealed — lobby">
+          <Link href="/" className="flex min-h-[44px] shrink-0 items-center" aria-label="Sealed lobby">
             <Wordmark />
           </Link>
           <span className="hidden h-5 w-px bg-rule lg:block" aria-hidden />

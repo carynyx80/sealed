@@ -5,11 +5,13 @@ import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { COMPANY_WALLET, type DepositRecord, type Network, type WithdrawalRecord } from "@sealed/shared";
 import { openDeposit, useCustodyAccount, useCustodyInfo, useCustodySession, useDeposits, useWithdrawals } from "@/lib/custody";
+import { networkName } from "@/lib/config";
 import { fmtAmount, shortAddr } from "@/lib/format";
 import { BalancesPanel } from "./BalancesPanel";
 import { CustodyGate, CustodyOffline, SignInButton } from "./SignInButton";
-import { DisclosureList, PayoutsPausedNotice, StatusChip, explorerAccount, explorerTx, payoutsPausedCopy } from "./parts";
+import { DisclosureList, StatusChip, explorerAccount, explorerTx } from "./parts";
 import { ArrowUpRight } from "../ui/Icons";
+import { PrivateBalancePanel } from "../privacy/ShieldedIdentity";
 
 function fmtWhen(ts: number): string {
   const ms = ts > 1e12 ? ts : ts * 1000;
@@ -29,7 +31,7 @@ export function AccountView() {
       {/* masthead */}
       <header className="grid gap-8 border-b border-ink pb-8 lg:grid-cols-12 lg:items-end">
         <div className="lg:col-span-8">
-          <p className="section-mark">§ 05 — Account</p>
+          <p className="section-mark">§ 05 · Account</p>
           <h1 className="mt-4 font-display text-display-lg text-ink">
             Your <span className="accent">custodial</span> account
           </h1>
@@ -60,17 +62,12 @@ export function AccountView() {
           <CustodyOffline />
         </div>
       )}
-      {mounted && availability === "available" && info?.payoutsEnabled === false && (
-        <div className="mt-8">
-          <PayoutsPausedNotice reason={info.payoutsReason} />
-        </div>
-      )}
 
       {/* balances + disclosure */}
       <div className="mt-8 grid gap-6 lg:grid-cols-12">
         <BalancesPanel className="lg:col-span-7" />
         <aside className="card-linen p-5 sm:p-6 lg:col-span-5" aria-labelledby="custody-title">
-          <p className="section-mark">§ 02 — Custody disclosure</p>
+          <p className="section-mark">§ 02 · Custody disclosure</p>
           <h2 id="custody-title" className="mt-2 font-display text-display-sm text-ink">
             Who holds <span className="accent">what</span>
           </h2>
@@ -88,20 +85,21 @@ export function AccountView() {
             </a>
             {info && (
               <p className="fine mt-1">
-                Mode <span className="num">{info.mode}</span> · network <span className="num">{info.network}</span> · payouts{" "}
-                <span className={clsx("num", info.payoutsEnabled ? "text-gain" : "text-burn")}>{info.payoutsEnabled ? "automatic" : "manual approval"}</span>
-                {!info.payoutsEnabled && <> · <span>{payoutsPausedCopy(info.payoutsReason)}</span></>}
+                Mode <span className="num">{info.mode}</span> · network <span className="num">{networkName(info.network)}</span>
               </p>
             )}
           </div>
         </aside>
       </div>
 
+      {/* Helius Privacy Ring private balance: renders nothing unless private features are enabled */}
+      {mounted && <PrivateBalancePanel className="mt-8" />}
+
       {/* proof of reserves — night band */}
       <section className="card-night mt-8 overflow-hidden" aria-labelledby="por-title">
         <div className="grid gap-6 p-5 sm:p-8 lg:grid-cols-12">
           <div className="lg:col-span-4">
-            <p className="section-mark !text-night-muted">§ 03 — Proof of reserves</p>
+            <p className="section-mark !text-night-muted">§ 03 · Proof of reserves</p>
             <h2 id="por-title" className="mt-3 font-display text-display-md text-night-text">
               Held <span className="accent">versus</span> owed
             </h2>
@@ -154,7 +152,7 @@ function Reserves() {
               <span role="cell" className="num text-right text-[13px] text-night-text"><span className="mr-1 text-[10px] text-night-muted sm:hidden">held</span>{fmtAmount(r.onchain)}</span>
               <span role="cell" className="num text-[13px] text-night-muted sm:text-right"><span className="mr-1 text-[10px] sm:hidden">owed</span>{fmtAmount(r.liabilities)}</span>
               <span role="cell" className={clsx("num text-right text-[15px]", ok ? "text-gain-bright" : "text-burn-bright")}>
-                {r.liabilities === 0 ? "—" : `${r.ratio.toFixed(2)}×`}
+                {r.liabilities === 0 ? "n/a" : `${r.ratio.toFixed(2)}×`}
               </span>
               <span className="col-span-2 mt-1 block h-px w-full bg-night-rule sm:col-span-4" aria-hidden>
                 <span className={clsx("block h-px", ok ? "bg-gain-bright" : "bg-burn-bright")} style={{ width: `${pct * 100}%` }} />
@@ -164,7 +162,7 @@ function Reserves() {
         })}
       </div>
       <p className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.06em] text-night-muted">
-        As of {fmtWhen(asOf)} · refreshed every 60s · {info.network}
+        As of {fmtWhen(asOf)} · refreshed every 60s · {networkName(info.network)}
       </p>
     </div>
   );
@@ -176,7 +174,7 @@ function History({ kind, network }: { kind: "deposits" | "withdrawals"; network:
     <section className="card overflow-hidden" aria-labelledby={`${kind}-title`}>
       <div className="flex items-baseline justify-between gap-3 p-5 sm:p-6">
         <div>
-          <p className="section-mark">§ {kind === "deposits" ? "04" : "05"} — History</p>
+          <p className="section-mark">§ {kind === "deposits" ? "04" : "05"} · History</p>
           <h2 id={`${kind}-title`} className="mt-2 font-display text-display-sm text-ink">{title}</h2>
         </div>
       </div>

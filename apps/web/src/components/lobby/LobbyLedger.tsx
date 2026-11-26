@@ -85,11 +85,11 @@ export function LobbyLedger({ tab, rows }: { tab: "auctions" | "vaults" | "gradu
                     </>
                   ) : (
                     <>
-                      <span role="cell" className="num truncate text-right">{m ? fmtPrice(m.price) : "—"}</span>
-                      <span role="cell" className="text-right">{m ? <ChangeTag pct={m.change24hPct} /> : "—"}</span>
-                      <span role="cell" className="num truncate text-right">{l.vault ? <RollingNumber value={l.vault.balance < 0.005 ? 0 : l.vault.balance} digits={l.vault.balance >= 1000 ? 0 : 2} /> : "—"}</span>
-                      <span role="cell" className="min-w-0">{l.credit ? <RepaidMini pct={l.credit.repaidPct} short /> : <span className="text-ink-muted">—</span>}</span>
-                      <span role="cell" className="num truncate text-right text-ink-slate">{m ? fmtUsd(m.volume24h * QUOTE_ASSETS[l.quoteAsset].demoUsdPrice) : "—"}</span>
+                      <span role="cell" className="num truncate text-right">{m ? fmtPrice(m.price) : "n/a"}</span>
+                      <span role="cell" className="text-right">{m ? <ChangeTag pct={m.change24hPct} /> : "n/a"}</span>
+                      <span role="cell" className="num truncate text-right">{l.vault ? <RollingNumber value={l.vault.balance < 0.005 ? 0 : l.vault.balance} digits={l.vault.balance >= 1000 ? 0 : 2} /> : "n/a"}</span>
+                      <span role="cell" className="min-w-0">{l.credit ? <RepaidMini pct={l.credit.repaidPct} short /> : <span className="text-ink-muted">n/a</span>}</span>
+                      <span role="cell" className="num truncate text-right text-ink-slate">{m ? fmtUsd(m.volume24h * QUOTE_ASSETS[l.quoteAsset].demoUsdPrice) : "n/a"}</span>
                     </>
                   )}
                   <span role="cell" className="text-ink-muted transition-colors group-hover:text-ink" aria-hidden><ArrowUpRight width={14} height={14} /></span>

@@ -24,7 +24,7 @@ export const DOC_GROUPS: DocGroup[] = [
       { href: "/docs/how-it-works", n: "01", title: "How it works", summary: "A launch end to end: supply split, timing windows, statuses and who calls what." },
       { href: "/docs/custody", n: "02", title: "Custody", summary: "Custodial mode on mainnet: risk disclosure, sign-in, deposits, withdrawals, limits and proof of reserves." },
       { href: "/docs/sealed-auction", n: "03", title: "Sealed auction", summary: "Commit-reveal, the 80-byte keccak preimage, the tick grid and uniform clearing." },
-      { href: "/docs/buyback-vault", n: "04", title: "Buyback vault", summary: "The 10–15% fee-credit line, why the vault cannot be withdrawn, and the drip schedule." },
+      { href: "/docs/buyback-vault", n: "04", title: "Buyback vault", summary: "The 10 to 15% fee-credit line, why the vault cannot be withdrawn, and the drip schedule." },
       { href: "/docs/flywheel", n: "05", title: "Flywheel", summary: "Fee routing: 80/20 while repaying, 50/35/15 forever after, and the anti-snipe rule." },
       { href: "/docs/privacy", n: "06", title: "Privacy", summary: "Helius Privacy Rings: what is hidden, what stays public, and the phase A/B/C plan." },
     ],

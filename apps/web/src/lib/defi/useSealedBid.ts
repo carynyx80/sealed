@@ -32,7 +32,7 @@ import {
   EscrowFundingUnsupportedError,
 } from "@sealed/defi";
 import { apiFetch, demoSignature, errorMessage } from "./config";
-import { DEMO_ENABLED } from "../config";
+import { DEMO_ENABLED, networkName } from "../config";
 import { confirmSignature } from "../solana/tx";
 import { CustodyError, custodyFetch, custodyReady, getSession, isInsufficientBalance } from "../custody/client";
 import { signInWithSolana } from "../custody/auth";
@@ -231,7 +231,7 @@ export function useSealedBid(launch: LaunchSummary) {
           // Checked BEFORE the vault write and any transaction so nothing is half-done.
           const ring = await fetchPrivacyStatus();
           if (!ring.available || ring.simulated) {
-            throw new Error(`Private deposits need the Helius Privacy Ring on ${launch.network}: ${ring.reason ?? "unavailable"}. Turn off private deposit to bid publicly.`);
+            throw new Error(`Private deposits need the Helius Privacy Ring on ${networkName(launch.network)}: ${ring.reason ?? "unavailable"}. Turn off private deposit to bid publicly.`);
           }
           const client = heliusRing();
           if (!client.capabilities().fundProgramEscrow) {

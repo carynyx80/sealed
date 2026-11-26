@@ -23,6 +23,7 @@ import { cached } from "../cache/index.js";
 import { sendError, zodDetails, type AppContext } from "../context.js";
 import { nowSec, publicLaunch } from "../store/index.js";
 import { requireAuth } from "../offchain/auth/requireAuth.js";
+import { validateTokenImageUri } from "./uploads.js";
 
 const CreateLaunchBody = CreateLaunchInputSchema.superRefine((v, c) => {
   if (v.clearingCap < v.targetRaise) c.addIssue({ code: z.ZodIssueCode.custom, path: ["clearingCap"], message: "clearingCap must be ≥ targetRaise" });
@@ -130,10 +131,15 @@ export async function launchRoutes(app: FastifyInstance, ctx: AppContext) {
       if (!engine) return sendError(reply, 503, "offchain ledger unavailable");
       const wallet = await requireAuth(req, reply);
       if (!wallet || reply.sent) return reply;
+      const imageErr = await validateTokenImageUri(ctx, req, input.imageUri, wallet);
+      if (imageErr) return sendError(reply, 400, imageErr);
       const row = await engine.createLaunch(input, wallet);
       const summary = await engine.getSummary(row.id);
       return reply.code(200).send(publicLaunch(summary!));
     }
+
+    const imageErr = await validateTokenImageUri(ctx, req, input.imageUri);
+    if (imageErr) return sendError(reply, 400, imageErr);
 
     if (!ctx.cfg.isDemo) {
       const atoms = (v: number) => BigInt(Math.round(v * 10 ** QUOTE_ASSETS[input.quoteAsset].decimals)).toString();

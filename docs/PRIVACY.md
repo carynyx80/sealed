@@ -1,7 +1,8 @@
 # Private deposits with Helius Solana Privacy Rings
 
-Status: **beta integration**. The UI, adapter, API proxy and demo flow are done. On real networks, private deposits
-stay **disabled (fail closed)** until the program change in §5 ships. Research date: 2026-11-26.
+Status (2026-11-26): **custodial private deposits and payouts are implemented with the real SDK
+(`@heliuslabs/spr@0.9.0-alpha`) behind `PRIVACY_RING_ENABLED` (default OFF)** — see §7. Funding the on-chain escrow
+from the ring still fails closed until the program change in §5 ships.
 
 ## 1. The leak we are closing
 
@@ -139,21 +140,65 @@ No attestor and no custody.
 Client changes for B and C are prepared: `PrivacyRingClient.fundEscrow()` is the single seam, and
 `useSealedBid` has a marked `TODO(contracts)` where `commit_bid_shielded` gets built.
 
-## 6. Why the SDK isn't installed yet (real vs simulated)
+## 6. SDK status (updated)
 
-Real, working against Helius today:
-- `GET /api/privacy/status`: live probe via `getUserRecords`.
-- `POST /api/privacy/rpc`: proxy for the 8 documented indexer methods.
-- `HeliusPrivacyRingClient.isRegistered`: `getUserRecords`.
-- `HeliusPrivacyRingClient.encryptedBalance`: `getShieldedTransactionsByTags`, which counts encrypted outputs.
+The SDK is now installed (exact pin `@heliuslabs/spr@0.9.0-alpha` + `@solana/kit@8.6.0`) in apps/api, apps/web and
+packages/defi. The installed SDK's high-level API differs from the guide snippets quoted in §2 (which use the lower-level
+`ConfidentialTransfer` / `decryptToBalances`); the backend uses the README's documented surface: `createSprClient`,
+`ShieldedKeypair.fromKeypair`, `SigningKey.fromEd25519Bytes`, `LocalKeys`, `Wallet`, `syncWallet`,
+`buildRegistrationTransaction`, `buildTransferTransaction`, `fetchUserRecord`, `validateRegisteredKeypair`,
+`SignedTeePolicy.forNetwork`. Wallet-derived keys: the wallet signs the full off-chain message v0 bytes of
+`ed25519DerivationMessage(pubkey)` (payload `"TSPP/derive/v1"`, exported as `SPR_DERIVE_MESSAGE` in @sealed/shared) and
+passes the signature to `LocalKeys.fromDerivationSeed` — verified offline to be byte-identical to
+`ShieldedKeypair.fromKeypair(SigningKey.fromEd25519Bytes(seed))` for the same Ed25519 key.
 
-Simulated or not yet wired:
-- Shield, confidential transfer, withdraw and viewing-key decryption need `@heliuslabs/spr` plus a shielded keypair.
-  Browser wallets (wallet-adapter) do not expose the secret key that `ShieldedKeypair.fromKeypair` needs. The documented
-  derivation (a signature over the `"TSPP/derive/v1"` off-chain message v0, then HKDF) has no documented wallet-adapter
-  entry point in the TS SDK yet.
-- Shipping these operations would also bring `@solana/kit@8` alongside `@solana/web3.js@1` into the web bundle.
-- They therefore sit behind `HeliusSprBindings` and throw `PrivacySdkUnavailableError` with a doc link.
-- To enable them: add `@heliuslabs/spr@0.9.0-alpha` (exact pin) to `packages/defi` and implement `HeliusSprBindings`
-  with the SDK calls named in §2.
-- Escrow funding fails closed on real networks until §5 ships.
+## 7. Custodial private deposits & payouts (apps/api/src/offchain/privacy)
+
+| Piece | Where | Notes |
+|---|---|---|
+| SDK boundary | `privacy/port.ts` (`SprPort`), `privacy/heliusSpr.ts` (real) | loaded lazily only when the flag is on; tests mock the port |
+| Runtime | `privacy/service.ts` (`PrivacyRuntime`) | boot probe, registration, deposit watcher, payout branch |
+| Routes | `routes/privacy.ts`, `routes/privacySpr.ts`, `routes/account.ts` (`privateTo`), `routes/admin.ts` | contract in `PRIVACY_ROUTES` |
+
+- **Company identity**: `ShieldedKeypair.fromKeypair(SigningKey.fromEd25519Bytes(seed))` from `COMPANY_WALLET_SECRET_KEY`
+  (same owner seed as the Solana signer, per the README); the shielded owner must equal `COMPANY_WALLET` or boot refuses.
+  Registration is never automatic: `POST /api/admin/privacy/register` (x-admin-token) checks the User Registry, needs
+  ≥ 0.005 SOL + rent reserve of company SOL **not owed to users** (else 409), and never overwrites a record with other keys.
+- **Availability guard**: at boot and every `PRIVACY_REPROBE_MS` the runtime checks the privacy program and tree accounts,
+  an indexer read and prover TEE attestation. Any failure → `enabled:false` with a reason (docs disagree on mainnet status).
+- **Deposits**: users send a confidential transfer (`buildTransferTransaction`, recipient = `companyShieldedAddress`, the
+  company's registered owner address; or `companyShieldedAddressBytes`) **from their signed-in wallet**. The watcher
+  (`PRIVACY_POLL_MS`, only with custody workers on) runs `syncWallet` for the company wallet, decrypts locally, and for each
+  inbound history row (`privateTransfer` / `deposit`) waits for `getTransaction(…, "finalized")`, then attributes:
+  1. a note memo equal to the user's `depositRef` (`<ref>` or `sealed:<ref>`; only deposits can carry one via the SDK);
+  2. else the transaction's Solana signers → exactly one Sealed account (accounts are keyed by their sign-in wallet).
+  **Why**: the SDK's transfer builders expose no memo/data field (only `buildDepositTransaction({memo})`), and the
+  Default Ring keeps the sender public, so the sending wallet is a reliable, documented attribution key.
+  Anything else (unknown ref, unknown/multiple senders, conflicting ref vs sender, unsupported mint, below
+  `PRIVACY_MIN_SOL`/`PRIVACY_MIN_USDC`) is stored `rejected` (manual resolution) and never credited. Exactly-once:
+  `DepositRec.key = spr:<signature>:<leafIndex>` + ledger idempotency `dep:<key>` (same table as public deposits, no
+  schema change). Transactions signed by the company wallet are internal and ignored.
+- **Payouts**: `POST /api/account/withdrawals` with `privateTo` (registered owner address, or base58 99-byte shielded
+  address) → same limits / approval / ledger lock as public; stored as `destination = "spr:<privateTo>"` (cannot be paid
+  by the public path). The PayoutWorker branch syncs, checks the company shielded balance (else holds with a user-safe
+  reason), builds `buildTransferTransaction` (company wallet = owner + fee payer), persists signature/rawTx/blockhash/
+  `lastValidBlockHeight` (from the tx lifetime) and moves queued → sending **before** broadcast, then reconciles by
+  signature exactly like public payouts (rebroadcast same bytes; finalized → settle; on-chain error → fail + unlock;
+  expired → re-queue and rebuild). One private payout in flight at a time; wallet state is reset after failures.
+- **Reserves / fees**: the synced shielded balance is added to proof-of-reserves `onchain` and to the SOL fee surplus.
+- **Browser passthrough**: `GET|POST /api/privacy/spr/*` → `https://{network}.helius-rpc.com/v1/spr/*` with the key
+  injected server-side (indexer AND prover base; the SDK resolves both to `/v1/spr`). Bytes and `Spr-Tee*` headers piped,
+  2 MB bodies, 90 s timeout, 60 req/min/IP and 10 proofs/min/IP, upstream errors scrubbed, 503 when the flag is off.
+- **Not done / limits**: no admin top-up of the shielded balance (it fills from private deposits; an operator can shield
+  company funds with `buildDepositTransaction` to the company's own shielded address — signed by the company, so the
+  watcher ignores it); company wallet state is in memory (full resync after restart; exactly-once is DB-keyed);
+  escrow funding (§5) unchanged.
+
+### Turning it on (operator)
+1. Devnet first: `NETWORK=devnet`, `HELIUS_API_KEY`, `COMPANY_WALLET`/`COMPANY_WALLET_SECRET_KEY`, `ADMIN_TOKEN`,
+   `CUSTODY_WORKERS=true`, `PRIVACY_RING_ENABLED=true`. Check `GET /api/admin/privacy` (probe detail).
+2. Fund the company wallet with ~0.01 SOL that is not owed to users, then `POST /api/admin/privacy/register`; wait until
+   `GET /api/privacy/status` shows `companyRegistered: true, enabled: true`.
+3. Run `node --import tsx scripts/privacy-smoke.ts --api … --keypair <operator.json> --network devnet` (0.001 SOL).
+4. Mainnet: repeat with `NETWORK=mainnet`; the smoke script needs `--i-understand-mainnet` (max 0.01 SOL).
+   Keep the flag off if the probe reports the ring unavailable.

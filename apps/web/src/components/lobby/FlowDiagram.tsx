@@ -46,7 +46,7 @@ function FigCredit() {
         <circle key={i} cx={(i + 1) * w} cy={14 + (i + 1) * 7} r="2.2" className="fill-burn" />
       ))}
       <text x="0" y="8" className="fill-ink-muted font-mono text-[9px] uppercase tracking-[0.08em]">vault</text>
-      <text x="260" y="78" textAnchor="end" className="fill-ink-muted font-mono text-[9px] uppercase tracking-[0.08em]">drip / 2–5 min</text>
+      <text x="260" y="78" textAnchor="end" className="fill-ink-muted font-mono text-[9px] uppercase tracking-[0.08em]">drip / 2 to 5 min</text>
     </svg>
   );
 }
@@ -89,7 +89,7 @@ const STEPS: Step[] = [
     fig: <FigSealed />,
     spec: [
       ["Commitment", "keccak256(bidder, px, amt, salt)"],
-      ["Window", "15–30 min, then 2 min reveal"],
+      ["Window", "15 to 30 min, then 2 min reveal"],
       ["Settlement", "Uniform clearing price"],
     ],
   },
@@ -100,8 +100,8 @@ const STEPS: Step[] = [
     body: "Because demand is known at minute zero, the Credit Pool advances a capped line into a locked vault. It buys and burns in steady drips from the first public trade. No one can withdraw it.",
     fig: <FigCredit />,
     spec: [
-      ["Credit line", "10–15% of raise"],
-      ["Drips", "Every 2–5 min via Jupiter"],
+      ["Credit line", "10 to 15% of raise"],
+      ["Drips", "Every 2 to 5 min via Jupiter"],
       ["Withdrawals", "None, by construction"],
     ],
   },

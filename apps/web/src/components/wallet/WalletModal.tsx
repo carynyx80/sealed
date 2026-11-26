@@ -63,7 +63,7 @@ function WalletPicker({ open, onClose }: { open: boolean; onClose: () => void })
     <Sheet
       open={open}
       onClose={onClose}
-      mark={`§ Wallet — ${NETWORK_LABEL}`}
+      mark={NETWORK_LABEL ? `§ Wallet · ${NETWORK_LABEL}` : "§ Wallet"}
       title={connected ? <>Switch <span className="accent">wallet</span></> : <>Connect a <span className="accent">wallet</span></>}
     >
       {mobileNoInjected && links && (

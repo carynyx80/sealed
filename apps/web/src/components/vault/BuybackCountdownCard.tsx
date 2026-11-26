@@ -32,7 +32,7 @@ export function BuybackCountdownCard({ launch }: { launch: LaunchSummary }) {
   return (
     <section className="card-night relative overflow-hidden p-5 sm:p-6" aria-label="Buyback vault">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="section-mark text-night-muted">§ Vault — Programmatic buyback</p>
+        <p className="section-mark text-night-muted">§ Vault · Programmatic buyback</p>
         <p className="num text-[11px] text-night-muted">
           drip <span className="text-night-text">{v.dripsExecuted}</span>/{v.dripsTotal}
         </p>
@@ -134,8 +134,8 @@ export function BuybackCountdownCard({ launch }: { launch: LaunchSummary }) {
 
       <p className="mt-4 text-[11px] leading-relaxed text-night-muted">
         {offchain
-          ? <>Non-withdrawable. Sealed&rsquo;s ledger permits swap-to-burn only &mdash; the creator cannot move vault funds to a wallet.</>
-          : <>Non-withdrawable. The program permits swap-to-burn only &mdash; neither the creator nor any admin can move vault funds to a wallet.</>}
+          ? <>Non-withdrawable. Sealed&rsquo;s ledger permits swap-to-burn only; the creator cannot move vault funds to a wallet.</>
+          : <>Non-withdrawable. The program permits swap-to-burn only; neither the creator nor any admin can move vault funds to a wallet.</>}
       </p>
     </section>
   );
