@@ -23,6 +23,15 @@ import { startBuybackKeeper } from "./workers/buybackKeeper.js";
 import { startIndexer } from "./workers/indexer.js";
 import { startRevealRelayer } from "./workers/revealRelayer.js";
 import { WsHub, registerWs } from "./ws/hub.js";
+import { tradeRoutes } from "./routes/trade.js";
+import { accountRoutes } from "./routes/account.js";
+import { adminRoutes } from "./routes/admin.js";
+import { authRoutes } from "./routes/auth.js";
+import { custodyRoutes } from "./routes/custody.js";
+import { buildCustody, type CustodyDeps, type CustodyRuntime } from "./offchain/custody/index.js";
+import { CompositeStore } from "./offchain/readModel.js";
+import { createOffchainRuntime, startOffchainScheduler } from "./offchain/runtime.js";
+import { MemoryStore } from "./store/index.js";
 
 export interface BuildOptions {
   config?: AppConfig;
@@ -32,9 +41,11 @@ export interface BuildOptions {
   logger?: boolean | object;
   /** Start background workers (relayer / indexer / keeper). Defaults to cfg.workersEnabled. */
   workers?: boolean;
+  /** Custody overrides (tests: mock RPC / repo / keys). */
+  custody?: CustodyDeps;
 }
 
-export type App = FastifyInstance & { ctx: AppContext; hub: WsHub };
+export type App = FastifyInstance & { ctx: AppContext; hub: WsHub; custody: CustodyRuntime };
 
 export async function buildServer(opts: BuildOptions = {}): Promise<App> {
   const cfg = opts.config ?? loadConfig();
@@ -44,11 +55,16 @@ export async function buildServer(opts: BuildOptions = {}): Promise<App> {
   const app = Fastify({ logger, trustProxy: true, bodyLimit: 256 * 1024 });
 
   const bus = new EventBus();
-  const store = opts.store ?? (await createStore(cfg, bus, app.log));
+  const baseStore = opts.store ?? (await createStore(cfg, bus, app.log));
   const cache = opts.cache ?? (await createCache(cfg.redisUrl, app.log));
   const relayer = loadRelayerKeys(cfg);
+  // Offchain custodial engine + composite read model (demo world ∪ primary store ∪ offchain launches).
+  const offchain = cfg.executionMode === "offchain" ? await createOffchainRuntime({ cfg, bus, cache, relayer, log: app.log }) : null;
+  const demoStore = cfg.isDemo && baseStore.kind !== "memory" ? new MemoryStore({ isDemo: true, network: cfg.network, bus, tickMs: cfg.demoTickMs }) : null;
+  const store: Store = offchain || demoStore ? new CompositeStore(baseStore, demoStore, offchain?.engine ?? null) : baseStore;
+  if (store !== baseStore) await store.init();
   if (relayer.ephemeral && !cfg.isDemo) app.log.warn("relayer: RELAYER_BOX_SEED / RELAYER_SECRET_KEY not set — using ephemeral keys (reveals will not survive restarts)");
-  const ctx: AppContext = { cfg, store, cache, bus, relayer, startedAt: Date.now() };
+  const ctx: AppContext = { cfg, store, cache, bus, relayer, startedAt: Date.now(), offchain };
   const hub = new WsHub(ctx, app.log);
 
   await app.register(cors, { origin: cfg.corsOrigin, methods: ["GET", "POST", "OPTIONS"] });
@@ -72,6 +88,12 @@ export async function buildServer(opts: BuildOptions = {}): Promise<App> {
   await relayerRoutes(app, ctx);
   await privacyRoutes(app, ctx);
   await llmsRoutes(app, ctx);
+  const custody = await buildCustody(cfg, ctx.offchain?.ledger ?? null, app.log, opts.custody);
+  await authRoutes(app, ctx, custody);
+  await accountRoutes(app, ctx, custody);
+  await custodyRoutes(app, ctx, custody);
+  await adminRoutes(app, ctx, custody);
+  await tradeRoutes(app, ctx);
   await registerWs(app, hub);
 
   hub.start();
@@ -79,17 +101,21 @@ export async function buildServer(opts: BuildOptions = {}): Promise<App> {
   if (opts.workers ?? cfg.workersEnabled) {
     stops.push(startRevealRelayer(ctx, app.log));
     stops.push(startBuybackKeeper(ctx, app.log));
+    if (custody.config.workers) stops.push(custody.start());
+    if (offchain) stops.push(startOffchainScheduler(offchain.engine, app.log, cfg.offchainTickMs));
     startIndexer(ctx, app.log).then((s) => stops.push(s)).catch((err) => app.log.error({ err }, "indexer failed to start"));
   }
 
   app.addHook("onClose", async () => {
     stops.forEach((s) => s());
+    await custody.close();
     hub.stop();
     await store.close().catch(() => undefined);
+    await offchain?.repo.close().catch(() => undefined);
     await cache.close().catch(() => undefined);
   });
 
-  return Object.assign(app, { ctx, hub }) as App;
+  return Object.assign(app, { ctx, hub, custody }) as App;
 }
 
 async function main() {

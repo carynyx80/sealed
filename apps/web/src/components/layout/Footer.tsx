@@ -7,6 +7,7 @@ const NOTES = [
   "All winning bids clear at one uniform price. Bids below clearing are refunded in full via claim_or_refund.",
   "The fee-credit line (10–15% of raise) sits in a non-withdrawable vault. The program can only swap-to-burn or drip to holders.",
   "Until repaid, 80% of fees repay the Credit Pool. After: 50% holders · 35% platform burn · 15% treasury. Graduation-slot buyers earn 0%.",
+  "Custodial mode: deposits are held by Sealed's company wallet and balances and trades are recorded offchain by Sealed. Withdrawals are sent from the company wallet and may need manual approval above limits. Proof of reserves is live on /account.",
 ];
 
 export function Footer() {
@@ -29,6 +30,7 @@ export function Footer() {
                 <li><Link className="text-ink-slate hover:text-ink" href="/launch">Launch Studio</Link></li>
                 <li><Link className="text-ink-slate hover:text-ink" href="/revenue">Revenue &amp; Burn</Link></li>
                 <li><Link className="text-ink-slate hover:text-ink" href="/docs">Docs</Link></li>
+                <li><Link className="text-ink-slate hover:text-ink" href="/account">Account</Link></li>
               </ul>
             </div>
             <div>

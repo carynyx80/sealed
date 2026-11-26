@@ -417,7 +417,7 @@ describe("sealed-launchpad", () => {
       expect(big(la.histogram[0])).to.equal(50_000n);
     });
 
-    it("rejects reveal after the reveal window closes, and clear before end is impossible after", async () => {
+    it("rejects reveal after the reveal window closes", async () => {
       const la = await program.account.launchAccount.fetch(L.launch);
       await waitUntilChain(la.revealEndTs.toNumber());
       await expectErr(reveal(L, b4), "RevealWindowClosed");

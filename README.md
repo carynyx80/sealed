@@ -1,5 +1,7 @@
 # Sealed — Sealed-Block Launchpad with a Fee-Credit Buyback Vault (Solana)
 
+**Live:** website https://www.sealedsol.xyz · API https://api-production-01dc1743.up.railway.app (`/api/health`, `/llms.txt`, `wss://…/ws`)
+
 Fair token launches on Solana in four phases:
 
 1. **Launch setup.** The creator picks name, ticker, quote asset (SOL, USDC or a tokenized stock such as NVDAx, TSLAx or TTWOx), auction length (15–30 min on mainnet, down to 2 min on devnet), target raise, clearing cap and supply (1B by default). The creator allocation is **capped at 2% (200 bps) on-chain**.
@@ -8,6 +10,23 @@ Fair token launches on Solana in four phases:
 4. **Auto-repay → permanent flywheel.** Pool fees go first **80% to repaying the credit line and 20% to platform burn/ops**. Once the line is 100% repaid (the switch happens at exactly 0 outstanding, and any overflow in the crossover batch goes straight to the flywheel), fees split **50% to holders (in the quote asset), 35% to platform buyback-burn and 15% to treasury**. Wallets that buy in the graduation slot land in the **anti-snipe registry** and earn 0% holder rewards.
 
 The canonical math is in `packages/shared`: `computeClearing` / `settleBid` (clearing.ts), `splitFees` (fees.ts) and `computeCommitment` (commitment.ts). The Rust program mirrors it integer-for-integer.
+
+## Documentation
+
+In-app docs: `/docs` on the web app (https://www.sealedsol.xyz/docs). Repo docs in [`docs/`](docs/):
+
+| Doc | Covers |
+|---|---|
+| [OVERVIEW](docs/OVERVIEW.md) | what Sealed is, the four-phase loop, execution modes, status |
+| [CUSTODY](docs/CUSTODY.md) | offchain custodial mode (default): SIWS, deposits, withdrawals, limits, proof of reserves, risks |
+| [MECHANICS](docs/MECHANICS.md) | auction, clearing with worked example, buyback vault, fee splits, anti-snipe |
+| [ARCHITECTURE](docs/ARCHITECTURE.md) | monorepo, data flow, workers, storage |
+| [PROGRAM](docs/PROGRAM.md) | Anchor program (roadmap onchain mode): instructions, accounts, seeds, events, errors |
+| [API](docs/API.md) | REST, custody routes, WebSocket, `/llms.txt` |
+| [STACK](docs/STACK.md) | what powers Sealed, with status |
+| [DEPLOYMENT](docs/DEPLOYMENT.md) | local, env vars, Railway, Vercel, devnet |
+| [SECURITY](docs/SECURITY.md) | custody disclosure, trust model, invariants, limitations, roadmap |
+| [PRIVACY](docs/PRIVACY.md) | Helius Privacy Rings integration |
 
 ## Architecture
 

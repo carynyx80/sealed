@@ -5,6 +5,7 @@ import type { AppConfig } from "./config.js";
 import type { EventBus } from "./events.js";
 import type { RelayerKeys } from "./services/solana.js";
 import type { Store } from "./store/index.js";
+import type { OffchainRuntime } from "./offchain/runtime.js";
 
 export interface AppContext {
   cfg: AppConfig;
@@ -13,6 +14,8 @@ export interface AppContext {
   bus: EventBus;
   relayer: RelayerKeys;
   startedAt: number;
+  /** Offchain custodial ledger + engine (EXECUTION_MODE=offchain). null when unavailable (e.g. mainnet DB down). */
+  offchain?: OffchainRuntime | null;
 }
 
 export function sendError(reply: FastifyReply, code: number, error: string, details?: unknown) {

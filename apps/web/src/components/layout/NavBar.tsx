@@ -5,6 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { ConnectButton } from "../wallet/ConnectButton";
+import { SessionPill } from "../custody/SignInButton";
+import { CustodySheets } from "../custody/CustodySheets";
 import { NETWORK } from "@/lib/config";
 import { useDataSource } from "@/lib/live";
 import { SPRING } from "../motion/spring";
@@ -16,6 +18,7 @@ export const NAV_LINKS = [
   { href: "/launch", label: "Launch Studio", n: "02" },
   { href: "/revenue", label: "Revenue & Burn", n: "03" },
   { href: "/docs", label: "Docs", n: "04" },
+  { href: "/account", label: "Account", n: "05" },
 ];
 
 export function NetworkBadge({ className }: { className?: string }) {
@@ -104,6 +107,7 @@ export function NavBar() {
           ))}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <span className="hidden xl:inline-flex xl:empty:hidden"><SessionPill /></span>
           <ConnectButton />
           <button
             ref={toggleRef}
@@ -150,6 +154,7 @@ export function NavBar() {
                   </li>
                 ))}
               </ul>
+              <div className="mt-6 empty:hidden"><SessionPill menuAlign="left" onNavigate={() => close(false)} /></div>
               <div className="mt-6 flex items-center justify-between gap-3">
                 <NetworkBadge />
                 <span className="fine">Sealed-block launchpad · Solana</span>
@@ -158,6 +163,7 @@ export function NavBar() {
           </motion.div>
         )}
       </AnimatePresence>
+      <CustodySheets />
     </header>
   );
 }

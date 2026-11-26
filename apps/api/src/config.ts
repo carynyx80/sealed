@@ -29,6 +29,8 @@ const EnvSchema = z.object({
   IDL_PATH: optStr,
   DEMO_TICK_MS: z.coerce.number().int().positive().default(1000),
   WORKERS_ENABLED: z.preprocess(emptyToUndef, boolish.default(true)),
+  EXECUTION_MODE: z.preprocess(emptyToUndef, z.enum(["offchain", "onchain"]).default("offchain")),
+  OFFCHAIN_TICK_MS: z.coerce.number().int().positive().default(2000),
 });
 
 export interface AppConfig {
@@ -52,6 +54,9 @@ export interface AppConfig {
   idlPath?: string;
   demoTickMs: number;
   workersEnabled: boolean;
+  /** offchain (default): custodial ledger engine; onchain: Anchor program (non-custodial). */
+  executionMode: "offchain" | "onchain";
+  offchainTickMs: number;
   version: string;
 }
 
@@ -90,6 +95,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     idlPath: e.IDL_PATH,
     demoTickMs: e.DEMO_TICK_MS,
     workersEnabled: e.WORKERS_ENABLED,
+    executionMode: e.EXECUTION_MODE,
+    offchainTickMs: e.OFFCHAIN_TICK_MS,
     version: "0.1.0",
     ...overrides,
   };

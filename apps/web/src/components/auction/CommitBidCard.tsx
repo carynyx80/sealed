@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import clsx from "clsx";
 import { NUM_PRICE_TICKS, type LaunchSummary } from "@sealed/shared";
 import { useSealedBid } from "@/lib/defi/useSealedBid";
+import { openDeposit, useCustodyBalance, useCustodySession } from "@/lib/custody";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { getDataSource } from "@/lib/api";
 import { noteDemoBid } from "@/lib/demoStore";
 import { fmtAmount, fmtCompact, fmtInt, fmtPrice } from "@/lib/format";
@@ -32,6 +34,12 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
   const [autoReveal, setAutoReveal] = useState(true);
   const [privateDeposit, setPrivateDeposit] = useState(false);
   const [open, setOpen] = useState(false);
+  const custody = useCustodySession();
+  const offchain = custody.availability === "available";
+  const quoteBal = useCustodyBalance(q);
+  const { setVisible } = useWalletModal();
+  const [revealMsg, setRevealMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [revealing, setRevealing] = useState(false);
 
   const maxPrice = ticks[Math.min(tick, ticks.length - 1)] ?? a.floorPrice;
   const amount = Number(amountStr) || 0;
@@ -43,7 +51,22 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
   const fill = ticks.length > 1 ? (tick / (ticks.length - 1)) * 100 : 0;
   const multiple = a.floorPrice > 0 ? maxPrice / a.floorPrice : 1;
 
-  const args = { maxPrice, amount, deposit, autoReveal, privateDeposit };
+  const showBal = offchain && custody.signedIn && quoteBal.known;
+  const insufficient = showBal && deposit > 0 && deposit > quoteBal.available + 1e-12;
+  const gate = !offchain || !commitOpen ? null : !custody.wallet ? "connect" : !custody.signedIn ? "signin" : insufficient ? "deposit" : null;
+  const args = { maxPrice, amount, deposit, autoReveal, privateDeposit: offchain ? false : privateDeposit };
+  const revealManually = async () => {
+    setRevealing(true);
+    setRevealMsg(null);
+    try {
+      await bid.reveal();
+      setRevealMsg({ ok: true, text: "Bid revealed. It is included in clearing." });
+    } catch (e) {
+      setRevealMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setRevealing(false);
+    }
+  };
   const confirm = async () => {
     const r = await bid.commit(args);
     if (getDataSource() === "demo") noteDemoBid(launch.id, deposit);
@@ -141,6 +164,13 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
           Over-deposit to mask your real size; the excess is refunded at settlement.
           {amount > 0 && <> At your max you receive up to <span className="num text-ink-slate">{fmtCompact(tokensAtMax, 2)}</span> {launch.ticker}.</>}
         </p>
+        {showBal && (
+          <p className="mt-2 flex flex-wrap items-baseline gap-x-2 font-mono text-[11px] text-ink-muted">
+            <span>Account balance</span>
+            <span className={clsx("num", insufficient ? "text-burn" : "text-ink-slate")}>{fmtAmount(quoteBal.available)} {q}</span>
+            <span>· deposit is locked from it</span>
+          </p>
+        )}
 
         {/* what the chain sees */}
         <div className="mt-5 rounded-field border border-signal/20 bg-signal-tint/50 p-4">
@@ -148,7 +178,7 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
             <SealRing size={30} />
             <div className="min-w-0">
               <p className="text-[13px] font-medium text-signal-ink">Your price and size stay sealed</p>
-              <p className="text-[11px] text-ink-slate">Only a keccak256 commitment reaches the chain until reveal.</p>
+              <p className="text-[11px] text-ink-slate">{offchain ? "Only a keccak256 commitment is recorded until reveal." : "Only a keccak256 commitment reaches the chain until reveal."}</p>
             </div>
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-x-4 border-t border-signal/15 pt-3 font-mono text-[11px]">
@@ -176,16 +206,45 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
             </div>
             <Toggle id="auto-reveal" checked={autoReveal} onChange={setAutoReveal} label="Encrypted auto-reveal" />
           </div>
-          <div className="py-4 empty:hidden">
-            <PrivateDepositToggle launch={launch} enabled={privateDeposit} onChange={setPrivateDeposit} />
-          </div>
+          {!offchain && (
+            <div className="py-4 empty:hidden">
+              <PrivateDepositToggle launch={launch} enabled={privateDeposit} onChange={setPrivateDeposit} />
+            </div>
+          )}
         </div>
 
         {invalid && amount > 0 && <p className="mt-3 text-[12px] text-burn">{invalid}</p>}
-        <button className="btn-primary mt-5 w-full py-3" disabled={!canSubmit} onClick={() => setOpen(true)}>
-          <LockIcon width={14} height={14} strokeWidth={1.5} />
-          {commitOpen ? "Review sealed bid" : "Commit window closed"}
-        </button>
+        {gate === "deposit" && (
+          <p className="mt-3 text-[12px] leading-relaxed text-burn">
+            Insufficient {q} balance: deposit needs <span className="num">{fmtAmount(deposit)}</span>, you have <span className="num">{fmtAmount(quoteBal.available)}</span> available.
+          </p>
+        )}
+        {gate === "signin" && custody.error && <p className="mt-3 text-[12px] text-burn">{custody.error}</p>}
+        {gate === "connect" ? (
+          <button className="btn-primary mt-5 min-h-[48px] w-full py-3" onClick={() => setVisible(true)}>Connect wallet to bid</button>
+        ) : gate === "signin" ? (
+          <button className="btn-primary mt-5 min-h-[48px] w-full py-3" disabled={custody.signingIn} onClick={() => void custody.signIn().catch(() => undefined)}>
+            {custody.signingIn ? "Check your wallet…" : "Sign in to bid"}
+          </button>
+        ) : gate === "deposit" ? (
+          <button className="btn-primary mt-5 min-h-[48px] w-full py-3" onClick={() => openDeposit(q, Math.max(0, deposit - quoteBal.available))}>
+            Deposit {q} to bid
+          </button>
+        ) : launch.status === "reveal" && offchain ? (
+          <button className="btn-primary mt-5 min-h-[48px] w-full py-3" disabled={revealing || !custody.wallet} onClick={() => void revealManually()}>
+            <LockIcon width={14} height={14} strokeWidth={1.5} />
+            {revealing ? "Revealing…" : "Reveal my bid manually"}
+          </button>
+        ) : (
+          <button className="btn-primary mt-5 w-full py-3" disabled={!canSubmit} onClick={() => setOpen(true)}>
+            <LockIcon width={14} height={14} strokeWidth={1.5} />
+            {commitOpen ? "Review sealed bid" : "Commit window closed"}
+          </button>
+        )}
+        {launch.status === "reveal" && offchain && !revealMsg && (
+          <p className="fine mt-2">Auto-reveal bids are revealed for you. Use this only if you turned auto-reveal off; it reads your salt from this browser&apos;s bid vault.</p>
+        )}
+        {revealMsg && <p className={clsx("mt-2 text-[12px]", revealMsg.ok ? "text-gain" : "text-burn")}>{revealMsg.text}</p>}
       </div>
 
       {/* plain-language clearing explainer */}

@@ -24,6 +24,8 @@ export function renderLlmsTxt(ctx: AppContext, baseUrl: string): string {
 Mode: ${mode}
 Network: ${cfg.network}
 Program id: ${cfg.programId}
+Website: https://www.sealedsol.xyz
+Hosted API: https://api-production-01dc1743.up.railway.app
 REST base: ${baseUrl}
 WebSocket: ${ws}
 All amounts in this API are UI units (JS numbers, already divided by decimals). Prices are quote per whole token

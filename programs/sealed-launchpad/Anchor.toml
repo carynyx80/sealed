@@ -16,4 +16,4 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "pnpm exec ts-mocha --exit -p ./tsconfig.json -t 1000000 \"tests/**/*.ts\""
+test = "NODE_OPTIONS=--no-experimental-strip-types ./node_modules/.bin/ts-mocha --exit -p ./tsconfig.json -t 1000000 \"tests/**/*.ts\""

@@ -193,3 +193,232 @@ model ProtocolStats {
   isDemo                 Boolean @default(false)
   updatedTs              Int     @default(0)
 }
+
+// =====================================================================================================
+// OFFCHAIN CUSTODIAL MODE (EXECUTION_MODE=offchain). Additive only — `prisma db push` compatible.
+// Money is BigInt atoms (never Float). rewardPerShare / rewardDebt exceed int64 → Decimal(78,0).
+// The ledger (LedgerAccount/LedgerTransaction/LedgerEntry) is the source of truth for every balance;
+// LedgerAccount.balance is a denormalised Σ(entries) maintained under row locks (verified by invariants).
+// =====================================================================================================
+
+model User {
+  wallet     String   @id
+  depositRef String   @unique
+  createdAt  DateTime @default(now())
+}
+
+model AuthNonce {
+  nonce     String    @id
+  wallet    String
+  message   String
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  @@index([expiresAt])
+}
+
+model Session {
+  tokenHash String    @id // sha256(token) hex — raw tokens are never stored
+  wallet    String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  @@index([wallet])
+}
+
+model Deposit {
+  key         String    @id // `${signature}:${ixIndex}` — exactly-once credit key
+  signature   String
+  ixIndex     String
+  wallet      String?
+  depositRef  String?
+  asset       String?
+  mint        String?
+  amountAtoms BigInt
+  sender      String?
+  status      String // detected | confirmed | credited | rejected
+  reason      String?
+  slot        Int
+  blockTime   Int?
+  createdAt   DateTime  @default(now())
+  creditedAt  DateTime?
+
+  @@unique([signature, ixIndex])
+  @@index([wallet, createdAt])
+  @@index([status])
+}
+
+model Withdrawal {
+  id                   String    @id
+  wallet               String
+  asset                String
+  mint                 String?
+  amountAtoms          BigInt
+  destination          String
+  usdValue             Float     @default(0) // display / limit check only
+  status               String // queued | pending_approval | sending | sent | failed | rejected
+  reason               String?
+  signature            String?   @unique
+  rawTx                String?
+  blockhash            String?
+  lastValidBlockHeight Int?
+  attempts             Int       @default(0)
+  approvedBy           String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  sentAt               DateTime?
+
+  @@index([wallet, createdAt])
+  @@index([status, createdAt])
+}
+
+model LedgerAccount {
+  id        String   @id @default(uuid())
+  key       String   @unique // `${owner}|${asset}|${kind}`
+  owner     String // wallet or "system"
+  asset     String // quote symbol or tok:<launchId>
+  kind      String // user_available | user_locked | bid_escrow:<l> | staked:<l> | pool_quote:<l> | company_custody | ...
+  balance   BigInt   @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries LedgerEntry[]
+
+  @@index([owner])
+  @@index([asset, kind])
+}
+
+model LedgerTransaction {
+  id             String   @id @default(uuid())
+  idempotencyKey String   @unique
+  kind           String // deposit | withdrawal | bid_commit | clear | graduate | swap | drip | distribute | stake | ...
+  launchId       String?
+  meta           Json
+  createdTs      Int
+  createdAt      DateTime @default(now())
+
+  entries LedgerEntry[]
+
+  @@index([launchId, kind, createdTs])
+  @@index([kind, createdTs])
+}
+
+model LedgerEntry {
+  id        BigInt @id @default(autoincrement())
+  txId      String
+  accountId String
+  asset     String
+  amount    BigInt // signed atoms; Σ per (txId, asset) = 0
+
+  tx      LedgerTransaction @relation(fields: [txId], references: [id], onDelete: Restrict)
+  account LedgerAccount     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([txId])
+  @@index([accountId])
+}
+
+model OffchainLaunch {
+  id                   String  @id
+  mint                 String  @unique
+  name                 String
+  ticker               String
+  description          String  @default("")
+  imageUri             String  @default("")
+  creator              String
+  quoteAsset           String
+  creditTier           String
+  creditBps            Int
+  network              String
+  status               String
+  createdTs            Int
+  creatorAllocationBps Int
+  totalSupply          BigInt
+  creatorAllocation    BigInt
+  tokensForSale        BigInt
+  poolTokenAllocation  BigInt
+  floorPrice           BigInt
+  tickSize             BigInt
+  numTicks             Int
+  targetRaise          BigInt
+  clearingCap          BigInt
+  commitStartTs        Int
+  commitEndTs          Int
+  revealEndTs          Int
+  bidCount             Int     @default(0)
+  revealedCount        Int     @default(0)
+  totalEscrowed        BigInt  @default(0)
+  clearingPrice        BigInt?
+  totalRaised          BigInt?
+  tokensSold           BigInt?
+  winners              Int     @default(0)
+  graduatedAtMs        BigInt?
+  creditLine           BigInt  @default(0)
+  creditOutstanding    BigInt  @default(0)
+  vaultInitial         BigInt  @default(0)
+  dripCount            Int
+  dripsExecuted        Int     @default(0)
+  dripIntervalSec      Int
+  nextDripTs           Int     @default(0)
+  rewardPerShare       Decimal @default(0) @db.Decimal(78, 0)
+  eligibleStaked       BigInt  @default(0)
+  feeDistributions     Int     @default(0)
+  feesCollected        BigInt  @default(0)
+  creditRepaid         BigInt  @default(0)
+  holderPayouts        BigInt  @default(0)
+  platformBurn         BigInt  @default(0)
+  treasuryTotal        BigInt  @default(0)
+  vaultQuoteSpent      BigInt  @default(0)
+  tokensBurned         BigInt  @default(0)
+  volumeQuote          BigInt  @default(0)
+  updatedAt            DateTime @updatedAt
+
+  @@index([status])
+  @@index([nextDripTs])
+}
+
+model OffchainBid {
+  id           String  @id
+  launchId     String
+  bidder       String
+  commitment   String
+  deposit      BigInt
+  createdTs    Int
+  revealed     Boolean @default(false)
+  maxPrice     BigInt?
+  bidAmount    BigInt?
+  tick         Int?
+  sealedReveal Json? // SealedRevealEnvelope — ciphertext only, opened at reveal window
+  autoReveal   String?
+  settled      Boolean @default(false)
+  spent        BigInt?
+  tokens       BigInt?
+  refund       BigInt?
+  slash        BigInt?
+  claimed      Boolean @default(false)
+
+  @@unique([launchId, bidder])
+  @@index([launchId])
+}
+
+model OffchainPosition {
+  launchId   String
+  wallet     String
+  staked     BigInt  @default(0)
+  rewardDebt Decimal @default(0) @db.Decimal(78, 0)
+  unclaimed  BigInt  @default(0)
+  claimed    BigInt  @default(0)
+  eligible   Boolean @default(true)
+
+  @@id([launchId, wallet])
+}
+
+model OffchainAntiSnipe {
+  launchId String
+  wallet   String
+  ts       Int
+  txId     String
+
+  @@id([launchId, wallet])
+  @@index([wallet])
+}

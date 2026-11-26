@@ -23,6 +23,6 @@ anchor deploy --provider.cluster "$RPC_URL" --provider.wallet "$WALLET"
 
 echo "==> initialising protocol, mock mints and credit pools"
 ANCHOR_PROVIDER_URL="$RPC_URL" ANCHOR_WALLET="$WALLET" \
-  pnpm exec ts-node --transpile-only -P tsconfig.json scripts/init-devnet.ts
+  ./node_modules/.bin/ts-node --transpile-only -P tsconfig.json scripts/init-devnet.ts
 
 echo "==> done. Mints written to devnet-mints.json"

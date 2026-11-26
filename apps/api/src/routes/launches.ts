@@ -18,6 +18,7 @@ import {
 import { cached } from "../cache/index.js";
 import { sendError, zodDetails, type AppContext } from "../context.js";
 import { nowSec, publicLaunch } from "../store/index.js";
+import { requireAuth } from "../offchain/auth/requireAuth.js";
 
 const CreateLaunchBody = CreateLaunchInputSchema.superRefine((v, c) => {
   if (v.clearingCap < v.targetRaise) c.addIssue({ code: z.ZodIssueCode.custom, path: ["clearingCap"], message: "clearingCap must be ≥ targetRaise" });
@@ -107,6 +108,18 @@ export async function launchRoutes(app: FastifyInstance, ctx: AppContext) {
     const parsed = CreateLaunchBody.safeParse(req.body ?? {});
     if (!parsed.success) return sendError(reply, 400, "invalid launch input", zodDetails(parsed.error));
     const input = parsed.data;
+
+    // OFFCHAIN mode: a signed-in creator creates a real custodial launch (creator = session wallet, ≤2% enforced).
+    // Unauthenticated requests keep the demo behaviour in DEMO_MODE.
+    if (ctx.cfg.executionMode === "offchain" && (req.headers.authorization || !ctx.cfg.isDemo)) {
+      const engine = ctx.offchain?.engine;
+      if (!engine) return sendError(reply, 503, "offchain ledger unavailable");
+      const wallet = await requireAuth(req, reply);
+      if (!wallet || reply.sent) return reply;
+      const row = await engine.createLaunch(input, wallet);
+      const summary = await engine.getSummary(row.id);
+      return reply.code(200).send(publicLaunch(summary!));
+    }
 
     if (!ctx.cfg.isDemo) {
       const atoms = (v: number) => BigInt(Math.round(v * 10 ** QUOTE_ASSETS[input.quoteAsset].decimals)).toString();

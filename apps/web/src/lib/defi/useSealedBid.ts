@@ -1,6 +1,9 @@
 "use client";
-// Owned by defi-integrations-agent.
-// Commit a sealed bid. Demo mode (launch.isDemo) → real keccak commitment + POST /api/auctions/:id/demo-bid.
+// Owned by defi-integrations-agent; offchain custodial path by web-offchain-agent.
+// Commit a sealed bid.
+// OFFCHAIN (default execution mode, custody API reachable) → real keccak commitment computed here with a random salt
+//   (salt encrypted in the BidVault), POST /api/trade/commit with the deposit locked from the internal balance,
+//   optional sealed auto-reveal envelope; reveal() / claim() hit the custody routes too. Demo mode (launch.isDemo) → real keccak commitment + POST /api/auctions/:id/demo-bid.
 // Devnet/mainnet → commit_bid tx via wallet, salt stored encrypted in the BidVault, optional auto-reveal
 // envelope sealed to the relayer (POST /api/relayer/reveals).
 // privateDeposit (helius-privacy-agent): fund the escrow from a Helius Privacy Ring confidential balance.
@@ -24,10 +27,16 @@ import {
   programErrorName,
   simulatedViewingKey,
   uiToAtoms,
+  verifyPreimage,
   wrapSolIxs,
   EscrowFundingUnsupportedError,
 } from "@sealed/defi";
 import { apiFetch, demoSignature, errorMessage } from "./config";
+import { CustodyError, custodyFetch, custodyReady, getSession, isInsufficientBalance } from "../custody/client";
+import { signInWithSolana } from "../custody/auth";
+import { balanceOf } from "../custody/hooks";
+import { custodyTrade } from "../custody/trade";
+import { CUSTODY_ROUTES, type AccountResponse } from "@sealed/shared";
 import { getSealedClient, launchKeys } from "./program";
 import { fetchPrivacyStatus, heliusRing, privacyOwner, simulatedRing } from "../privacy/ring";
 import { invalidateShieldedBalance, setPrivacyOp } from "../privacy/usePrivacyRing";
@@ -43,6 +52,10 @@ export interface CommitResult {
   privacySignature?: string;
 }
 export type SealedBidStatus = "idle" | "hashing" | "signing" | "submitting" | "done" | "error";
+export type SealedBidAction = "reveal" | "claim";
+
+/** Offchain results carry a ledger reference instead of a transaction signature. */
+const ledgerRef = (id: string | number) => `ledger:${id}`;
 
 /* ----------------------------------------------------------------------------------- vault sessions */
 
@@ -120,6 +133,46 @@ export function useSealedBid(launch: LaunchSummary) {
         const bidAmount = uiToAtoms(a.amount, quoteDecimals);
         const deposit = uiToAtoms(a.deposit, quoteDecimals);
         const now = Math.floor(Date.now() / 1000);
+
+        /* ---------------------------------------------------------------------- offchain custodial */
+        if (await custodyReady()) {
+          if (!publicKey || !signMessage) throw new Error("Connect a wallet that can sign messages to bid");
+          if (a.privateDeposit) throw new Error("Private deposits are not available for custodial balances. Turn off private deposit to bid.");
+          const bidder = publicKey.toBase58();
+          const prepared = prepareSealedBid({ bidder, grid, maxPrice, bidAmount, deposit });
+          setStatus("signing");
+          if (!getSession(bidder)) await signInWithSolana(bidder, signMessage);
+          const account = await custodyFetch<AccountResponse>(CUSTODY_ROUTES.me, { wallet: bidder });
+          const bal = balanceOf(account, launch.quoteAsset);
+          if (bal.available + 1e-12 < a.deposit) {
+            throw new CustodyError(`Insufficient ${launch.quoteAsset} balance: ${bal.available} available, ${a.deposit} needed. Deposit to continue.`, 400, "insufficient_balance");
+          }
+          // 1. Persist the encrypted preimage BEFORE submitting, so an accepted bid can never lose its salt.
+          const vault = await walletVault(bidder, signMessage);
+          await vault.save({
+            launchId: launch.id, bidder, network: launch.network, commitmentHex: prepared.commitmentHex,
+            maxPrice: prepared.maxPrice.toString(), bidAmount: bidAmount.toString(), deposit: deposit.toString(),
+            saltHex: prepared.saltHex, tick: prepared.tick, createdTs: now,
+          });
+          // 2. Optional auto-reveal envelope sealed to the relayer key (backend reveals when the window opens).
+          let sealedReveal: unknown;
+          let envelopeError: string | null = null;
+          if (a.autoReveal) {
+            try {
+              const rk = await apiFetch<RelayerPubkeyResponse>(API_ROUTES.relayerPubkey);
+              sealedReveal = await buildAutoRevealEnvelope({ launchId: launch.id, prepared, relayerPubkeyB64: rk.pubkey, signMessage });
+            } catch (e) {
+              envelopeError = errorMessage(e);
+            }
+          }
+          setStatus("submitting");
+          const r = await custodyTrade.commitBid(bidder, { launchId: launch.id, commitment: prepared.commitmentHex, deposit: a.deposit, sealedReveal });
+          const signature = ledgerRef(r.bidId);
+          await vault.update(launch.id, { txSignature: signature, autoRevealQueued: !!sealedReveal });
+          if (envelopeError) setError(`Bid committed, but auto-reveal could not be sealed: ${envelopeError}. Reveal manually when the window opens.`);
+          setStatus("done");
+          return { signature, commitmentHex: prepared.commitmentHex, autoRevealQueued: !!sealedReveal };
+        }
 
         /* ---------------------------------------------------------------------------------- demo */
         if (launch.isDemo) {
@@ -227,7 +280,7 @@ export function useSealedBid(launch: LaunchSummary) {
         return { signature, commitmentHex: prepared.commitmentHex, autoRevealQueued };
       } catch (e) {
         const code = programErrorName(e);
-        setError(code ? `${code}: ${errorMessage(e)}` : errorMessage(e));
+        setError(isInsufficientBalance(e) ? errorMessage(e) : code ? `${code}: ${errorMessage(e)}` : errorMessage(e));
         setStatus("error");
         throw e;
       } finally {
@@ -237,10 +290,52 @@ export function useSealedBid(launch: LaunchSummary) {
     [launch, quoteDecimals, publicKey, sendTransaction, signMessage, connection],
   );
 
+  /** Manual reveal (fallback when auto-reveal was off or failed). Offchain: POST /api/trade/reveal from the vault preimage. */
+  const reveal = useCallback(async (): Promise<string> => {
+    if (busy.current) throw new Error("Another action is in progress");
+    busy.current = true;
+    setError(null);
+    try {
+      if (!(await custodyReady())) throw new Error("Manual reveal is available through the Sealed API; it is unreachable right now");
+      if (!publicKey || !signMessage) throw new Error("Connect the wallet that placed the bid");
+      const bidder = publicKey.toBase58();
+      if (!getSession(bidder)) await signInWithSolana(bidder, signMessage);
+      const vault = await walletVault(bidder, signMessage);
+      const stored = await vault.get(launch.id);
+      if (!stored) throw new Error("No sealed bid for this launch in this browser's bid vault");
+      if (!verifyPreimage(stored)) throw new Error("Stored bid preimage does not match its commitment");
+      await custodyTrade.reveal(bidder, { launchId: launch.id, maxPrice: stored.maxPrice, bidAmount: stored.bidAmount, salt: stored.saltHex });
+      await vault.update(launch.id, { revealed: true });
+      return ledgerRef(`reveal-${launch.id.slice(0, 8)}`);
+    } catch (e) {
+      setError(errorMessage(e));
+      throw e;
+    } finally {
+      busy.current = false;
+    }
+  }, [launch.id, publicKey, signMessage]);
+
+  /** After clearing: credit won tokens + refund excess deposit to the internal balance. */
+  const claim = useCallback(async (): Promise<{ tokens: number; refund: number }> => {
+    setError(null);
+    try {
+      if (!(await custodyReady())) throw new Error("Claims are processed by the Sealed API; it is unreachable right now");
+      if (!publicKey || !signMessage) throw new Error("Connect the wallet that placed the bid");
+      const bidder = publicKey.toBase58();
+      if (!getSession(bidder)) await signInWithSolana(bidder, signMessage);
+      return await custodyTrade.claim(bidder, launch.id);
+    } catch (e) {
+      setError(errorMessage(e));
+      throw e;
+    }
+  }, [launch.id, publicKey, signMessage]);
+
   return {
     status,
     error,
     commit,
+    reveal,
+    claim,
     /** Price ticks the bidder may choose from (UI units). */
     priceTicks,
   };
