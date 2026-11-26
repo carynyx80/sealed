@@ -1,0 +1,22 @@
+{
+  "name": "@sealed/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:invariants": "node --import tsx --test --test-reporter=spec \"invariants/**/*.test.ts\"",
+    "test:e2e": "node --import tsx --test --test-reporter=spec --test-concurrency=1 \"e2e/**/*.test.ts\"",
+    "test": "pnpm run test:invariants && pnpm run test:e2e",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@sealed/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.9.0",
+    "@types/ws": "8.5.13",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3",
+    "ws": "8.18.0"
+  }
+}

@@ -1,0 +1,74 @@
+/* @solana/wallet-adapter-react-ui overrides — stone paper, hairlines, ink. See /DESIGN.md. */
+.wallet-adapter-modal-wrapper {
+  background: #fcfbf8;
+  color: #0f0f0d;
+  border: 1px solid #dedad1;
+  border-radius: 14px;
+  box-shadow: 0 1px 0 rgba(15, 15, 13, 0.04), 0 30px 60px -24px rgba(15, 15, 13, 0.28);
+  font-family: var(--font-display), "Helvetica Neue", Arial, sans-serif;
+}
+.wallet-adapter-modal-overlay {
+  background: rgba(15, 15, 13, 0.42);
+}
+.wallet-adapter-modal-title {
+  color: #0f0f0d;
+  font-family: var(--font-display), "Helvetica Neue", Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-size: 26px;
+  line-height: 1.1;
+}
+.wallet-adapter-modal-button-close {
+  background: #f1efe9;
+  border: 1px solid #dedad1;
+}
+.wallet-adapter-modal-button-close:hover {
+  background: #e8e5dc;
+}
+.wallet-adapter-modal-button-close svg {
+  fill: #5c5a54;
+}
+.wallet-adapter-modal-list .wallet-adapter-button {
+  color: #0f0f0d;
+  font-family: var(--font-display), "Helvetica Neue", Arial, sans-serif;
+  font-weight: 500;
+  margin: 0 12px;
+  width: calc(100% - 24px);
+  border-bottom: 1px solid #dedad1;
+  border-radius: 0;
+  transition: background-color 160ms ease;
+}
+.wallet-adapter-modal-list li:last-child .wallet-adapter-button {
+  border-bottom: 0;
+}
+.wallet-adapter-modal-list .wallet-adapter-button:not([disabled]):hover {
+  background: #f1efe9;
+}
+.wallet-adapter-modal-list .wallet-adapter-button span {
+  color: #8f8c84;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.wallet-adapter-modal-list-more {
+  color: #5c5a54;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+}
+.wallet-adapter-modal-list-more svg {
+  fill: #5c5a54;
+}
+.wallet-adapter-modal-middle-button,
+.wallet-adapter-button-trigger {
+  background: #0f0f0d;
+  color: #f1efe9;
+  border-radius: 9999px;
+}
+.wallet-adapter-modal-middle-button:hover,
+.wallet-adapter-button-trigger:not([disabled]):hover {
+  background: #2a2926;
+}
+.wallet-adapter-collapse {
+  border-top: 1px solid #dedad1;
+}

@@ -1,0 +1,195 @@
+// Postgres schema for the Sealed-Block Launchpad API.
+// Amounts are UI units (Float) matching packages/shared/src/types.ts DTOs; timestamps are unix seconds (Int/BigInt).
+// PRIVACY: Bid rows only hold the commitment hash + deposit until the auction clears. Plaintext reveal
+// parameters live (encrypted) in RevealPayload and are only decrypted by the relayer once the reveal window opens.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Launch {
+  id                   String   @id // launch PDA (base58)
+  mint                 String   @unique
+  name                 String
+  ticker               String
+  description          String   @default("")
+  imageUri             String   @default("")
+  creator              String
+  creatorAllocationBps Int
+  totalSupply          Float
+  quoteAsset           String
+  creditTier           String   @default("standard")
+  status               String // commit | reveal | clearing | live | flywheel | failed
+  createdTs            Int
+  network              String   @default("devnet")
+  isDemo               Boolean  @default(false)
+
+  // AuctionState (public aggregates only)
+  commitStartTs  Int
+  commitEndTs    Int
+  revealEndTs    Int
+  bidCount       Int     @default(0)
+  revealedCount  Int     @default(0)
+  escrowedWallets Int    @default(0)
+  totalEscrowed  Float   @default(0)
+  floorPrice     Float
+  tickSize       Float
+  tokensForSale  Float
+  targetRaise    Float
+  clearingCap    Float
+  clearingPrice  Float?
+  totalRaised    Float?
+
+  // MarketState / VaultState / CreditState snapshots (shape = types.ts), null before graduation
+  market     Json?
+  vault      Json?
+  credit     Json?
+  nextDripTs Int?  // denormalised from vault.nextDripTs for the buyback keeper
+
+  updatedAt DateTime @updatedAt
+
+  bids      Bid[]
+  reveals   RevealPayload[]
+  trades    Trade[]
+  buybacks  BuybackEvent[]
+  ledger    CreditLedger[]
+  rewards   HolderReward[]
+
+  @@index([status])
+  @@index([quoteAsset])
+  @@index([nextDripTs])
+}
+
+model Bid {
+  id         String   @id @default(cuid())
+  launchId   String
+  bidder     String
+  commitment String // hex keccak256 — the ONLY bid info stored before clearing
+  deposit    Float // escrowed collateral (public on-chain, never served individually by the API pre-clear)
+  revealed   Boolean  @default(false)
+  // Filled only after clearing (from on-chain SealedBid once revealed + cleared)
+  maxPrice   Float?
+  bidAmount  Float?
+  claimed    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  launch Launch @relation(fields: [launchId], references: [id], onDelete: Cascade)
+
+  @@unique([launchId, bidder])
+  @@index([launchId])
+}
+
+model RevealPayload {
+  id              String    @id @default(cuid())
+  launchId        String
+  bidder          String
+  commitment      String
+  relayerPubkey   String
+  ephemeralPubkey String
+  nonce           String
+  ciphertext      String // nacl.box sealed RevealPlaintext — never decrypted before the reveal window
+  signature       String
+  status          String    @default("pending") // pending | submitted | failed
+  attempts        Int       @default(0)
+  txSignature     String?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  submittedAt     DateTime?
+
+  launch Launch @relation(fields: [launchId], references: [id], onDelete: Cascade)
+
+  @@unique([launchId, bidder])
+  @@index([status])
+}
+
+model Trade {
+  id          String  @id
+  launchId    String
+  side        String
+  wallet      String
+  amountQuote Float
+  amountToken Float
+  price       Float
+  signature   String
+  slot        Int
+  ts          Int
+  isBuyback   Boolean @default(false)
+  isSniper    Boolean @default(false)
+
+  launch Launch @relation(fields: [launchId], references: [id], onDelete: Cascade)
+
+  @@index([launchId, ts])
+}
+
+model BuybackEvent {
+  id           String @id
+  launchId     String
+  ticker       String
+  quoteAsset   String
+  quoteSpent   Float
+  tokensBurned Float
+  price        Float
+  signature    String
+  ts           Int
+  dripIndex    Int
+
+  launch Launch @relation(fields: [launchId], references: [id], onDelete: Cascade)
+
+  @@index([ts])
+  @@index([launchId, ts])
+}
+
+model CreditLedger {
+  id         String @id
+  launchId   String
+  ticker     String
+  kind       String // advance | repayment | flywheel_holder | flywheel_platform_burn | flywheel_treasury | platform_ops
+  amount     Float
+  quoteAsset String
+  signature  String
+  ts         Int
+
+  launch Launch @relation(fields: [launchId], references: [id], onDelete: Cascade)
+
+  @@index([ts])
+  @@index([launchId])
+}
+
+model HolderReward {
+  launchId   String
+  wallet     String
+  staked     Float   @default(0)
+  claimable  Float   @default(0)
+  claimed    Float   @default(0)
+  quoteAsset String
+  eligible   Boolean @default(true)
+
+  launch Launch @relation(fields: [launchId], references: [id], onDelete: Cascade)
+
+  @@id([launchId, wallet])
+}
+
+model ProtocolStats {
+  id                     Int     @id @default(1)
+  totalVolumeUsd         Float   @default(0)
+  totalFeesUsd           Float   @default(0)
+  activeBuybackCreditUsd Float   @default(0)
+  totalCreditDeployedUsd Float   @default(0)
+  totalCreditRepaidUsd   Float   @default(0)
+  solvencyRatio          Float   @default(1)
+  totalTokensBurnedUsd   Float   @default(0)
+  platformTokensBurned   Float   @default(0)
+  holderPayoutsUsd       Float   @default(0)
+  liveAuctions           Int     @default(0)
+  activeVaults           Int     @default(0)
+  graduatedFlywheels     Int     @default(0)
+  snipersBlocked         Int     @default(0)
+  network                String  @default("devnet")
+  isDemo                 Boolean @default(false)
+  updatedTs              Int     @default(0)
+}

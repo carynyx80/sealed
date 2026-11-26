@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 12.23.0
+  NODE_VERSION: 22
+  SOLANA_VERSION: v2.2.20
+  ANCHOR_VERSION: 0.32.1
+
+jobs:
+  ts:
+    name: typecheck · build · tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared
+        run: pnpm --filter @sealed/shared build
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Build
+        run: pnpm build
+      - name: Shared unit tests
+        run: pnpm --filter @sealed/shared test
+      - name: Package unit tests (api, defi)
+        run: |
+          if ls apps/api/test/*.test.ts >/dev/null 2>&1; then pnpm --filter @sealed/api test; fi
+          if [ -d packages/defi/dist/__tests__ ]; then pnpm --filter @sealed/defi test; fi
+      - name: Invariant / property tests
+        run: pnpm --filter @sealed/e2e test:invariants
+        env:
+          INVARIANT_RUNS: 1000
+      - name: E2E (API + web smoke)
+        run: pnpm --filter @sealed/e2e test:e2e
+      - name: Seed script (memory mode no-op)
+        run: pnpm --filter @sealed/api seed
+
+  docker:
+    name: API Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build apps/api/Dockerfile
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          load: true
+          tags: sealed-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Boot + healthcheck
+        run: |
+          docker run -d --name api -p 4000:4000 sealed-api:ci
+          for i in $(seq 1 30); do curl -fsS http://localhost:4000/api/health && exit 0; sleep 2; done
+          docker logs api; exit 1
+
+  anchor:
+    name: anchor build · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            programs/sealed-launchpad/target
+          key: anchor-${{ runner.os }}-${{ hashFiles('programs/sealed-launchpad/Cargo.lock') }}
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/${SOLANA_VERSION}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v${ANCHOR_VERSION} anchor-cli --locked --force
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @sealed/shared build
+      - name: Test keypair
+        run: solana-keygen new --no-bip39-passphrase -o ~/.config/solana/id.json --force
+      - name: anchor build
+        working-directory: programs/sealed-launchpad
+        run: anchor build
+      - name: anchor test
+        working-directory: programs/sealed-launchpad
+        run: pnpm test

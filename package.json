@@ -1,0 +1,17 @@
+{
+  "name": "sealed-launchpad",
+  "private": true,
+  "packageManager": "pnpm@12.23.0",
+  "scripts": {
+    "dev": "pnpm --filter @sealed/shared build && pnpm -r --parallel --filter @sealed/api --filter @sealed/web dev",
+    "build": "pnpm --filter @sealed/shared build && pnpm -r --filter !@sealed/shared build",
+    "typecheck": "pnpm --filter @sealed/shared build && pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "seed": "pnpm --filter @sealed/api seed",
+    "anchor:build": "cd programs/sealed-launchpad && anchor build",
+    "anchor:test": "cd programs/sealed-launchpad && anchor test"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3"
+  }
+}

@@ -1,0 +1,19 @@
+[toolchain]
+package_manager = "pnpm"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+sealed_launchpad = "71geDPZMKfjJnKE4an15QyyH5TyFG1w7XEL5tUkp5Tpy"
+
+[programs.devnet]
+sealed_launchpad = "71geDPZMKfjJnKE4an15QyyH5TyFG1w7XEL5tUkp5Tpy"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "pnpm exec ts-mocha --exit -p ./tsconfig.json -t 1000000 \"tests/**/*.ts\""
