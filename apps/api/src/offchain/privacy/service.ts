@@ -86,6 +86,7 @@ export class PrivacyRuntime {
   /** Keys already final (credited / rejected) or internal signatures: skipped on later scans (memory only). */
   private done = new Set<string>();
   private registering = false;
+  private autoRegisterAttempted = false;
   private timer: NodeJS.Timeout | null = null;
   private stopped = false;
 
@@ -184,6 +185,10 @@ export class PrivacyRuntime {
           this.probeOk = p.ok;
           this.probeReason = p.ok ? null : p.reason ?? "probe failed";
           if (p.ok) this.reg = await this.port!.registration();
+          if (p.ok && this.reg === "unregistered" && this.config.enabled && this.config.autoRegister && !this.autoRegisterAttempted) {
+            this.autoRegisterAttempted = true; // at most once per process: never loops or retries spending
+            void this.register().then((r) => this.log.info({ code: r.code, body: r.body }, "privacy: auto-registration result"));
+          }
           if (!p.ok) this.log.warn({ network: this.app.network, reason: this.probeReason }, "privacy: ring unavailable on this network — private flows disabled (mainnet guard)");
           else if (this.reg !== "registered") this.log.warn({ registration: this.reg }, "privacy: company shielded address not registered — POST /api/admin/privacy/register");
         } catch (e) {

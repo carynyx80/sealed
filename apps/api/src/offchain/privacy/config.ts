@@ -7,6 +7,8 @@ import type { Network } from "@sealed/shared";
  *                                 503 {enabled:false, reason} and nothing touches the SDK or the chain.
  *   SPR_INDEXER_URL / SPR_PROVER_URL  optional overrides; default = the Helius RPC root's `/v1/spr` namespace
  *                                 (derived by the SDK from https://{network}.helius-rpc.com/?api-key=HELIUS_API_KEY)
+ *   PRIVACY_AUTO_REGISTER         "true" registers the company private address once per boot if unregistered
+ *                                 (same safety checks as POST /api/admin/privacy/register; spends only spare SOL)
  *   PRIVACY_POLL_MS               private deposit watcher interval (default 20000)
  *   PRIVACY_REPROBE_MS            ring availability / registration re-check interval (default 300000)
  *   PRIVACY_MIN_SOL / PRIVACY_MIN_USDC  smallest private deposit credited (default 0.001 SOL / 1 USDC)
@@ -21,6 +23,8 @@ export interface PrivacyConfig {
   reprobeMs: number;
   minAmount: { SOL: number; USDC: number };
   priorityFeeLamports?: bigint;
+  /** PRIVACY_AUTO_REGISTER: register the company private address once per boot when unregistered (same checks as the admin route). */
+  autoRegister?: boolean;
 }
 
 const nonEmpty = (v: string | undefined) => (v && v.trim() !== "" ? v.trim() : undefined);
@@ -34,6 +38,7 @@ export function loadPrivacyConfig(network: Network, env: Record<string, string |
   const fee = nonEmpty(env.PRIVACY_PRIORITY_FEE_LAMPORTS);
   return {
     enabled: truthy(env.PRIVACY_RING_ENABLED),
+    autoRegister: truthy(env.PRIVACY_AUTO_REGISTER),
     network,
     indexerUrl: nonEmpty(env.SPR_INDEXER_URL),
     proverUrl: nonEmpty(env.SPR_PROVER_URL),
