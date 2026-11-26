@@ -46,7 +46,7 @@ export default function HowItWorks() {
         }
         lede="A launch moves through six statuses. This page walks through each one: who acts, what money moves, and which numbers are fixed by the protocol."
       >
-        <StatusBadge status="demo" />
+        <StatusBadge status="live" />
         <StatusBadge status="offchain-passing" label="Offchain ledger · tests passing" />
         <StatusBadge status="chain-pending" />
       </DocHeader>
@@ -159,11 +159,10 @@ export default function HowItWorks() {
           ["Withdraw", "POST /api/account/withdrawals → company wallet pays out", "not needed: funds are already in your wallet"],
         ]}
       />
-      <Note title="Demo mode">
+      <Note title="Local development">
         <p>
-          With no environment set, the API runs <C>DEMO_MODE</C> with an in-memory store and a deterministic demo world; the UI labels it Demo.
-          Demo bids go through <C>POST /api/auctions/:id/demo-bid</C> with a real keccak commitment. No real funds move. Demo mode is for local development only:
-          it is disabled on mainnet, where the hosted API (rolling out) serves only real launches with real funds and the web app has no demo fallback.
+          With no environment set, the API uses an in-memory store so you can run it without Postgres or Redis. The hosted API (rolling out) runs on
+          Solana mainnet with Postgres and serves only real launches with real funds.
         </p>
       </Note>
     </>

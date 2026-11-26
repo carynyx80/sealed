@@ -39,7 +39,7 @@ export default function SealedAuction() {
         lede="A sealed-bid, uniform-price auction over a 64-tick price grid. Prices and sizes stay hidden until the reveal window; the clearing algorithm is integer-exact and identical in TypeScript and Rust."
       >
         <StatusBadge status="offchain-passing" label="Clearing math · tests passing" />
-        <StatusBadge status="demo" />
+        <StatusBadge status="live" />
         <StatusBadge status="offchain-passing" label="Offchain ledger · tests passing" />
         <StatusBadge status="chain-pending" />
       </DocHeader>

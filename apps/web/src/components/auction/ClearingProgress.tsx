@@ -47,8 +47,10 @@ export function ClearingProgress({ launch, className }: { launch: LaunchSummary;
                 />
                 <span className="absolute -top-1 left-0 h-[11px] w-px bg-ink-slate" aria-hidden />
               </div>
-              <span className={clsx("mt-2 block font-mono text-[10px] uppercase tracking-[0.08em]", current ? "text-ink" : i < idx ? "text-ink-slate" : "text-ink-muted")}>
-                <span className="text-ink-muted">{String(i + 1).padStart(2, "0")}</span> {s.label}
+              <span className={clsx("mt-2 block min-w-0 pr-1 font-mono text-[10px] uppercase tracking-[0.08em]", current ? "text-ink" : i < idx ? "text-ink-slate" : "text-ink-muted")}>
+                {/* number above label: the four narrow columns never wrap unevenly (rail is ~300px at lg) */}
+                <span className="block text-ink-muted">{String(i + 1).padStart(2, "0")}</span>
+                <span className="block truncate">{s.label}</span>
               </span>
             </li>
           );

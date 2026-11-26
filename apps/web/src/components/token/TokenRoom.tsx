@@ -1,10 +1,9 @@
 "use client";
 import Link from "next/link";
 import clsx from "clsx";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CREDIT_TIERS, NUM_PRICE_TICKS, QUOTE_ASSETS, type LaunchSummary } from "@sealed/shared";
 import { useLaunchRoom, useNow } from "@/lib/live";
-import { networkName } from "@/lib/config";
 import { fmtAmount, fmtCompact, fmtInt, fmtPct, fmtPrice, fmtTime, fmtUsd, shortAddr, solscanAccount } from "@/lib/format";
 import { OneClickJupiterSwap } from "../swap/OneClickJupiterSwap";
 import { CommitBidCard } from "../auction/CommitBidCard";
@@ -19,6 +18,7 @@ import { QuoteBadge } from "../ui/QuoteBadge";
 import { TokenAvatar } from "../ui/TokenAvatar";
 import { Skeleton } from "../ui/Skeleton";
 import { ArrowUpRight } from "../ui/Icons";
+import { Address, CopyButton } from "../ui/Address";
 import { PriceChart } from "./PriceChart";
 import { TradeTape } from "./TradeTape";
 import { FlywheelBreakdown } from "./FlywheelBreakdown";
@@ -65,16 +65,16 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
   const vaultBuys = data.trades.filter((t) => t.isBuyback).length;
 
   return (
-    <div className="pb-16 pt-6 sm:pt-10">
+    <div className="pb-28 pt-6 sm:pt-10 lg:pb-16">
       <Masthead launch={L} />
       <KeyFigures launch={L} />
 
-      <div className="mt-6 flex flex-col gap-4 sm:gap-5 lg:mt-8 lg:grid lg:grid-cols-12 lg:items-start lg:gap-6">
+      <div className={clsx("mt-6 flex flex-col gap-4 sm:gap-5 lg:mt-8 lg:grid lg:grid-cols-12 lg:items-start lg:gap-6", graduated && "md:grid md:grid-cols-2 md:items-start")}>
         {/* ------------------------------------------------------------------ main column */}
         <div className="contents lg:col-span-8 lg:flex lg:min-w-0 lg:flex-col lg:gap-6">
           {graduated ? (
             <>
-              <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(3))}>
+              <FadeIn className={clsx("card min-w-0 p-5 sm:p-6 md:col-span-2 md:order-3", ord(3))}>
                 <SectionHead
                   mark="01 · Price"
                   title={<><span className="num">{L.ticker}</span><span className="text-ink-muted"> / </span><span className="num">{L.quoteAsset}</span></>}
@@ -86,7 +86,7 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
               </FadeIn>
 
               <div className="contents xl:grid xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] xl:items-start xl:gap-6">
-                <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(5))}>
+                <FadeIn className={clsx("card min-w-0 p-5 sm:p-6 md:col-span-2 md:order-4 xl:col-span-1", ord(5))}>
                   <SectionHead
                     mark="02 · Tape"
                     title="Trades & buybacks"
@@ -106,13 +106,13 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
                       : "Each row links to Solscan. Programmatic buys execute from the vault on a fixed cadence and are burned in the same transaction."}
                   </p>
                 </FadeIn>
-                <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(8))} delay={0.04}>
+                <FadeIn className={clsx("card min-w-0 p-5 sm:p-6 md:col-span-2 md:order-8 xl:col-span-1", ord(8))} delay={0.04}>
                   <SectionHead mark="03 · Particulars" title="Market" />
                   <MarketParticulars launch={L} />
                 </FadeIn>
               </div>
 
-              <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(7))}>
+              <FadeIn className={clsx("card min-w-0 p-5 sm:p-6 md:col-span-2 md:order-7", ord(7))}>
                 <SectionHead mark="04 · Fees" title={<>Holder <span className="accent">flywheel</span></>} aside={<span>1% pool fee · Fee Collector PDA</span>} />
                 <div className="mt-4">
                   <FlywheelBreakdown launch={L} />
@@ -138,24 +138,24 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
         <aside className="contents lg:col-span-4 lg:flex lg:min-w-0 lg:flex-col lg:gap-6" aria-label={graduated ? "Trade and vault" : "Auction"}>
           {graduated ? (
             <>
-              <div className={clsx("flex min-w-0 flex-col gap-4 sm:gap-5 lg:gap-6", ord(1))}>
+              <div id="room-action" className={clsx("flex min-w-0 scroll-mt-20 flex-col gap-4 sm:gap-5 md:order-1 lg:gap-6", ord(1))}>
                 <ClaimPanel launch={L} variant="card" />
                 <OneClickJupiterSwap launch={L} />
               </div>
-              <div className={clsx("min-w-0", ord(2))}>
+              <div className={clsx("min-w-0 md:order-2", ord(2))}>
                 <BuybackCountdownCard launch={L} />
               </div>
               {L.credit && (
-                <div className={clsx("min-w-0", ord(4))}>
+                <div className={clsx("min-w-0 md:order-5", ord(4))}>
                   <CreditRepayMeter credit={L.credit} quote={L.quoteAsset} />
                 </div>
               )}
-              <div className={clsx("min-w-0", ord(6))}>
+              <div className={clsx("min-w-0 md:order-6", !L.credit && "md:col-span-2", ord(6))}>
                 <RewardsCard launch={L} />
               </div>
             </>
           ) : L.status === "commit" || L.status === "reveal" ? (
-            <div className={clsx("min-w-0", ord(1))}>
+            <div id="room-action" className={clsx("min-w-0 scroll-mt-20", ord(1))}>
               <CommitBidCard launch={L} />
             </div>
           ) : (
@@ -176,6 +176,51 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
             </section>
           )}
         </aside>
+      </div>
+      {(graduated || L.status === "commit") && <ActionDock launch={L} />}
+    </div>
+  );
+}
+
+/**
+ * Phones and tablets: the trade / bid card sits high in the column, so once it scrolls out of view a slim dock
+ * brings it back in one tap. Fixed (no layout shift), clear of the home indicator, hidden from lg up.
+ */
+function ActionDock({ launch: L }: { launch: LaunchSummary }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const el = document.getElementById("room-action");
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => e && setShow(!e.isIntersecting), { rootMargin: "0px 0px -15% 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const graduated = L.status === "live" || L.status === "flywheel";
+  return (
+    <div
+      aria-hidden={!show}
+      className={clsx(
+        "fixed inset-x-0 bottom-0 z-40 border-t border-rule bg-sheet px-4 pb-[calc(0.625rem+env(safe-area-inset-bottom))] pt-2.5 transition-transform duration-200 lg:hidden",
+        show ? "translate-y-0" : "pointer-events-none translate-y-full",
+      )}
+    >
+      <div className="mx-auto flex max-w-xl items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="eyebrow truncate">{graduated ? `${L.ticker} / ${L.quoteAsset}` : "Commit closes in"}</p>
+          {graduated ? (
+            <p className="num truncate text-[15px] text-ink">{L.market ? fmtPrice(L.market.price) : "--"}</p>
+          ) : (
+            <Countdown to={L.auction.commitEndTs} className="text-[15px] text-ink" />
+          )}
+        </div>
+        <button
+          type="button"
+          tabIndex={show ? 0 : -1}
+          className="btn-primary min-h-[44px] shrink-0"
+          onClick={() => document.getElementById("room-action")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        >
+          {graduated ? `Trade $${L.ticker}` : "Place sealed bid"}
+        </button>
       </div>
     </div>
   );
@@ -200,10 +245,13 @@ function Masthead({ launch: L }: { launch: LaunchSummary }) {
           <span className="uppercase tracking-[0.08em]">Token room</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-3">
-          <a href={solscanAccount(L.mint, L.network)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 transition-colors hover:text-ink">
-            mint {shortAddr(L.mint, 4)} <ArrowUpRight width={11} height={11} strokeWidth={1.25} />
-          </a>
-          <span className="hidden sm:inline">· {networkName(L.network)}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <a href={solscanAccount(L.mint, L.network)} target="_blank" rel="noreferrer" title={L.mint} className="inline-flex items-center gap-1 transition-colors hover:text-ink">
+              mint {shortAddr(L.mint, 4)} <ArrowUpRight width={11} height={11} strokeWidth={1.25} />
+            </a>
+            <CopyButton value={L.mint} label="mint address" />
+          </span>
+          <span className="hidden sm:inline">· Solana</span>
           <span className="hidden sm:inline">· as of <span className="num text-ink-slate">{now === null ? "--:--:--" : fmtTime(now)}</span></span>
         </div>
       </div>
@@ -214,7 +262,6 @@ function Masthead({ launch: L }: { launch: LaunchSummary }) {
             <TokenAvatar src={L.imageUri} ticker={L.ticker} size={36} eager />
             <CommitRevealBadge status={L.status} />
             <QuoteBadge symbol={L.quoteAsset} showKind />
-            {L.isDemo && <span className="rounded-full border border-dashed border-rule-strong px-2.5 py-1 font-mono text-[10px] uppercase leading-none tracking-[0.06em] text-ink-muted">Demo</span>}
           </div>
           <h1 className="mt-5 break-words font-display text-display-lg text-ink">{L.name}</h1>
           <p className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -340,9 +387,7 @@ function MarketParticulars({ launch: L }: { launch: LaunchSummary }) {
       <LedgerRow
         k="Creator"
         v={
-          <a className="underline decoration-rule-strong underline-offset-2 transition-colors hover:text-ink hover:decoration-ink" href={solscanAccount(L.creator, L.network)} target="_blank" rel="noreferrer">
-            {shortAddr(L.creator)}
-          </a>
+          <Address value={L.creator} href={solscanAccount(L.creator, L.network)} tail={4} copy label="creator address" className="max-w-[11rem] align-bottom" />
         }
       />
     </dl>

@@ -8,16 +8,16 @@ import { RingMark } from "../privacy/RingMotif";
  */
 export function PoweredByHelius({ id = "helius-credit", className }: { id?: string; className?: string }) {
   return (
-    <section aria-labelledby={id} className={clsx("border-b border-ink py-14 sm:py-20", className)}>
+    <section aria-labelledby={id} className={clsx("border-b border-ink py-10 sm:py-16 lg:py-20", className)}>
       <div className="grid gap-8 lg:grid-cols-12 lg:items-center lg:gap-10">
         <div className="lg:col-span-10">
-          <RingMark size={44} active className="mb-6 text-signal lg:hidden" />
-          <h2 id={id} className="text-display-xl text-ink">
+          <RingMark size={40} active className="mb-5 text-signal lg:hidden" />
+          <h2 id={id} className="text-balance text-[clamp(2.25rem,9vw,4.5rem)] font-bold leading-[0.95] tracking-[-0.045em] text-ink lg:text-display-xl">
             Partially powered by <span className="accent text-signal">Helius Privacy Rings</span>
           </h2>
           <Link
             href="/docs/privacy"
-            className="mt-6 inline-flex min-h-[44px] items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-slate underline decoration-rule-strong underline-offset-4 transition-colors hover:text-signal"
+            className="mt-4 inline-flex min-h-[44px] sm:mt-6 items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-slate underline decoration-rule-strong underline-offset-4 transition-colors hover:text-signal"
           >
             What&rsquo;s live today <span aria-hidden>→</span>
           </Link>

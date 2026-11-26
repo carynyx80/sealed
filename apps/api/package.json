@@ -21,6 +21,7 @@
     "@prisma/client": "5.22.0",
     "@sealed/shared": "workspace:*",
     "@solana/kit": "8.6.0",
+    "@solana/wallet-standard-util": "1.2.0",
     "@solana/web3.js": "1.98.0",
     "bs58": "6.0.0",
     "fastify": "5.1.0",

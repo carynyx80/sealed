@@ -87,7 +87,12 @@ export async function buildCustody(app: AppConfig, ledger: CustodyLedger | null,
   });
   if (prices.live) log.info("custody: withdrawal limits use LIVE USD prices (Jupiter Price API v3, Helius fallback); no fresh price → pending_approval");
 
-  const auth = new AuthService(repo, config.siwsDomain);
+  const auth = new AuthService(repo, {
+    domain: config.siwsDomain,
+    domainExplicit: config.siwsDomainExplicit,
+    allowedOrigins: app.corsOrigin,
+    network: config.network,
+  });
   const deposits = new DepositService(config, repo, ledgerPort, rpc, assets, log);
   const withdrawals = new WithdrawalService(config, repo, ledgerPort, assets, log, undefined, prices);
   const reserves = new ReservesService(config, ledgerPort, rpc, assets, log);

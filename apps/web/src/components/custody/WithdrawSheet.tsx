@@ -187,7 +187,7 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
 
       <div className={clsx("mt-4", usePrivate && "hidden")}>
         <label htmlFor="wd-dest" className="label">Destination wallet</label>
-        <input id="wd-dest" className={clsx("input num text-[13px]", dest && !destOk && "!border-burn")} value={dest} onChange={(e) => setDest(e.target.value.trim())} autoComplete="off" spellCheck={false} />
+        <input id="wd-dest" className={clsx("input num text-base sm:text-[13px]", dest && !destOk && "!border-burn")} value={dest} onChange={(e) => setDest(e.target.value.trim())} autoComplete="off" spellCheck={false} />
         <p className="fine mt-1.5">
           {dest === s.wallet ? "Your connected wallet." : dest && !destOk ? <span className="text-burn">Not a valid Solana address.</span> : <button type="button" className="underline underline-offset-2" onClick={() => s.wallet && setDest(s.wallet)}>Use my connected wallet</button>}
         </p>

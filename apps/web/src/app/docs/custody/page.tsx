@@ -32,7 +32,7 @@ export default function Custody() {
       <Note title="Status on the hosted API" tone="signal">
         <p>
           The custody code is built and its tests pass, and it runs on Railway with Postgres and Redis. The move to mainnet is <strong>rolling out</strong>:
-          the API is switching to <C>NETWORK=mainnet</C> with <C>DEMO_MODE=false</C>, the deposit watcher and payout worker on, and{" "}
+          the API is switching to <C>NETWORK=mainnet</C> with the deposit watcher and payout worker on, and{" "}
           <C>COMPANY_WALLET_SECRET_KEY</C> and <C>HELIUS_API_KEY</C> set by the operator. Before you send anything, check that{" "}
           <C>GET /api/custody/info</C> reports <C>&quot;network&quot;: &quot;mainnet&quot;</C> and <C>payoutsEnabled: true</C>.
         </p>
@@ -145,7 +145,7 @@ Content-Type: application/json
         items={[
           { k: "Auto-approved", v: <>At or under <N>{usd(WITHDRAWAL_LIMITS.autoApproveMaxUsd)}</N> USD-equivalent and inside the <N>{usd(WITHDRAWAL_LIMITS.dailyPerWalletUsd)}</N> daily per-wallet limit, valued at a fresh live price.</> },
           { k: "Manual approval", v: <>Above either limit, or when no fresh price is available, the request lands in <C>pending_approval</C>. An operator lists, approves (→ <C>queued</C>) or rejects it on <C>/api/admin/withdrawals</C> with the <C>x-admin-token</C> header; these routes require <C>ADMIN_TOKEN</C> to be set.</> },
-          { k: "USD valuation", s: "rolling", v: "Limits use live prices from the Jupiter Price API. If the price is missing or stale, the withdrawal fails safe to manual approval rather than being auto-approved. (Earlier builds used the demo reference prices in quoteAssets.ts.)" },
+          { k: "USD valuation", s: "rolling", v: "Limits use live prices from the Jupiter Price API. If the price is missing or stale, the withdrawal fails safe to manual approval rather than being auto-approved." },
           { k: "Payouts paused", s: "rolling", v: <>When the company wallet lacks SOL for network fees, payouts pause and report a reason; <C>queued</C> withdrawals wait with funds locked until the wallet is topped up.</> },
           { k: "Payouts disabled", v: <>Without <C>COMPANY_WALLET_SECRET_KEY</C> (and an RPC), <C>payoutsEnabled</C> is false and no payout worker runs: <C>queued</C> withdrawals wait, funds stay locked, and approving one only moves it to <C>queued</C>. Rejecting unlocks the funds.</> },
         ]}

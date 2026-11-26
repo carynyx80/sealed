@@ -29,7 +29,7 @@ export function CropPreview({ img, crop, size }: { img: DecodedImage; crop: Crop
   );
 }
 
-/** Pan (drag, arrow keys) and zoom (wheel, slider, + / -) a square crop inside a circular mask. */
+/** Pan (drag, arrow keys) and zoom (pinch, wheel, slider, + / -) a square crop inside a circular mask. */
 export function CropBox({ img, crop, onChange, label }: { img: DecodedImage; crop: Crop; onChange: (c: Crop) => void; label: string }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState(0);
@@ -61,23 +61,56 @@ export function CropBox({ img, crop, onChange, label }: { img: DecodedImage; cro
 
   const set = (c: Crop) => onChange(clampCrop(c, img.width, img.height));
 
+  // Active pointers: one pointer pans; two pointers pinch-zoom around their midpoint (and pan with it).
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; mx: number; my: number; start: Crop } | null>(null);
+
+  const startGesture = () => {
+    const pts = [...pointers.current.values()];
+    if (pts.length >= 2) {
+      const [a, b] = pts as [{ x: number; y: number }, { x: number; y: number }];
+      pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, start: cropRef.current };
+      drag.current = null;
+    } else if (pts.length === 1) {
+      const [id] = [...pointers.current.keys()] as [number];
+      pinch.current = null;
+      drag.current = { id, x: pts[0]!.x, y: pts[0]!.y, start: cropRef.current };
+    } else {
+      pinch.current = null;
+      drag.current = null;
+    }
+  };
+
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
       /* pointer already released (or synthetic); dragging still works while inside the box */
     }
-    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, start: crop };
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    startGesture();
   };
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (!pointers.current.has(e.pointerId) || !view) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const p = pinch.current;
+    if (p && pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()] as [{ x: number; y: number }, { x: number; y: number }];
+      const zoom = p.start.zoom * ((Math.hypot(a.x - b.x, a.y - b.y) || 1) / p.dist);
+      const scale = view / cropSide(img.width, img.height, zoom);
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      set({ zoom, u: p.start.u - (mx - p.mx) / (scale * img.width), v: p.start.v - (my - p.my) / (scale * img.height) });
+      return;
+    }
     const d = drag.current;
-    if (!d || d.id !== e.pointerId || !view) return;
+    if (!d || d.id !== e.pointerId) return;
     const scale = view / cropSide(img.width, img.height, d.start.zoom);
     set({ ...d.start, u: d.start.u - (e.clientX - d.x) / (scale * img.width), v: d.start.v - (e.clientY - d.y) / (scale * img.height) });
   };
   const endDrag = (e: PointerEvent<HTMLDivElement>) => {
-    if (drag.current?.id === e.pointerId) drag.current = null;
+    if (!pointers.current.delete(e.pointerId)) return;
+    startGesture();
   };
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -106,7 +139,7 @@ export function CropBox({ img, crop, onChange, label }: { img: DecodedImage; cro
         ref={boxRef}
         role="group"
         tabIndex={0}
-        aria-label={`${label}. Drag or use arrow keys to move, plus and minus to zoom, 0 to reset.`}
+        aria-label={`${label}. Drag or use arrow keys to move, pinch or plus and minus to zoom, 0 to reset.`}
         aria-roledescription="image crop"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -142,7 +175,7 @@ export function CropBox({ img, crop, onChange, label }: { img: DecodedImage; cro
           <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden><path d="M2 7h10M7 2v10" stroke="currentColor" strokeWidth="1.25" /></svg>
         </button>
       </div>
-      <p className={clsx("num mt-1 text-[11px] text-ink-muted")}>{crop.zoom.toFixed(2)}× · drag to position</p>
+      <p className={clsx("num mt-1 text-[11px] text-ink-muted")}>{crop.zoom.toFixed(2)}× · drag to position, pinch to zoom</p>
     </div>
   );
 }

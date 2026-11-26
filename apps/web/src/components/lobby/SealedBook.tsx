@@ -63,7 +63,7 @@ export function SealedBook({ launch }: { launch: LaunchSummary | null }) {
         <div className="flex items-center justify-between gap-3 bg-ink px-4 py-2.5 text-paper sm:px-5">
           <span className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.08em]">
             {launch && <TokenAvatar src={launch.imageUri} ticker={launch.ticker} size={20} tone="dark" />}
-            <span className="truncate">Sealed book <span className="text-paper/40">/</span> {launch ? `$${launch.ticker}` : "awaiting lot"}</span>
+            <span className="truncate"><span className="hidden min-[400px]:inline">Sealed book <span className="text-paper/40">/</span> </span>{launch ? `$${launch.ticker}` : "awaiting lot"}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-[0.08em] text-paper/70">
             <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-signal-bright" /> {reveal ? "Reveal" : "Commit"} window
@@ -74,9 +74,9 @@ export function SealedBook({ launch }: { launch: LaunchSummary | null }) {
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 border-b border-rule px-4 pb-4 pt-5 sm:px-5">
           <div className="min-w-0">
             <p className="eyebrow">{reveal ? "Reveal closes in" : "Book closes in"}</p>
-            <p className="mt-2 text-[44px] leading-none tracking-[-0.04em] sm:text-[56px]">{a ? <LobbyCountdown to={reveal ? a.revealEndTs : a.commitEndTs} /> : <span className="num">--:--</span>}</p>
+            <p className="mt-2 text-[clamp(2.25rem,12vw,2.75rem)] leading-none tracking-[-0.04em] sm:text-[56px]">{a ? <LobbyCountdown to={reveal ? a.revealEndTs : a.commitEndTs} /> : <span className="num">--:--</span>}</p>
           </div>
-          <dl className="grid grid-cols-2 gap-x-5 gap-y-1.5 text-right">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-right sm:gap-x-5">
             <dt className="eyebrow">Bids</dt>
             <dt className="eyebrow">Wallets</dt>
             <dd className="num text-lg leading-none">{a ? fmtInt(count) : "…"}</dd>
@@ -89,9 +89,9 @@ export function SealedBook({ launch }: { launch: LaunchSummary | null }) {
           <div className={`grid ${COLS} gap-3 border-b border-rule py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted`}>
             <span>No.</span>
             <span className="hidden sm:block">Bidder</span>
-            <span>Commitment</span>
-            <span>Max px</span>
-            <span>Size</span>
+            <span className="truncate"><span className="sm:hidden">Hash</span><span className="hidden sm:inline">Commitment</span></span>
+            <span className="truncate">Max px</span>
+            <span className="truncate">Size</span>
           </div>
           <ul className="relative">
             <AnimatePresence initial={false}>
@@ -119,7 +119,7 @@ export function SealedBook({ launch }: { launch: LaunchSummary | null }) {
         {/* clearing line */}
         <div className="mx-4 mb-1 mt-2 flex items-center gap-3 sm:mx-5" aria-hidden>
           <span className="flex-1 border-t border-dashed border-signal" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-signal">One clearing price · sealed</span>
+          <span className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.08em] text-signal">One clearing price · sealed</span>
           <span className="w-5 border-t border-dashed border-signal" />
         </div>
 

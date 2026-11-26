@@ -13,7 +13,8 @@ import type { AppConfig } from "../../config.js";
  *   EXECUTION_MODE             offchain (default) | onchain
  *   DEPOSIT_CONFIRMATIONS      "finalized" (default; always the default on mainnet) or an integer N of confirmed-slot
  *                              depth (mainnet: N must be ≥ 32, otherwise startup fails)
- *   SIWS_DOMAIN                domain shown in the sign-in message (default "sealed.app")
+ *   SIWS_DOMAIN                host shown in / required of the sign-in message (e.g. www.sealedsol.xyz). Unset → the
+ *                              request Origin's host when that Origin is in the CORS allowlist, else DEFAULT_SIWS_DOMAIN
  *   CUSTODY_WORKERS            run DepositWatcher / PayoutWorker (default: follows WORKERS_ENABLED)
  *   DEPOSIT_POLL_MS / PAYOUT_POLL_MS
  *
@@ -29,7 +30,10 @@ export interface CustodyConfig {
   mode: ExecutionMode;
   /** "finalized" or minimum confirmed-slot depth. */
   depositConfirmations: "finalized" | number;
+  /** SIWS domain (host). Always set: SIWS_DOMAIN or DEFAULT_SIWS_DOMAIN. */
   siwsDomain: string;
+  /** true when SIWS_DOMAIN was configured explicitly (then the request Origin is never used). */
+  siwsDomainExplicit: boolean;
   network: Network;
   /** Helius (or explicit) JSON-RPC url used by custody. Contains the API key — never log it. */
   rpcUrl?: string;
@@ -42,6 +46,22 @@ export interface CustodyConfig {
   testCredit: boolean;
   /** ENABLE_TEST_CLOCK && network !== mainnet && NODE_ENV !== production. */
   testClock: boolean;
+}
+
+/** Production site host (apps/web is served from https://www.sealedsol.xyz). */
+export const DEFAULT_SIWS_DOMAIN = "www.sealedsol.xyz";
+
+/** Normalise a SIWS_DOMAIN value: accepts "host", "host:port" or a full origin URL; returns lowercase host[:port]. */
+export function normalizeSiwsDomain(v: string): string {
+  const raw = v.trim();
+  let host: string;
+  try {
+    host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`).host;
+  } catch {
+    throw new Error("Invalid environment: SIWS_DOMAIN must be a host name such as www.sealedsol.xyz");
+  }
+  if (!host || /[\s/]/.test(host)) throw new Error("Invalid environment: SIWS_DOMAIN must be a host name such as www.sealedsol.xyz");
+  return host.toLowerCase();
 }
 
 const nonEmpty = (v: string | undefined) => (v && v.trim() !== "" ? v.trim() : undefined);
@@ -79,7 +99,8 @@ export function loadCustodyConfig(cfg: AppConfig, env: Record<string, string | u
     adminToken,
     mode,
     depositConfirmations,
-    siwsDomain: nonEmpty(env.SIWS_DOMAIN) ?? "sealed.app",
+    siwsDomain: nonEmpty(env.SIWS_DOMAIN) ? normalizeSiwsDomain(env.SIWS_DOMAIN!) : DEFAULT_SIWS_DOMAIN,
+    siwsDomainExplicit: !!nonEmpty(env.SIWS_DOMAIN),
     network: cfg.network,
     rpcUrl: custodyRpcUrl(cfg.network, cfg.heliusApiKey, cfg.rpcUrl),
     depositPollMs: Number(nonEmpty(env.DEPOSIT_POLL_MS) ?? 15_000),

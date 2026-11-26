@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { useReducedMotion } from "@/components/motion/reduced";
@@ -16,7 +16,7 @@ const METRICS: { id: Metric; label: string; stroke: string }[] = [
 ];
 
 const H = 260;
-const PAD = { t: 16, b: 28, l: 0, r: 52 };
+const PAD = { t: 22, b: 28, l: 0, r: 52 };
 
 function niceStep(max: number, n = 4) {
   const raw = max / n;
@@ -62,6 +62,22 @@ export function DailyChart({ daily }: { daily: RevenueResponse["daily"] }) {
   const sel = hover ?? n - 1;
   const selDay = daily[sel];
 
+  /** Mouse, pen and touch share one path: the column under the pointer is selected; dragging a finger scrubs. */
+  const onPointer = (e: PointerEvent<SVGSVGElement>) => {
+    if (!slot) return;
+    const x = e.clientX - e.currentTarget.getBoundingClientRect().left - PAD.l;
+    setHover(Math.min(n - 1, Math.max(0, Math.floor(x / slot))));
+  };
+  const onKey = (e: KeyboardEvent<SVGSVGElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
+    e.preventDefault();
+    const cur = hover ?? n - 1;
+    const next = e.key === "Home" ? 0 : e.key === "End" ? n - 1 : cur + (e.key === "ArrowRight" ? 1 : -1);
+    setHover(Math.min(n - 1, Math.max(0, next)));
+  };
+  /** Floating readout above the selected column, kept inside the plot. */
+  const tip = hover !== null && selDay ? { x: Math.min(Math.max(PAD.l + slot * hover + slot / 2, 46), PAD.l + iw - 46), v: fmtUsd(selDay[metric], false), d: dayLabel(selDay.date) } : null;
+
   return (
     <div>
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
@@ -87,7 +103,7 @@ export function DailyChart({ daily }: { daily: RevenueResponse["daily"] }) {
                 aria-selected={on}
                 type="button"
                 onClick={() => setMetric(x.id)}
-                className={clsx("relative shrink-0 whitespace-nowrap px-2 pb-2 pt-1 text-[13px] transition-colors", on ? "text-ink" : "text-ink-muted hover:text-ink-slate")}
+                className={clsx("relative min-h-[44px] shrink-0 whitespace-nowrap px-2 text-[13px] transition-colors sm:min-h-[36px]", on ? "text-ink" : "text-ink-muted hover:text-ink-slate")}
               >
                 {x.label}
                 {on && <motion.span layoutId="rev-metric-rule" className="absolute inset-x-2 bottom-0 h-px bg-ink" transition={SPRING} />}
@@ -99,7 +115,21 @@ export function DailyChart({ daily }: { daily: RevenueResponse["daily"] }) {
 
       <div ref={wrap} className="relative mt-6 border-t border-rule" style={{ height: H }}>
         {w > 0 && (
-          <svg width={w} height={H} className="block" role="img" aria-label={`Daily ${m.label} in USD, ${daily.length} days`} onMouseLeave={() => setHover(null)}>
+          <svg
+            width={w}
+            height={H}
+            className="block touch-pan-y select-none outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
+            role="img"
+            tabIndex={0}
+            aria-label={`Daily ${m.label} in USD, ${daily.length} days. Use the arrow keys to step through days.`}
+            onPointerDown={onPointer}
+            onPointerMove={onPointer}
+            onPointerLeave={(e) => {
+              if (e.pointerType === "mouse") setHover(null);
+            }}
+            onKeyDown={onKey}
+            onBlur={() => setHover(null)}
+          >
             {/* value grid + right axis */}
             {yTicks.map((t) => (
               <g key={t}>
@@ -119,7 +149,7 @@ export function DailyChart({ daily }: { daily: RevenueResponse["daily"] }) {
               const yy = y(d[metric]);
               const active = hover === null || hover === i;
               return (
-                <g key={d.date} onMouseEnter={() => setHover(i)} onTouchStart={() => setHover(i)}>
+                <g key={d.date}>
                   <rect x={PAD.l + slot * i} y={PAD.t} width={slot} height={ih} fill="transparent" />
                   {hover === i && <line x1={Math.round(cx) + 0.5} x2={Math.round(cx) + 0.5} y1={PAD.t} y2={PAD.t + ih} stroke="var(--rule-strong)" strokeWidth={1} />}
                   <motion.rect
@@ -141,10 +171,17 @@ export function DailyChart({ daily }: { daily: RevenueResponse["daily"] }) {
                 </g>
               );
             })}
+            {tip && (
+              <g pointerEvents="none" aria-hidden>
+                <rect x={tip.x - 44} y={PAD.t - 14} width={88} height={30} rx={4} fill="var(--ink)" />
+                <text x={tip.x} y={PAD.t - 1} textAnchor="middle" className="fill-paper font-mono text-[11px]">{tip.v}</text>
+                <text x={tip.x} y={PAD.t + 11} textAnchor="middle" className="fill-paper font-mono text-[9.5px]" opacity={0.7}>{tip.d}</text>
+              </g>
+            )}
           </svg>
         )}
       </div>
-      <p className="mt-2 text-[11px] text-ink-muted">USD at indicative prices, UTC days. Hover or tap a column to read its value.</p>
+      <p className="mt-2 text-[11px] text-ink-muted">USD at indicative prices, UTC days. Hover, tap or drag across the columns to read a value.</p>
     </div>
   );
 }

@@ -33,7 +33,7 @@ export default function BuybackVault() {
         }
         lede="At graduation the Protocol Credit Pool advances a fee-credit line of 10 to 15% of the raise into a vault that can only buy the token and burn it. Pool fees repay the line later."
       >
-        <StatusBadge status="demo" />
+        <StatusBadge status="live" />
         <StatusBadge status="offchain-passing" label="Offchain ledger · tests passing" />
         <StatusBadge status="chain-pending" />
       </DocHeader>
@@ -96,7 +96,7 @@ export default function BuybackVault() {
       <H2 id="keeper" n="4.4">The keeper</H2>
       <P>
         Onchain, <C>apps/api/src/workers/buybackKeeper.ts</C> polls every 10 s for due drips, calls <C>execute_buyback_drip</C>, then{" "}
-        <C>distribute_fees</C> when the indexer sees new fees. It is disabled in demo mode and without <C>KEEPER_SECRET_KEY</C>.
+        <C>distribute_fees</C> when the indexer sees new fees. It is disabled without <C>KEEPER_SECRET_KEY</C>.
       </P>
       <Note title="Known gap" tone="warn">
         <p>

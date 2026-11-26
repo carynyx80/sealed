@@ -88,7 +88,7 @@ describe("auth routes + requireAuth", () => {
     assert.equal((await app.inject({ method: "POST", url: "/api/auth/verify", payload })).statusCode, 200);
     const again = await app.inject({ method: "POST", url: "/api/auth/verify", payload });
     assert.equal(again.statusCode, 401);
-    assert.match(again.json().error, /already-used/);
+    assert.equal(again.json().code, "nonce_used");
   });
 
   it("bad signature is refused and burns the nonce", async () => {
@@ -97,7 +97,7 @@ describe("auth routes + requireAuth", () => {
     const { nonce, message } = (await app.inject({ method: "POST", url: "/api/auth/nonce", payload: { wallet } })).json();
     const bad = await app.inject({ method: "POST", url: "/api/auth/verify", payload: { wallet, nonce, signature: sign(message + "x", kp) } });
     assert.equal(bad.statusCode, 401);
-    assert.match(bad.json().error, /invalid signature/);
+    assert.equal(bad.json().code, "invalid_signature");
     const good = await app.inject({ method: "POST", url: "/api/auth/verify", payload: { wallet, nonce, signature: sign(message, kp) } });
     assert.equal(good.statusCode, 401, "nonce is single-use even after a failed attempt");
   });

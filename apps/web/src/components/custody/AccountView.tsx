@@ -5,12 +5,12 @@ import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { COMPANY_WALLET, type DepositRecord, type Network, type WithdrawalRecord } from "@sealed/shared";
 import { openDeposit, useCustodyAccount, useCustodyInfo, useCustodySession, useDeposits, useWithdrawals } from "@/lib/custody";
-import { networkName } from "@/lib/config";
 import { fmtAmount, shortAddr } from "@/lib/format";
 import { BalancesPanel } from "./BalancesPanel";
 import { CustodyGate, CustodyOffline, SignInButton } from "./SignInButton";
 import { DisclosureList, StatusChip, explorerAccount, explorerTx } from "./parts";
 import { ArrowUpRight } from "../ui/Icons";
+import { Address } from "../ui/Address";
 import { PrivateBalancePanel } from "../privacy/ShieldedIdentity";
 
 function fmtWhen(ts: number): string {
@@ -64,9 +64,9 @@ export function AccountView() {
       )}
 
       {/* balances + disclosure */}
-      <div className="mt-8 grid gap-6 lg:grid-cols-12">
+      <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-12">
         <BalancesPanel className="lg:col-span-7" />
-        <aside className="card-linen p-5 sm:p-6 lg:col-span-5" aria-labelledby="custody-title">
+        <aside className="card-linen min-w-0 p-5 sm:p-6 lg:col-span-5" aria-labelledby="custody-title">
           <p className="section-mark">§ 02 · Custody disclosure</p>
           <h2 id="custody-title" className="mt-2 font-display text-display-sm text-ink">
             Who holds <span className="accent">what</span>
@@ -74,18 +74,19 @@ export function AccountView() {
           <DisclosureList className="mt-4" />
           <div className="mt-5 border-t border-rule pt-4">
             <p className="eyebrow">Company wallet</p>
-            <a
-              href={explorerAccount(info?.companyWallet ?? acc.data?.companyWallet ?? COMPANY_WALLET, network)}
-              target="_blank"
-              rel="noreferrer"
-              className="num mt-1 inline-flex min-h-[44px] items-center gap-1.5 break-all text-[13px] text-ink underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
-            >
-              {info?.companyWallet ?? acc.data?.companyWallet ?? COMPANY_WALLET}
-              <ArrowUpRight width={12} height={12} className="shrink-0" />
-            </a>
+            <div className="mt-1 flex min-h-[44px] min-w-0 items-center gap-2 text-[13px] text-ink">
+              <Address
+                value={info?.companyWallet ?? acc.data?.companyWallet ?? COMPANY_WALLET}
+                href={explorerAccount(info?.companyWallet ?? acc.data?.companyWallet ?? COMPANY_WALLET, network)}
+                tail={8}
+                copy
+                label="company wallet address"
+              />
+              <ArrowUpRight width={12} height={12} className="shrink-0 text-ink-muted" aria-hidden />
+            </div>
             {info && (
               <p className="fine mt-1">
-                Mode <span className="num">{info.mode}</span> · network <span className="num">{networkName(info.network)}</span>
+                Mode <span className="num">{info.mode}</span> · Solana
               </p>
             )}
           </div>
@@ -114,7 +115,7 @@ export function AccountView() {
       </section>
 
       {/* history */}
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+      <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
         <History kind="deposits" network={network} />
         <History kind="withdrawals" network={network} />
       </div>
@@ -162,7 +163,7 @@ function Reserves() {
         })}
       </div>
       <p className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.06em] text-night-muted">
-        As of {fmtWhen(asOf)} · refreshed every 60s · {networkName(info.network)}
+        As of {fmtWhen(asOf)} · refreshed every 60s
       </p>
     </div>
   );
@@ -231,7 +232,7 @@ function WithdrawalRows({ network }: { network: Network | undefined }) {
         <li key={r.id} className="grid grid-cols-[1fr_auto] items-baseline gap-x-3 gap-y-1 border-b border-rule py-3">
           <span className="num text-[14px] text-ink">−{fmtAmount(r.amount)} <span className="text-ink-muted">{r.asset}</span></span>
           <StatusChip status={r.status} />
-          <span className="num min-w-0 truncate text-[11px] text-ink-muted">{fmtWhen(r.ts)} · to {shortAddr(r.destination, 4)}{r.reason ? ` · ${r.reason}` : ""}</span>
+          <span className="num min-w-0 truncate text-[11px] text-ink-muted" title={`To ${r.destination}`}>{fmtWhen(r.ts)} · to {shortAddr(r.destination, 4)}{r.reason ? ` · ${r.reason}` : ""}</span>
           {r.signature ? (
             <a href={explorerTx(r.signature, network)} target="_blank" rel="noreferrer" className="num inline-flex min-h-[32px] items-center gap-1 justify-self-end text-[11px] text-ink-slate underline decoration-rule-strong underline-offset-2 hover:text-ink">
               {shortAddr(r.signature, 5)} <ArrowUpRight width={11} height={11} />

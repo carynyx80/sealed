@@ -7,11 +7,27 @@
 //    Standard wallet with the same name is detected, so the modal never lists a wallet twice.
 //  - autoConnect only for the wallet this browser connected before (or the one the user just picked).
 //  - Errors become quiet toasts (rejections) or actionable ones (not installed → install / open-in-app link).
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
-import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
-import { WalletAdapterNetwork, WalletNotReadyError, WalletReadyState, type Adapter, type WalletError } from "@solana/wallet-adapter-base";
-import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
-import { IS_MAINNET, RPC_ENDPOINT } from "@/lib/config";
+//  - Perf: the real providers + adapters + @solana/web3.js live in ./WalletRuntime, a lazy chunk. It loads right
+//    away for a returning wallet (so autoConnect is unchanged), otherwise on the first wallet intent (modal open,
+//    hover/focus of the connect pill, any select()). Until then the app sees a plain "disconnected" wallet state.
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
+import {
+  ConnectionContext,
+  WalletContext,
+  WalletNotSelectedError,
+  useWallet,
+  type ConnectionContextState,
+  type WalletContextState,
+} from "@solana/wallet-adapter-react";
+import {
+  WalletNotConnectedError,
+  WalletNotReadyError,
+  WalletReadyState,
+  type Adapter,
+  type WalletError,
+  type WalletName,
+} from "@solana/wallet-adapter-base";
 import { clearSession } from "@/lib/custody/client";
 import { isUserRejection } from "@/lib/defi/config";
 import {
@@ -23,12 +39,55 @@ import {
   setLastWallet,
   walletDeepLinks,
 } from "@/lib/wallet";
+import { isWalletSignInActive } from "@/lib/wallet/signIn";
+import { WalletRuntimeContext, type WalletRuntimeState } from "./runtime";
 import { SealedWalletModalProvider } from "./WalletModal";
 import { WalletToasts } from "./WalletToasts";
 
+const WalletRuntime = dynamic(() => import("./WalletRuntime"), { ssr: false });
+
+/** Context value before the runtime is up: what WalletProvider reports with no wallet selected. */
+function idleWallet(select: (name: WalletName | null) => void): WalletContextState {
+  return {
+    autoConnect: false,
+    wallets: [],
+    wallet: null,
+    publicKey: null,
+    connecting: false,
+    connected: false,
+    disconnecting: false,
+    select,
+    connect: () => Promise.reject(new WalletNotSelectedError()),
+    disconnect: () => Promise.resolve(),
+    sendTransaction: () => Promise.reject(new WalletNotConnectedError()),
+    signTransaction: undefined,
+    signAllTransactions: undefined,
+    signMessage: undefined,
+    signIn: undefined,
+  };
+}
+const IDLE_CONNECTION = {} as ConnectionContextState;
+
 export function SolanaProviders({ children }: { children: ReactNode }) {
-  const network = IS_MAINNET ? WalletAdapterNetwork.Mainnet : WalletAdapterNetwork.Devnet;
-  const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter({ network })], [network]);
+  const [wanted, setWanted] = useState(false);
+  const [mirror, setMirror] = useState<{ wallet: WalletContextState; connection: ConnectionContextState } | null>(null);
+  const pendingSelect = useRef<WalletName | null>(null);
+  const load = useCallback(() => setWanted(true), []);
+  // A returning wallet reconnects on page load, as before: start the runtime immediately.
+  useEffect(() => {
+    if (getLastWallet()) setWanted(true);
+  }, []);
+  const idle = useMemo(
+    () =>
+      idleWallet((name) => {
+        pendingSelect.current = name;
+        setWanted(true);
+      }),
+    [],
+  );
+  const onChange = useCallback((wallet: WalletContextState, connection: ConnectionContextState) => setMirror({ wallet, connection }), []);
+  const ready = mirror !== null;
+  const runtime = useMemo<WalletRuntimeState>(() => ({ ready, load }), [ready, load]);
   /** Whether the in-flight connect was started by autoConnect (silent on failure) rather than by the user. */
   const silentConnect = useRef(false);
 
@@ -47,6 +106,8 @@ export function SolanaProviders({ children }: { children: ReactNode }) {
   }, []);
 
   const onError = useCallback((error: WalletError, adapter?: Adapter) => {
+    // "Sign in to Sealed" shows its own friendly status/error; don't double it with a raw wallet toast.
+    if (isWalletSignInActive()) return;
     if (silentConnect.current) {
       // A failed silent reconnect (wallet locked, permission revoked): forget it, don't nag.
       silentConnect.current = false;
@@ -78,15 +139,18 @@ export function SolanaProviders({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ConnectionProvider endpoint={RPC_ENDPOINT} config={{ commitment: "confirmed" }}>
-      <WalletProvider wallets={wallets} autoConnect={autoConnect} onError={onError}>
-        <SealedWalletModalProvider>
-          <WalletSessionSync silentConnect={silentConnect} />
-          {children}
-          <WalletToasts />
-        </SealedWalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <WalletRuntimeContext.Provider value={runtime}>
+      <ConnectionContext.Provider value={mirror?.connection ?? IDLE_CONNECTION}>
+        <WalletContext.Provider value={mirror?.wallet ?? idle}>
+          <SealedWalletModalProvider>
+            <WalletSessionSync silentConnect={silentConnect} />
+            {children}
+            <WalletToasts />
+          </SealedWalletModalProvider>
+        </WalletContext.Provider>
+      </ConnectionContext.Provider>
+      {wanted && <WalletRuntime autoConnect={autoConnect} onError={onError} onChange={onChange} pendingSelect={pendingSelect} />}
+    </WalletRuntimeContext.Provider>
   );
 }
 

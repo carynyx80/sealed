@@ -27,7 +27,7 @@ export default function Flywheel() {
         lede={`Every swap through the graduation pool pays a ${pct(POOL_FEE_BPS)} fee in the quote asset. One function, splitFees, decides where each atom goes, and it flips phase at exactly zero outstanding credit.`}
       >
         <StatusBadge status="offchain-passing" label="splitFees · tests passing" />
-        <StatusBadge status="demo" />
+        <StatusBadge status="live" />
         <StatusBadge status="offchain-passing" label="Offchain ledger · tests passing" />
         <StatusBadge status="chain-pending" />
       </DocHeader>

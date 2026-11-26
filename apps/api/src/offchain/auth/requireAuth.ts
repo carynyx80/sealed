@@ -34,13 +34,13 @@ export function bearerToken(req: FastifyRequest): string | null {
 export async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<string | undefined> {
   const auth = req.server.sealedAuth;
   if (!auth) {
-    await reply.code(503).send({ error: "auth not configured" });
+    await reply.code(503).send({ error: "auth not configured", code: "auth_unavailable" });
     return undefined;
   }
   const token = bearerToken(req);
   const session = token ? await auth.resolve(token) : null;
   if (!session) {
-    await reply.code(401).header("www-authenticate", "Bearer").send({ error: "unauthorized" });
+    await reply.code(401).header("www-authenticate", "Bearer").send({ error: "unauthorized", code: "unauthorized" });
     return undefined;
   }
   req.wallet = session.wallet;

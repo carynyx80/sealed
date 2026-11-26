@@ -56,8 +56,9 @@ export function ShieldedBalance({ quoteAsset, compact = false }: { quoteAsset: Q
         </p>
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted">Helius Privacy Ring</span>
       </div>
-      <p className="mt-4 flex items-baseline gap-2">
-        <span className={clsx("num leading-none", v === null ? "text-[24px]" : "text-[28px]")}>{value}</span>
+      {/* fixed line box: unlocking swaps the redaction glyphs for digits without moving anything below */}
+      <p className="mt-4 flex h-8 items-baseline gap-2">
+        <span className={clsx("num leading-8", v === null ? "text-[24px]" : "text-[28px]")}>{value}</span>
         <span className="font-mono text-[12px] text-ink-muted">{quoteAsset}</span>
       </p>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-rule pt-3 text-[13px]">

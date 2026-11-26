@@ -13,6 +13,7 @@ import { GridIcon, LedgerIcon } from "../ui/Icons";
 import { AuctionCard } from "./AuctionCard";
 import { LiveCard } from "./LiveCard";
 import { LobbyLedger } from "./LobbyLedger";
+import { ScrollFade } from "./ScrollFade";
 
 type Tab = "auctions" | "vaults" | "graduated";
 type QuoteFilter = "all" | "stocks" | "SOL" | "USDC";
@@ -71,7 +72,7 @@ export function LobbyGrid() {
   const cards = (
     <motion.div layout={!reduce} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {isLoading ? (
-        Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-[300px]" />)
+        Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-[356px]" />)
       ) : (
         <AnimatePresence mode="popLayout" initial={false}>
           {shown.map((l, i) => (
@@ -106,6 +107,7 @@ export function LobbyGrid() {
       </div>
 
       <div className="mt-10">
+        <ScrollFade>
         <PillTabs
           variant="rule"
           layoutId="lobby-tab"
@@ -117,9 +119,11 @@ export function LobbyGrid() {
             { id: "graduated", label: "Graduated Flywheels", count: counts.graduated },
           ]}
         />
+        </ScrollFade>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 max-w-full items-center gap-3">
             <span className="eyebrow hidden sm:inline">Quote</span>
+            <ScrollFade>
             <PillTabs
               layoutId="lobby-quote"
               size="sm"
@@ -132,6 +136,7 @@ export function LobbyGrid() {
                 { id: "USDC", label: "USDC" },
               ]}
             />
+            </ScrollFade>
           </div>
           <div className="hidden items-center gap-0.5 rounded-full border border-rule bg-sheet p-[3px] xl:inline-flex" role="group" aria-label="View">
             {(["ledger", "cards"] as const).map((v) => (

@@ -119,7 +119,7 @@ export function ImageUploader({
     const uri = await blobToDataUri(blob);
     onChange(uri, { wallet: null, inline: true, bytes: blob.size, mime: blob.type, width: OUTPUT_PX, height: OUTPUT_PX });
     holdImage(null);
-    setNote("The upload service isn't available here, so the image is kept with this test launch instead.");
+    setNote("The upload service isn't available here, so the image is kept with this launch instead.");
     setPhase({ k: "idle" });
     void img;
   };
@@ -328,7 +328,7 @@ export function ImageUploader({
 
       {/* crop */}
       {phase.k === "crop" && (
-        <div className="grid gap-5 sm:grid-cols-[minmax(0,280px)_minmax(0,1fr)] sm:gap-6">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-[minmax(0,280px)_minmax(0,1fr)] sm:gap-6">
           <CropBox img={phase.img} crop={crop} onChange={setCrop} label={`Crop for ${phase.img.name}`} />
           <div className="min-w-0">
             <p className="eyebrow">Preview</p>

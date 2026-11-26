@@ -83,10 +83,10 @@ export function BuybackTable({ rows, network, now, images = {} }: { rows: Buybac
                 <span className="num ml-1.5 hidden text-[10px] text-ink-muted sm:inline">#{b.dripIndex}</span>
               </td>
               <td className={clsx(td, "num truncate text-right text-ink")}>
-                {fmtAmount(b.quoteSpent)} <span className="text-ink-muted">{b.quoteAsset}</span>
+                {fmtAmount(b.quoteSpent)} <span className="text-ink-muted max-sm:block max-sm:text-[10px]">{b.quoteAsset}</span>
               </td>
               <td className={clsx(td, "num hidden truncate text-right text-burn sm:table-cell")}>{fmtCompact(b.tokensBurned, 2)}</td>
-              <td className={clsx(td, "text-right")}><TxLink sig={b.signature} network={network} /></td>
+              <td className={clsx(td, "pl-3 text-right")}><TxLink sig={b.signature} network={network} /></td>
             </Row>
           ))}
         </AnimatePresence>
@@ -117,7 +117,7 @@ export function CreditLedgerTable({ rows, network, now, images = {} }: { rows: C
                 <span className={clsx("mr-2 inline-block h-1.5 w-1.5 -translate-y-px", KIND[e.kind].mark)} aria-hidden />
                 <span className="text-ink-soft">{KIND[e.kind].label}</span>
               </td>
-              <td className={clsx(td, "truncate font-medium text-ink")}>
+              <td className={clsx(td, "truncate pr-2 font-medium text-ink")}>
                 <TokenAvatar src={images[e.launchId]} ticker={e.ticker} size={18} className="mr-1.5 hidden align-[-4px] sm:inline-flex" />
                 ${e.ticker}
               </td>
@@ -125,7 +125,7 @@ export function CreditLedgerTable({ rows, network, now, images = {} }: { rows: C
                 <span className="num block truncate text-ink">{fmtAmount(e.amount)} <span className="text-ink-muted">{e.quoteAsset}</span></span>
                 <span className="num block text-[10px] text-ink-muted">≈ {fmtUsd(e.amount * QUOTE_ASSETS[e.quoteAsset].demoUsdPrice)}</span>
               </td>
-              <td className={clsx(td, "text-right")}><TxLink sig={e.signature} network={network} /></td>
+              <td className={clsx(td, "pl-3 text-right")}><TxLink sig={e.signature} network={network} /></td>
             </Row>
           ))}
         </AnimatePresence>

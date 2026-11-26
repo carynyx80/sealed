@@ -5,6 +5,7 @@
  */
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
+import { scrollShade } from "./scrollShade";
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -53,7 +54,7 @@ export function CodeBlock({ code, lang = "text", title, className }: { code: str
         <button
           type="button"
           onClick={onCopy}
-          className="inline-flex min-h-[32px] shrink-0 items-center gap-1.5 rounded-full px-3 font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-slate transition hover:bg-sheet hover:text-ink"
+          className="inline-flex min-h-[40px] min-w-[44px] shrink-0 items-center justify-center gap-1.5 rounded-full px-3 font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-slate transition hover:bg-sheet hover:text-ink"
           aria-label={title ? `Copy ${title}` : "Copy code"}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -67,7 +68,11 @@ export function CodeBlock({ code, lang = "text", title, className }: { code: str
           <span aria-live="polite">{state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : "Copy"}</span>
         </button>
       </div>
-      <pre className="max-w-full overflow-x-auto px-4 py-3.5 font-mono text-[12.5px] leading-[1.7] text-ink [tab-size:2]" tabIndex={0}>
+      <pre
+        className="max-w-full overflow-x-auto overscroll-x-contain px-4 py-3.5 font-mono text-[12.5px] leading-[1.7] text-ink [scrollbar-width:thin] [tab-size:2]"
+        style={scrollShade()}
+        tabIndex={0}
+      >
         <code>{text}</code>
       </pre>
     </figure>

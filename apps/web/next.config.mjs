@@ -23,6 +23,11 @@ const walletAliases = Object.fromEntries(
     .filter(([, v]) => v),
 );
 
+/** Same parsing as src/lib/config.ts parseNetwork(): mainnet builds never ship the client-side demo simulator. */
+const buildNetwork = (process.env.NEXT_PUBLIC_NETWORK ?? "").trim().toLowerCase();
+const isMainnetBuild = buildNetwork === "mainnet" || buildNetwork === "mainnet-beta";
+const demoStoreStub = path.join(here, "src/lib/demoStore.disabled.ts");
+
 const isProd = process.env.VERCEL_ENV === "production" || (process.env.NODE_ENV === "production" && !process.env.VERCEL_ENV);
 
 const securityHeaders = [
@@ -35,6 +40,8 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Lets a production build go to a separate folder (e.g. NEXT_DIST_DIR=.next-perf) without touching the dev server's .next.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   transpilePackages: ["@sealed/shared", "@sealed/defi"],
   images: { unoptimized: true },
@@ -53,7 +60,7 @@ const nextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, webpack }) => {
     if (!isServer) {
       config.resolve.fallback = { ...(config.resolve.fallback ?? {}), fs: false, os: false, path: false };
     }
@@ -63,6 +70,15 @@ const nextConfig = {
     // Helius Privacy Rings SDK (lazy chunk): @lightprotocol/hasher.rs "browser-fat" inlines its wasm, but its
     // wasm-bindgen init keeps an unused `new URL("*.wasm", import.meta.url)` default that webpack can't resolve.
     config.module.rules.push({ test: /[\\/]@lightprotocol[\\/]hasher\.rs[\\/].*\.m?js$/, parser: { url: false } });
+    // Tree-shaking: the workspace packages and src/lib are plain ES modules with no import-time side effects, but
+    // their package.json files don't say so, so webpack kept every module behind a barrel (`@sealed/shared`,
+    // `@sealed/defi`, `@/lib/custody`) — e.g. Anchor + zod + spl-token in every page's layout chunk.
+    config.module.rules.push({ test: /[\\/]packages[\\/](shared|defi)[\\/]dist[\\/].*\.js$/, sideEffects: false });
+    config.module.rules.push({ test: /\.tsx?$/, include: path.join(here, "src", "lib"), sideEffects: false });
+    // Mainnet: swap the demo world for its no-op stub (see src/lib/demoStore.disabled.ts).
+    if (isMainnetBuild) {
+      config.plugins.push(new webpack.NormalModuleReplacementPlugin(/^(\.\/|@\/lib\/)demoStore$/, demoStoreStub));
+    }
     return config;
   },
 };

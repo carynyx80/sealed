@@ -1,7 +1,8 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
 import { useReducedMotion } from "@/components/motion/reduced";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useModal } from "../custody/useModal";
 import clsx from "clsx";
 import type { LaunchSummary } from "@sealed/shared";
 import type { CommitArgs, CommitResult, SealedBidStatus } from "@/lib/defiTypes";
@@ -40,6 +41,7 @@ export function SealedBidModal({ open, onClose, launch, args, status, error, onC
   const [result, setResult] = useState<CommitResult | null>(null);
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
   const q = launch.quoteAsset;
   // Same switch useSealedBid uses (custody API reachable → offchain custodial ledger).
   const offchain = useCustodyInfo().availability === "available";
@@ -49,16 +51,8 @@ export function SealedBidModal({ open, onClose, launch, args, status, error, onC
     if (!open) return;
     setResult(null);
     setLocalErr(null);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !busy && onClose();
-    window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+  useModal(open, panel, { onClose, locked: busy });
 
   const confirm = async () => {
     setBusy(true);
@@ -82,12 +76,14 @@ export function SealedBidModal({ open, onClose, launch, args, status, error, onC
     <AnimatePresence>
       {open && (
         <motion.div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <button aria-label="Close" className="absolute inset-0 bg-ink/40" onClick={() => !busy && onClose()} />
+          <button type="button" tabIndex={-1} aria-label="Close" className="absolute inset-0 cursor-default bg-ink/40" onClick={() => !busy && onClose()} />
           <motion.div
+            ref={panel}
             role="dialog"
             aria-modal="true"
             aria-labelledby="sealed-bid-title"
-            className="relative max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-card border border-rule bg-sheet p-6 shadow-lift sm:rounded-card"
+            tabIndex={-1}
+            className="relative mb-[var(--kb,0px)] max-h-[min(92dvh,calc(var(--vvh,100dvh)-12px))] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-card border border-rule bg-sheet p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-lift outline-none sm:rounded-card sm:p-6"
             initial={reduce ? { opacity: 0 } : { y: 40, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={reduce ? { opacity: 0 } : { y: 30, opacity: 0, scale: 0.98 }}
@@ -98,7 +94,7 @@ export function SealedBidModal({ open, onClose, launch, args, status, error, onC
                 <span className="section-mark">§ Sealed bid · ${launch.ticker}</span>
                 <h3 id="sealed-bid-title" className="mt-2 font-display text-display-md text-ink">{done ? <>Your bid is <span className="accent">sealed</span></> : <>Seal your <span className="accent">bid</span></>}</h3>
               </div>
-              <button onClick={() => !busy && onClose()} className="rounded-full border border-rule p-2 text-ink-slate transition hover:border-rule-strong hover:text-ink" aria-label="Close dialog">
+              <button type="button" onClick={() => !busy && onClose()} disabled={busy} className="-mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule text-ink-slate disabled:opacity-40 transition hover:border-rule-strong hover:text-ink" aria-label="Close dialog">
                 <XIcon />
               </button>
             </div>
@@ -143,11 +139,11 @@ export function SealedBidModal({ open, onClose, launch, args, status, error, onC
 
             <div className="mt-6 flex gap-3">
               {done ? (
-                <button className="btn-primary w-full" onClick={onClose}>Done</button>
+                <button type="button" className="btn-primary min-h-[48px] w-full" onClick={onClose}>Done</button>
               ) : (
                 <>
-                  <button className="btn-ghost flex-1" onClick={onClose} disabled={busy}>Cancel</button>
-                  <button className="btn-primary flex-1" onClick={confirm} disabled={busy}>
+                  <button type="button" className="btn-ghost min-h-[48px] flex-1" onClick={onClose} disabled={busy}>Cancel</button>
+                  <button type="button" data-autofocus className="btn-primary min-h-[48px] flex-1" onClick={confirm} disabled={busy}>
                     <LockIcon width={14} height={14} />
                     {busy ? "Sealing…" : "Seal & commit"}
                   </button>
@@ -167,7 +163,7 @@ function Receipt({ signature, launch }: { signature: string; launch: LaunchSumma
     return <p className="num break-all">Receipt {signature}</p>;
   }
   if (launch.isDemo || signature.startsWith("demo")) {
-    return <p className="num break-all">tx {shortAddr(signature, 10)} <span className="text-gain/70">(simulated)</span></p>;
+    return <p className="num">Receipt recorded</p>;
   }
   return (
     <p className="num break-all">

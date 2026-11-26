@@ -124,11 +124,11 @@ export function FlowDiagram() {
   const reduce = useReducedMotion();
   return (
     <div>
-      <ol className="grid border-t border-ink md:grid-cols-3">
+      <ol className="grid grid-cols-1 border-t border-ink md:grid-cols-3">
         {STEPS.map((s, i) => (
           <motion.li
             key={s.n}
-            className={`relative flex flex-col border-b border-rule py-8 md:border-b-0 md:py-10 ${i > 0 ? "md:border-l md:pl-8" : ""} ${i < 2 ? "md:pr-8" : ""}`}
+            className={`relative flex min-w-0 flex-col border-b border-rule py-8 md:border-b-0 md:py-10 ${i > 0 ? "md:border-l md:pl-8" : ""} ${i < 2 ? "md:pr-8" : ""}`}
             initial={reduce ? false : { opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
@@ -148,7 +148,7 @@ export function FlowDiagram() {
               {s.spec.map(([k, v]) => (
                 <div key={k} className="flex items-baseline justify-between gap-4 border-b border-rule py-2">
                   <dt className="eyebrow shrink-0">{k}</dt>
-                  <dd className="num truncate text-right text-[12px] text-ink">{v}</dd>
+                  <dd className="num min-w-0 text-balance text-right text-[12px] leading-snug text-ink">{v}</dd>
                 </div>
               ))}
             </dl>

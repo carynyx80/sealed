@@ -195,10 +195,18 @@ GET /api/custody/info   (public, cached ~30s)
 
 Sign in with Solana (SIWS)
 POST /api/auth/nonce    {"wallet":"<base58>"}
-  → {"nonce":"<nonce>","message":"<exact text to sign>","expiresTs":1764150300}   (nonce valid 5 min, single use)
+  → {"nonce":"<nonce>","message":"<exact text to sign>","expiresTs":1764150300,
+     "signInInput":{"domain","address","statement","uri","version":"1","nonce","issuedAt","expirationTime"}}
+  (nonce valid 5 min, single use; signInInput is the Wallet Standard solana:signIn input that reproduces message)
   The message contains the statement "${SIWS_STATEMENT}"
-POST /api/auth/verify   {"wallet":"<base58>","nonce":"<nonce>","signature":"<base58 ed25519 sig over utf8(message)>"}
-  → {"token":"<session token>","wallet":"<base58>","expiresTs":1764755100}          (7-day session; 401 on bad sig)
+POST /api/auth/verify   {"wallet":"<base58>","nonce":"<nonce>", ...ONE proof}
+  (a) "signature":"<base58|base64 ed25519 sig over utf8(message)>"                         (signMessage)
+  (b) "signedMessage":"<base64>","signature":"<base58|base64>","address":"<base58>"       (solana:signIn output)
+  (c) "signedTransaction":"<base64 tx: fee payer = wallet, only ComputeBudget + SPL Memo 'sealed-login:<nonce>'>"
+      (hardware wallets; never broadcast)
+  → {"token":"<session token>","wallet":"<base58>","expiresTs":1764755100}          (7-day session)
+  Errors: {"error":"<user-safe text>","code":"malformed|invalid_signature|expired|domain_mismatch|nonce_used|
+           nonce_mismatch|wallet_mismatch|invalid_transaction|rate_limited"}
 GET  /api/auth/session  → {"wallet":"<base58>"}   (401 if missing / expired / revoked)
 POST /api/auth/logout   → {"ok":true}             (revokes the presented token)
 

@@ -45,15 +45,15 @@ export function Hero() {
         <span className="sm:hidden">Solana</span>
       </div>
 
-      <div className="mt-10 grid gap-14 sm:mt-14 lg:grid-cols-12 lg:gap-8">
+      <div className="mt-8 grid gap-10 sm:mt-14 sm:gap-14 lg:grid-cols-12 lg:gap-8">
         <div className="lg:col-span-7">
-          <h1 {...lift(50)} className="hero-rise font-display text-[clamp(3rem,7.4vw,6.75rem)] font-bold leading-[0.9] tracking-[-0.05em] text-ink">
+          <h1 {...lift(50)} className="hero-rise font-display text-[clamp(2.25rem,11.8vw,3.25rem)] sm:text-[clamp(3rem,7.4vw,5.875rem)] font-bold leading-[0.9] tracking-[-0.05em] text-ink">
             Bids stay sealed.
             <br />
-            Buybacks start at minute <span className="accent tracking-[-0.03em]">one.</span>
+            Buybacks start at <span className="whitespace-nowrap">minute <span className="accent tracking-[-0.03em]">one.</span></span>
           </h1>
 
-          <p {...lift(110)} className="hero-rise mt-8 max-w-[34rem] text-[17px] leading-relaxed text-ink-slate">
+          <p {...lift(110)} className="hero-rise mt-6 max-w-[34rem] text-pretty text-[16px] leading-relaxed text-ink-slate sm:mt-8 sm:text-[17px]">
             Every token opens with a private commit-reveal auction that clears at a single price: no block-zero snipers, no whale copy-trading. At graduation a locked fee-credit vault starts buying and burning, repays itself from fees, then turns into a flywheel holders keep.
           </p>
 
@@ -61,12 +61,12 @@ export function Hero() {
             <a href="#lobby" className="btn-primary h-12 px-6">
               Enter the lobby <ArrowRight width={15} height={15} />
             </a>
-            <Link href="/launch" className="btn-link">
+            <Link href="/launch" className="btn-link min-h-[44px]">
               Open a sealed auction
             </Link>
           </div>
 
-          <motion.dl {...rise(0.24)} className="mt-14 grid max-w-2xl grid-cols-1 border-t border-rule sm:grid-cols-3">
+          <motion.dl {...rise(0.24)} className="mt-10 grid max-w-2xl grid-cols-1 border-t border-rule sm:mt-14 sm:grid-cols-3">
             {RAILS.map((r, i) => (
               <div key={r.k} className={`border-b border-rule py-3.5 sm:border-b-0 sm:py-4 ${i > 0 ? "sm:border-l sm:pl-5" : ""} ${i < 2 ? "sm:pr-5" : ""}`}>
                 <dt className="eyebrow">{r.k}{r.n && <sup className="ml-0.5">{r.n}</sup>}</dt>

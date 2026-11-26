@@ -5,17 +5,17 @@
 import clsx from "clsx";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { scrollShade } from "./scrollShade";
 
 /* ---------------------------------------------------------------- status */
 
-export type Status = "demo" | "chain-pending" | "chain-passing" | "offchain-passing" | "simulated" | "planned" | "partial" | "dev" | "rolling";
+export type Status = "live" | "chain-pending" | "chain-passing" | "offchain-passing" | "planned" | "partial" | "dev" | "rolling";
 
 const STATUS: Record<Status, { label: string; cls: string; dot: string }> = {
-  demo: { label: "Live in demo", cls: "border-gain/30 bg-gain-tint text-gain", dot: "bg-gain" },
+  live: { label: "Live", cls: "border-gain/30 bg-gain-tint text-gain", dot: "bg-gain" },
   "chain-passing": { label: "On-chain · tests passing", cls: "border-ink/20 bg-sheet text-ink", dot: "bg-ink" },
   "chain-pending": { label: "On-chain · tests passing (not deployed)", cls: "border-rule-strong bg-sheet text-ink-soft", dot: "border border-ink-soft bg-transparent" },
   "offchain-passing": { label: "Off-chain · tests passing", cls: "border-rule-strong bg-sheet text-ink-soft", dot: "bg-ink-soft" },
-  simulated: { label: "Simulated", cls: "border-dashed border-ink-slate/50 bg-paper text-ink-slate", dot: "border border-dashed border-ink-slate" },
   planned: { label: "Planned", cls: "border-dashed border-rule-strong bg-transparent text-ink-muted", dot: "bg-rule-strong" },
   dev: { label: "Live · needs operator key", cls: "border-signal/30 bg-signal-tint text-signal-ink", dot: "bg-signal" },
   rolling: { label: "Rolling out", cls: "border-dashed border-signal/40 bg-signal-tint text-signal-ink", dot: "bg-signal" },
@@ -25,9 +25,9 @@ const STATUS: Record<Status, { label: string; cls: string; dot: string }> = {
 export function StatusBadge({ status, label, className }: { status: Status; label?: string; className?: string }) {
   const s = STATUS[status];
   return (
-    <span className={clsx("inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase leading-4 tracking-[0.06em]", s.cls, className)}>
+    <span className={clsx("inline-flex max-w-full items-center gap-1.5 rounded-[9px] border px-2 py-0.5 font-mono text-[10px] uppercase leading-4 tracking-[0.06em] sm:whitespace-nowrap sm:rounded-full", s.cls, className)}>
       <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", s.dot)} aria-hidden />
-      {label ?? s.label}
+      <span className="min-w-0">{label ?? s.label}</span>
     </span>
   );
 }
@@ -35,10 +35,9 @@ export function StatusBadge({ status, label, className }: { status: Status; labe
 export function StatusLegend() {
   const order: Array<[Status, string]> = [
     ["rolling", "Part of the switch to Solana mainnet. Being deployed now; check /api/health and /api/custody/info on the hosted API before relying on it."],
-    ["demo", "Runs in the demo world (local development with DEMO_MODE). Disabled on mainnet. No real funds."],
+    ["live", "Built, tested and running in the production web app and API on Solana mainnet."],
     ["chain-pending", "Implemented in the Anchor program. anchor build succeeds, the 15 Rust unit tests and the 18-test anchor suite (with --features test-mode) pass locally. Not deployed."],
     ["offchain-passing", "TypeScript implementation with unit, invariant or e2e tests that pass today."],
-    ["simulated", "A stand-in that models the behaviour (for example the simulated Privacy Ring)."],
     ["dev", "Built, tested and deployed on Railway, but only active once the operator has set its secret (COMPANY_WALLET_SECRET_KEY for payouts, HELIUS_API_KEY for deposit detection). /api/custody/info reports payoutsEnabled."],
     ["partial", "Code exists but a known gap stops it working end to end. The gap is described next to the badge."],
     ["planned", "Designed, not built."],
@@ -65,7 +64,7 @@ export function DocHeader({ n, kicker, title, lede, children }: { n: string; kic
       <p className="section-mark">
         § {n} · {kicker}
       </p>
-      <h1 className="mt-4 text-display-lg">{title}</h1>
+      <h1 className="mt-4 text-display-lg [overflow-wrap:anywhere]">{title}</h1>
       <p className="mt-5 max-w-[40rem] text-[17px] leading-relaxed text-ink-slate">{lede}</p>
       {children && <div className="mt-6 flex flex-wrap gap-2">{children}</div>}
     </header>
@@ -126,12 +125,12 @@ export function A({ href, children }: { href: string; children: ReactNode }) {
   const external = /^https?:/.test(href);
   if (external)
     return (
-      <a href={href} target="_blank" rel="noreferrer" className="font-medium text-ink underline decoration-rule-strong decoration-1 underline-offset-4 hover:decoration-ink">
+      <a href={href} target="_blank" rel="noreferrer" className="font-medium text-ink underline decoration-rule-strong decoration-1 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-ink">
         {children}
       </a>
     );
   return (
-    <Link href={href} className="font-medium text-ink underline decoration-rule-strong decoration-1 underline-offset-4 hover:decoration-ink">
+    <Link href={href} className="font-medium text-ink underline decoration-rule-strong decoration-1 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-ink">
       {children}
     </Link>
   );
@@ -173,7 +172,7 @@ export function Formula({ children, caption }: { children: ReactNode; caption?: 
 export function Table({ head, rows, caption, dense, colClass }: { head: ReactNode[]; rows: ReactNode[][]; caption?: ReactNode; dense?: boolean; colClass?: string[] }) {
   return (
     <figure className="mt-6 min-w-0">
-      <div className="max-w-full overflow-x-auto rounded-card border border-rule bg-sheet">
+      <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-card border border-rule [scrollbar-width:thin]" style={scrollShade()} tabIndex={0} role="region" aria-label="Table (scrolls horizontally on small screens)">
         <table className="w-full border-collapse text-left text-[13.5px]">
           <thead>
             <tr className="border-b border-rule bg-paper-deep/60">
@@ -243,7 +242,7 @@ export function Figures({ items }: { items: Array<{ value: ReactNode; unit?: str
 export function Figure({ children, caption, className }: { children: ReactNode; caption?: ReactNode; className?: string }) {
   return (
     <figure className={clsx("mt-6 min-w-0", className)}>
-      <div className="rounded-card border border-rule bg-sheet p-4 sm:p-6">{children}</div>
+      <div className="rounded-card border border-rule bg-sheet p-3 max-sm:-mx-4 max-sm:rounded-none max-sm:border-x-0 sm:p-6">{children}</div>
       {caption && <figcaption className="fine mt-2">{caption}</figcaption>}
     </figure>
   );

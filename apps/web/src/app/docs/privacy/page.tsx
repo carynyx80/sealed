@@ -28,9 +28,9 @@ export default function Privacy() {
         }
         lede="A commitment hides price and size, but a public deposit still bounds bid size from above. Helius Solana Privacy Rings encrypt amounts. This page summarises what is hidden, what stays public, and what is real today. The full analysis is docs/PRIVACY.md."
       >
-        <StatusBadge status="simulated" label="Ring · simulated in demo" />
+        <StatusBadge status="rolling" label="Private deposits + payouts · rolling out" />
         <StatusBadge status="offchain-passing" label="Status probe + RPC proxy" />
-        <StatusBadge status="planned" label="Private escrow · phases A to C" />
+        <StatusBadge status="planned" label="Onchain private escrow · phases A to C" />
       </DocHeader>
 
       <H2 id="leak" n="6.1">The leak</H2>
@@ -78,14 +78,20 @@ export default function Privacy() {
         caption="After reveal, max price and bid amount are public in every design: ring privacy protects the commit window, which is when copy-trading happens."
       />
 
-      <H2 id="real" n="6.4">Real vs simulated</H2>
+      <H2 id="real" n="6.4">What runs today</H2>
+      <P>
+        Helius Privacy Rings are real in the custodial API. The integration is built on the official <C>@heliuslabs/spr</C> SDK and sits behind{" "}
+        <C>PRIVACY_RING_ENABLED</C>, which is turned on in production. The company private address is registered on mainnet, so private deposits and
+        withdrawals are live. Use a small amount first: the SDK is a beta release and needs a wallet that signs version 1 transactions.
+      </P>
       <Ledger
         items={[
-          { k: "GET /api/privacy/status", s: "offchain-passing", v: "Live probe via getUserRecords, cached 60 s. Returns simulated: true in demo mode." },
+          { k: "GET /api/privacy/status", s: "offchain-passing", v: <>Live probe via <C>getUserRecords</C>, cached 60 s. Reports <C>available</C>, <C>enabled</C>, <C>companyShieldedAddress</C> and <C>companyRegistered</C>, with a <C>reason</C> when something is not ready.</> },
           { k: "POST /api/privacy/rpc", s: "offchain-passing", v: <>Proxies the 8 documented indexer methods; <C>HELIUS_API_KEY</C> never leaves the server; 32 KB body, 120 requests/min/IP.</> },
-          { k: "Private deposit toggle (demo)", s: "simulated", v: "A nacl.secretbox ring model funds a shielded escrow; bids are marked privately funded. No real funds." },
-          { k: "Private deposit (mainnet)", s: "planned", v: "Fails closed: the escrow is a plain SPL token account and cannot receive confidential transfers. The toggle is disabled with the reason." },
-          { k: "Shield, transfer, withdraw, decrypt", s: "planned", v: "Need @heliuslabs/spr plus a shielded keypair that wallet-adapter cannot yet derive. Behind the HeliusSprBindings seam." },
+          { k: "/api/privacy/spr", s: "rolling", v: <>Keyed passthrough to the Helius SPR indexer and prover, used as the SDK&apos;s <C>indexerUrl</C> and <C>proverUrl</C>, so the browser never holds a provider key.</> },
+          { k: "Private deposits", s: "rolling", v: <>A confidential transfer from your shielded balance to the company private address, then <C>POST /api/privacy/deposits/claim</C> with the signature credits your Sealed balance. Live once the company private address is registered.</> },
+          { k: "Private withdrawals", s: "rolling", v: <>A withdrawal with <C>privateTo</C> pays out from the company private address to your shielded address through the same SDK. Live once the company private address is registered.</> },
+          { k: "Onchain escrow funding", s: "planned", v: "The onchain-mode escrow is a plain SPL token account and cannot receive confidential transfers, so ring funding for onchain launches fails closed. See the plan below." },
         ]}
       />
       <CodeBlock

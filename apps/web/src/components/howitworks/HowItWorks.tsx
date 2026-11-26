@@ -457,7 +457,7 @@ export function HowItWorks() {
             </p>
           </div>
           <FadeIn className="mx-auto w-full max-w-[560px] lg:col-span-6 lg:max-w-none">
-            <LoopFigure />
+            <LoopFigure stepIds={index.map((i) => i.id)} />
           </FadeIn>
         </div>
       </section>
@@ -473,7 +473,7 @@ export function HowItWorks() {
           ))}
 
           {/* FAQ */}
-          <section id="faq" aria-labelledby="faq-title" className="scroll-mt-24 border-t border-ink py-14 sm:py-20">
+          <section id="faq" aria-labelledby="faq-title" className="scroll-mt-2 border-t border-ink py-14 sm:py-20">
             <div className="grid gap-10 lg:grid-cols-12">
               <div className="lg:col-span-4">
                 <p className="section-mark uppercase">§ 11 · Questions</p>

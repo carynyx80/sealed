@@ -9,7 +9,6 @@
  */
 import {
   API_ROUTES,
-  demoStats,
   type ChartResponse,
   type CreateLaunchInput,
   type LaunchListResponse,
@@ -23,7 +22,7 @@ import {
   type BuybackEvent,
 } from "@sealed/shared";
 import { API_URL, DEMO_ENABLED, IS_MAINNET } from "./config";
-import { createDemoLaunch, demoRevenue, findDemoLaunch, getDemoWorld } from "./demoStore";
+import { createDemoLaunch, demoProtocolStats, demoRevenue, findDemoLaunch, getDemoWorld } from "./demoStore";
 
 export type DataSource = "api" | "demo" | "offline" | "unknown";
 
@@ -177,13 +176,12 @@ async function withFallback<T>(live: () => Promise<T>, demo: () => T): Promise<T
 const real = <T extends { isDemo?: boolean }>(xs: T[]): T[] => (IS_MAINNET ? xs.filter((x) => !x.isDemo) : xs);
 
 const clone = <T,>(v: T): T => (typeof structuredClone === "function" ? structuredClone(v) : (JSON.parse(JSON.stringify(v)) as T));
-const now = () => Math.floor(Date.now() / 1000);
 
 export const api = {
   stats(): Promise<ProtocolStats> {
     return withFallback(
       () => request<ProtocolStats>(API_ROUTES.stats),
-      () => demoStats(getDemoWorld(), now()),
+      () => demoProtocolStats(),
     );
   },
 

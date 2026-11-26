@@ -50,7 +50,7 @@ export function SectionHead({ mark, title, accent, lede }: { mark: string; title
 
 const STEP_ROMAN = ["01", "02", "03"];
 
-export function StepRail({ steps, step, onGo }: { steps: readonly string[]; step: number; onGo: (i: number) => void }) {
+export function StepRail({ steps, short, step, onGo }: { steps: readonly string[]; /** Labels for narrow phones. */ short?: readonly string[]; step: number; onGo: (i: number) => void }) {
   return (
     <nav aria-label="Launch steps">
       <ol className="grid grid-cols-3 border-t border-rule">
@@ -65,14 +65,24 @@ export function StepRail({ steps, step, onGo }: { steps: readonly string[]; step
                 disabled={state === "todo"}
                 onClick={() => state === "done" && onGo(i)}
                 aria-current={state === "current" ? "step" : undefined}
-                className={clsx("group block w-full px-2 pb-1 pt-3 text-left sm:px-4 sm:pt-4", state === "done" && "cursor-pointer", state === "todo" && "cursor-default")}
+                aria-label={`Step ${i + 1}, ${s}${state === "done" ? ", complete" : state === "current" ? ", current" : ""}`}
+                className={clsx("group block min-h-[44px] w-full px-2 pb-1 pt-3 text-left sm:px-4 sm:pt-4", state === "done" && "cursor-pointer", state === "todo" && "cursor-default")}
               >
                 <span className={clsx("num flex items-center gap-1.5 text-[11px] tracking-[0.08em]", state === "todo" ? "text-ink-muted" : "text-ink")}>
                   § {STEP_ROMAN[i]}
                   {state === "done" && <CheckIcon width={11} height={11} className="text-gain" />}
                   <span className="hidden text-ink-muted sm:inline">· {state === "done" ? "complete" : state === "current" ? "in draft" : "pending"}</span>
                 </span>
-                <span className={clsx("mt-1 block truncate text-[13px] font-medium sm:text-base", state === "todo" ? "text-ink-muted" : "text-ink", state === "done" && "group-hover:underline group-hover:underline-offset-4")}>{s}</span>
+                <span className={clsx("mt-1 block truncate text-[13px] font-medium sm:text-base", state === "todo" ? "text-ink-muted" : "text-ink", state === "done" && "group-hover:underline group-hover:underline-offset-4")}>
+                  {short ? (
+                    <>
+                      <span className="sm:hidden">{short[i]}</span>
+                      <span className="hidden sm:inline">{s}</span>
+                    </>
+                  ) : (
+                    s
+                  )}
+                </span>
               </button>
             </li>
           );

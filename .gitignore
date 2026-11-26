@@ -16,3 +16,4 @@ test-ledger
 !.env.example
 *.pem
 **/target/deploy/*.json
+.next-perf

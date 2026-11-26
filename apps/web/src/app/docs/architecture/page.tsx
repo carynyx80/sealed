@@ -29,7 +29,7 @@ export default function Architecture() {
         lang="text"
         title="layout"
         code={`packages/shared            @sealed/shared: types, Zod schemas, PDAs, clearing / fee / commitment math,
-                           custody contract (custody.ts), demo world, REST + WS contract
+                           custody contract (custody.ts), REST + WS contract
 packages/defi              @sealed/defi: Anchor client, Jupiter v6, Raydium adapter (optional),
                            internal-CPMM quotes, encrypted bid vault, Privacy Ring clients
 programs/sealed-launchpad  Anchor program sealed_launchpad (onchain mode, roadmap) + tests + init script
@@ -70,12 +70,11 @@ sealed_launchpad (Rust) mirrors constants.ts and clearing/fees/commitment intege
       <Table
         head={["Worker", "File", "Cadence", "Runs when", "Status"]}
         rows={[
-          ["Indexer", <C key="f">workers/indexer.ts</C>, "20 s poll + onLogs", "not demo, RPC + IDL present", <StatusBadge key="s" status="chain-pending" label="Onchain mode" />],
-          ["Auto-reveal relayer", <C key="f">workers/revealRelayer.ts</C>, "2 s", "always; demo marks bids revealed", <StatusBadge key="s" status="demo" />],
-          ["Buyback keeper", <C key="f">workers/buybackKeeper.ts</C>, "10 s", "not demo, KEEPER_SECRET_KEY set", <StatusBadge key="s" status="partial" label="Account wiring gap" />],
-          ["Demo world ticker", <C key="f">@sealed/shared demo.ts</C>, "DEMO_TICK_MS (1 s)", "DEMO_MODE", <StatusBadge key="s" status="demo" />],
+          ["Indexer", <C key="f">workers/indexer.ts</C>, "20 s poll + onLogs", "onchain mode, RPC + IDL present", <StatusBadge key="s" status="chain-pending" label="Onchain mode" />],
+          ["Auto-reveal relayer", <C key="f">workers/revealRelayer.ts</C>, "2 s", "always", <StatusBadge key="s" status="live" />],
+          ["Buyback keeper", <C key="f">workers/buybackKeeper.ts</C>, "10 s", "onchain mode, KEEPER_SECRET_KEY set", <StatusBadge key="s" status="partial" label="Account wiring gap" />],
           ["Offchain scheduler (clear, graduate, drips, fees, auto-reveal)", <C key="f">src/offchain/runtime.ts</C>, "OFFCHAIN_TICK_MS (2 s)", "EXECUTION_MODE=offchain", <StatusBadge key="s" status="offchain-passing" />],
-          ["Deposit watcher", <C key="f">src/offchain/custody</C>, "DEPOSIT_POLL_MS (15 s)", "RPC configured and custody workers on (default: WORKERS_ENABLED and not demo; force with CUSTODY_WORKERS)", <StatusBadge key="s" status="dev" label="Needs HELIUS_API_KEY" />],
+          ["Deposit watcher", <C key="f">src/offchain/custody</C>, "DEPOSIT_POLL_MS (15 s)", "RPC configured and custody workers on (force with CUSTODY_WORKERS)", <StatusBadge key="s" status="dev" label="Needs HELIUS_API_KEY" />],
           ["Payout worker", <C key="f">src/offchain/custody/payout.ts</C>, "PAYOUT_POLL_MS (10 s)", "as above, plus COMPANY_WALLET_SECRET_KEY", <StatusBadge key="s" status="dev" label="Needs operator key" />],
         ]}
       />
@@ -88,9 +87,9 @@ sealed_launchpad (Rust) mirrors constants.ts and clearing/fees/commitment intege
       <Ledger
         items={[
           { k: "Postgres (Prisma)", v: <>Models: Launch, Bid, RevealPayload, Trade, BuybackEvent, CreditLedger, HolderReward, ProtocolStats (<C>apps/api/prisma/schema.prisma</C>). Custodial tables: User, AuthNonce, Session, Deposit, Withdrawal, LedgerAccount, LedgerTransaction, LedgerEntry, OffchainLaunch, OffchainBid, OffchainPosition, OffchainAntiSnipe. <C>prisma db push</C> runs on container boot when <C>DATABASE_URL</C> is set.</> },
-          { k: "Memory store", v: "Used when DATABASE_URL is unset (demo). Not durable; a custodial deployment must use Postgres." },
+          { k: "Memory store", v: "Used when DATABASE_URL is unset (local development). Not durable; a custodial deployment must use Postgres." },
           { k: "Redis", v: <>Response cache (1 to 2 s TTLs on lists, stats, revenue) and the keeper job queue. Falls back to an in-process map when <C>REDIS_URL</C> is unset.</> },
-          { k: "Browser", v: "Encrypted bid salts in IndexedDB; a client-side demo world takes over if the API is unreachable." },
+          { k: "Browser", v: "Encrypted bid salts in IndexedDB." },
         ]}
       />
       <Note>

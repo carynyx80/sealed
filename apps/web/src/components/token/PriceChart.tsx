@@ -7,7 +7,8 @@ import { fmtAmount, fmtPct, fmtPrice } from "@/lib/format";
 /* Print-style price chart: crisp 1px strokes on whole pixels, hatched area, right-hand price axis with tick
    marks, time axis with tick marks, hairline volume band, dashed sealed-clearing reference and a crosshair. */
 
-const AXIS_W = 78; // right price axis
+const AXIS_W_FULL = 78; // right price axis
+const AXIS_W_COMPACT = 66; // phones: tags are set in 10px mono, 66px fits 0.0₃8134-style prices
 const TIME_H = 26; // bottom time axis
 const VOL_H = 34; // volume band
 const GAP = 10;
@@ -43,31 +44,45 @@ function timeTicks(t0: number, t1: number, maxCount: number) {
   return { ticks: out, step };
 }
 
+function dayOnly(ts: number) {
+  return new Date(ts * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+}
+
 function hhmm(ts: number, withDay = false) {
   const d = new Date(ts * 1000);
   const t = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   return withDay ? `${d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} ${t}` : t;
 }
 
-function useWidth<T extends HTMLElement>() {
+/** Measures the box. Its height is set by CSS (clamped to the viewport), so nothing shifts when JS measures it. */
+function useSize<T extends HTMLElement>() {
   const ref = useRef<T>(null);
-  const [w, setW] = useState(0);
+  const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => e && setW(Math.floor(e.contentRect.width)));
+    const read = () => {
+      const r = el.getBoundingClientRect();
+      setSize((p) => (p.w === Math.floor(r.width) && p.h === Math.floor(r.height) ? p : { w: Math.floor(r.width), h: Math.floor(r.height) }));
+    };
+    const ro = new ResizeObserver(read);
     ro.observe(el);
-    setW(Math.floor(el.getBoundingClientRect().width));
+    read();
     return () => ro.disconnect();
   }, []);
-  return [ref, w] as const;
+  return [ref, size] as const;
 }
 
 export function PriceChart({ points, quote, clearingPrice, height = 300 }: { points: PricePoint[]; quote: QuoteAssetSymbol; clearingPrice?: number | null; height?: number }) {
-  const [wrap, W] = useWidth<HTMLDivElement>();
+  const [wrap, { w: W, h: measuredH }] = useSize<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
-  const H = height;
+  const H = measuredH || height;
   const compact = W > 0 && W < 520;
+  const AXIS_W = compact ? AXIS_W_COMPACT : AXIS_W_FULL;
+  // Touch: a tap or a sideways drag scrubs the crosshair; vertical drags still scroll the page (touch-action: pan-y).
+  const touch = useRef<{ id: number; x: number; y: number; scrubbing: boolean } | null>(null);
+  const clearT = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(clearT.current), []);
 
   const geo = useMemo(() => {
     if (points.length < 2 || W <= 0) return null;
@@ -94,7 +109,7 @@ export function PriceChart({ points, quote, clearingPrice, height = 300 }: { poi
     const yt = priceTicks(lo, hi, compact ? 3 : 4).filter((v) => sy(v) > TOP + 4 && sy(v) < plotB - 4);
     const tt = timeTicks(t0, t1, compact ? 3 : 6);
     return { plotL, plotR, plotB, volT, volB, sx, sy, pts, line, area, vmax, barW, yt, tt, t0, t1 };
-  }, [points, clearingPrice, W, H, compact]);
+  }, [points, clearingPrice, W, H, compact, AXIS_W]);
 
   const stats = useMemo(() => {
     if (points.length < 2) return null;
@@ -113,7 +128,7 @@ export function PriceChart({ points, quote, clearingPrice, height = 300 }: { poi
 
   const onMove = (clientX: number, rectLeft: number) => {
     if (!geo) return;
-    const x = clientX - rectLeft;
+    const x = Math.min(geo.plotR, clientX - rectLeft);
     let best = 0, bd = Infinity;
     geo.pts.forEach(([p], i) => {
       const d = Math.abs(p - x);
@@ -137,8 +152,8 @@ export function PriceChart({ points, quote, clearingPrice, height = 300 }: { poi
   return (
     <div>
       {/* readout */}
-      <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 font-mono text-[11px] text-ink-muted">
-        <span className={clsx("uppercase tracking-[0.08em]", hover !== null ? "text-ink" : "")}>{hover !== null ? "Cursor" : "Last"}</span>
+      <div className="mb-3 flex min-h-[2.5rem] flex-wrap content-start items-baseline gap-x-4 gap-y-1 font-mono text-[11px] text-ink-muted sm:min-h-0">
+        <span className={clsx("inline-block w-[3.25rem] uppercase tracking-[0.08em]", hover !== null ? "text-ink" : "")}>{hover !== null ? "Cursor" : "Last"}</span>
         <span className="num text-ink">{hhmm(cur.ts, spanDays)}</span>
         <span>
           <span className="num text-[13px] text-ink">{fmtPrice(cur.price)}</span> {quote}
@@ -152,18 +167,42 @@ export function PriceChart({ points, quote, clearingPrice, height = 300 }: { poi
         ) : null}
       </div>
 
-      <div ref={wrap} className="relative w-full" style={{ height: H }}>
+      <div ref={wrap} className="relative w-full" style={{ height: `clamp(200px, min(58vw, 60svh), ${height}px)` }}>
         {geo && (
           <svg
             width={W}
             height={H}
             viewBox={`0 0 ${W} ${H}`}
             className="block touch-pan-y select-none"
-            onMouseMove={(e) => onMove(e.clientX, e.currentTarget.getBoundingClientRect().left)}
-            onMouseLeave={() => setHover(null)}
-            onTouchStart={(e) => e.touches[0] && onMove(e.touches[0].clientX, e.currentTarget.getBoundingClientRect().left)}
-            onTouchMove={(e) => e.touches[0] && onMove(e.touches[0].clientX, e.currentTarget.getBoundingClientRect().left)}
-            onTouchEnd={() => setHover(null)}
+            onPointerMove={(e) => {
+              const left = e.currentTarget.getBoundingClientRect().left;
+              if (e.pointerType === "mouse") return onMove(e.clientX, left);
+              const t = touch.current;
+              if (!t || t.id !== e.pointerId) return;
+              const dx = Math.abs(e.clientX - t.x), dy = Math.abs(e.clientY - t.y);
+              if (!t.scrubbing && dx > 6 && dx > dy) t.scrubbing = true;
+              if (t.scrubbing) onMove(e.clientX, left);
+            }}
+            onPointerLeave={(e) => e.pointerType === "mouse" && setHover(null)}
+            onPointerDown={(e) => {
+              if (e.pointerType === "mouse") return;
+              clearTimeout(clearT.current);
+              touch.current = { id: e.pointerId, x: e.clientX, y: e.clientY, scrubbing: false };
+            }}
+            onPointerUp={(e) => {
+              const t = touch.current;
+              if (!t || t.id !== e.pointerId) return;
+              // A tap (no real movement) pins the crosshair at that point.
+              if (!t.scrubbing && Math.abs(e.clientX - t.x) < 8 && Math.abs(e.clientY - t.y) < 8) onMove(e.clientX, e.currentTarget.getBoundingClientRect().left);
+              touch.current = null;
+              clearTimeout(clearT.current);
+              clearT.current = setTimeout(() => setHover(null), 2600);
+            }}
+            onPointerCancel={() => {
+              // The browser took over for a vertical scroll.
+              touch.current = null;
+              setHover(null);
+            }}
             role="img"
             aria-label={`Price of the token in ${quote}. Last ${fmtPrice(stats!.last)}, high ${fmtPrice(stats!.high)}, low ${fmtPrice(stats!.low)}${clearingPrice ? `, sealed clearing price ${fmtPrice(clearingPrice)}` : ""}.`}
             shapeRendering="crispEdges"
@@ -195,7 +234,7 @@ export function PriceChart({ points, quote, clearingPrice, height = 300 }: { poi
               return (
                 <g key={t}>
                   <line x1={x} x2={x} y1={geo.volB} y2={geo.volB + 5} stroke={INK} strokeWidth="1" />
-                  <text x={x} y={geo.volB + 17} fontSize="10" fill={MUTED} textAnchor="middle" fontFamily="var(--font-mono)">{hhmm(t, geo.tt.step >= 86400)}</text>
+                  <text x={x} y={geo.volB + 17} fontSize="10" fill={MUTED} textAnchor="middle" fontFamily="var(--font-mono)">{geo.tt.step >= 86400 ? (compact ? dayOnly(t) : hhmm(t, true)) : hhmm(t)}</text>
                 </g>
               );
             })}
@@ -257,7 +296,7 @@ export function PriceChart({ points, quote, clearingPrice, height = 300 }: { poi
       </div>
 
       {stats && (
-        <dl className="mt-4 grid grid-cols-3 border-t border-ink sm:grid-cols-6">
+        <dl className="mt-4 grid grid-cols-2 gap-px border-t border-ink bg-rule min-[400px]:grid-cols-3 sm:grid-cols-6">
           {[
             ["Open", fmtPrice(stats.open)],
             ["High", fmtPrice(stats.high)],
@@ -266,7 +305,7 @@ export function PriceChart({ points, quote, clearingPrice, height = 300 }: { poi
             ["Δ range", fmtPct(stats.chg, 1, true)],
             [`Vol ${quote}`, fmtAmount(stats.vol)],
           ].map(([k, v], i) => (
-            <div key={k} className={clsx("border-rule py-2.5 pr-2", i % 3 !== 0 && "border-l pl-3", i >= 3 && "border-t sm:border-t-0", i === 3 && "sm:border-l sm:pl-3")}>
+            <div key={k} className={clsx("min-w-0 bg-sheet py-2.5 pr-2", i % 2 === 0 ? "pl-0" : "pl-3", i % 3 === 0 ? "min-[400px]:pl-0" : "min-[400px]:pl-3", i === 0 ? "sm:pl-0" : "sm:pl-3")}>
               <dt className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted">{k}</dt>
               <dd className={clsx("num mt-0.5 truncate text-[13px]", k === "Δ range" ? (stats.chg >= 0 ? "text-gain" : "text-burn") : "text-ink")}>{v}</dd>
             </div>

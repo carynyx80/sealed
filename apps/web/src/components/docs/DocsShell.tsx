@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { SPRING } from "@/components/motion/spring";
 import { DOC_GROUPS, docByHref, neighbours } from "./nav";
 
@@ -33,7 +34,7 @@ function NavList({ path, onNavigate }: { path: string; onNavigate?: () => void }
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     className={clsx(
-                      "group relative flex min-h-[40px] items-center gap-3 border-b border-rule py-2 pr-2 text-[14px] transition-colors",
+                      "group relative flex min-h-[44px] items-center gap-3 lg:min-h-[40px] border-b border-rule py-2 pr-2 text-[14px] transition-colors",
                       active ? "font-semibold text-ink" : "text-ink-slate hover:text-ink",
                     )}
                   >
@@ -60,6 +61,10 @@ function MobileNav({ path }: { path: string }) {
   const current = docByHref(path);
 
   const close = useCallback(() => setOpen(false), []);
+  // The sheet is portalled to <body>: the sticky bar is its own stacking context (z-30), which would otherwise keep the
+  // sheet underneath the site header (z-40) and hide the sheet's close button.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     setOpen(false);
@@ -102,6 +107,7 @@ function MobileNav({ path }: { path: string }) {
         </svg>
       </button>
 
+      {mounted && createPortal(
       <AnimatePresence>
         {open && (
           <motion.div className="fixed inset-0 z-50" initial={{ opacity: 1 }} exit={{ opacity: 1 }}>
@@ -141,13 +147,15 @@ function MobileNav({ path }: { path: string }) {
                   </svg>
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto px-4 pb-10 pt-5">
+              <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-5">
                 <NavList path={path} onNavigate={close} />
               </div>
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+      )}
     </div>
   );
 }
@@ -245,7 +253,7 @@ export function DocsShell({ children }: { children: ReactNode }) {
       <MobileNav path={path} />
       <div className="grid gap-10 lg:grid-cols-[13.5rem_minmax(0,1fr)] xl:grid-cols-[13.5rem_minmax(0,1fr)_12rem]">
         <aside className="hidden lg:block">
-          <div className="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto pb-10 pr-2 pt-10">
+          <div className="sticky top-16 max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain pb-10 pr-2 pt-10">
             <NavList path={path} />
           </div>
         </aside>
@@ -258,7 +266,7 @@ export function DocsShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <aside className="hidden xl:block">
-          <div className="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto pb-10 pt-10">
+          <div className="sticky top-16 max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain pb-10 pt-10">
             <Toc path={path} />
           </div>
         </aside>

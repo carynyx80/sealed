@@ -9,7 +9,7 @@ import { fmtAgo, fmtAmount, fmtCompact, fmtPrice, shortAddr, solscanTx } from "@
 import { FlameIcon } from "../ui/Icons";
 import { SPRING } from "../motion/spring";
 
-const COLS = "grid grid-cols-[4.25rem_minmax(0,1fr)_auto] gap-x-3 sm:grid-cols-[4.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto]";
+const COLS = "grid grid-cols-[3.75rem_minmax(0,1fr)_auto] gap-x-3 sm:grid-cols-[4.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto]";
 
 /** Trade & programmatic-buyback tape set as a ruled ledger. Vault buy-and-burns are marked in `gain`. */
 export function TradeTape({ trades, quote, ticker, network, max = 14 }: { trades: Trade[]; quote: QuoteAssetSymbol; ticker: string; network: Network; max?: number }) {
@@ -23,10 +23,10 @@ export function TradeTape({ trades, quote, ticker, network, max = 14 }: { trades
     <div className="min-w-0">
       <div className={clsx(COLS, "border-b border-ink pb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted")}>
         <span>When</span>
-        <span>Side · wallet</span>
+        <span>Side<span className="hidden min-[400px]:inline"> · wallet</span></span>
         <span className="hidden text-right sm:block">Price</span>
         <span className="hidden text-right sm:block">{ticker}</span>
-        <span className="text-right">{quote}</span>
+        <span className="text-right">{quote}<span className="sm:hidden"> · {ticker}</span></span>
       </div>
       <ul>
         <AnimatePresence initial={false}>
@@ -56,13 +56,17 @@ export function TradeTape({ trades, quote, ticker, network, max = 14 }: { trades
                 ) : (
                   <span className="flex min-w-0 items-baseline gap-2">
                     <span className={clsx("w-8 shrink-0 font-mono text-[10px] uppercase tracking-[0.06em]", t.side === "buy" ? "text-ink" : "text-burn")}>{t.side}</span>
-                    <span className="num truncate text-ink-slate">{shortAddr(t.wallet)}</span>
+                    <span className="num truncate text-ink-slate" title={t.wallet}>{shortAddr(t.wallet)}</span>
                     {t.isSniper && <span className="hidden font-mono text-[9px] uppercase tracking-[0.06em] text-burn sm:inline" title="Bought in the graduation slot: 0% holder rewards">snipe</span>}
                   </span>
                 )}
                 <span className="num hidden text-right text-ink-slate sm:block">{fmtPrice(t.price)}</span>
                 <span className="num hidden text-right text-ink-slate sm:block">{fmtCompact(t.amountToken, 2)}</span>
-                <span className={clsx("num text-right", t.isBuyback ? "text-gain" : "text-ink")}>{fmtAmount(t.amountQuote)}</span>
+                <span className={clsx("num whitespace-nowrap text-right", t.isBuyback ? "text-gain" : "text-ink")}>
+                  {fmtAmount(t.amountQuote)}
+                  {/* phones: the token leg stacks under the quote leg instead of getting its own column */}
+                  <span className="block text-[10px] text-ink-muted sm:hidden">{fmtCompact(t.amountToken, 2)} {ticker}</span>
+                </span>
               </RowLink>
             </motion.li>
           ))}

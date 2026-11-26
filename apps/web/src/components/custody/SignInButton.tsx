@@ -1,5 +1,5 @@
 "use client";
-// Owned by web-offchain-agent. Sign-In-With-Solana button, a gate for signed-in-only content, and the
+// Owned by signin-web-agent (was web-offchain-agent). Sign-In-With-Solana button, a gate for signed-in-only content, and the
 // header session pill (balance + Deposit / Withdraw / Account / Sign out).
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -8,7 +8,16 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { isQuoteAssetSymbol, type QuoteAssetSymbol } from "@sealed/shared";
 import { openDeposit, openWithdraw, useCustodyAccount, useCustodySession } from "@/lib/custody";
+import { isQuietSignInError } from "@/lib/custody/auth";
+import { pushWalletToast } from "@/lib/wallet";
 import { SPRING } from "../motion/spring";
+
+/** Compact triggers (header pill) have no room for an inline error: surface it as a toast instead. */
+function notifySignInError(e: unknown) {
+  const message = (e as Error)?.message || "Sign-in failed. Try again.";
+  if (isQuietSignInError(e)) pushWalletToast({ tone: "info", title: message }, 3_000);
+  else pushWalletToast({ tone: "error", title: "Sign-in failed", body: message }, 8_000);
+}
 
 function fmtBal(n: number): string {
   if (!Number.isFinite(n)) return "0";
@@ -34,21 +43,36 @@ export function SignInButton({ className, label = "Sign in to Sealed", block = f
         type="button"
         className={clsx("btn-primary min-h-[44px]", block && "w-full", className)}
         disabled={s.signingIn || !s.canSign}
+        aria-busy={s.signingIn || undefined}
         onClick={() => void s.signIn().catch(() => undefined)}
       >
-        {s.signingIn ? "Check your wallet…" : !s.canSign ? "Wallet can't sign messages" : label}
+        {s.signingIn ? "Check your wallet…" : !s.canSign ? "This wallet can't sign in" : label}
       </button>
-      <SiwsDomainNote domain={s.messageDomain} signing={s.signingIn} />
-      {s.error && <p className="mt-2 text-[12px] text-burn">{s.error}</p>}
+      {s.signingIn && s.statusText ? (
+        <p className="fine mt-2 text-ink-slate" aria-live="polite">
+          {s.statusText}{" "}
+          <button type="button" className="underline underline-offset-2 hover:text-ink" onClick={s.cancel}>
+            Cancel
+          </button>
+        </p>
+      ) : (
+        <SiwsDomainNote domain={s.messageDomain} signing={s.signingIn} transaction={s.method === "signTransaction"} />
+      )}
+      {!s.canSign && <p className="mt-2 text-[12px] text-burn">This wallet can&apos;t sign in yet. Try Phantom, Solflare or Backpack.</p>}
+      {s.error && !s.signingIn && (
+        <p className={clsx("mt-2 text-[12px]", s.errorQuiet ? "text-ink-muted" : "text-burn")} role={s.errorQuiet ? undefined : "alert"}>
+          {s.error}
+        </p>
+      )}
     </div>
   );
 }
 
 /**
- * Fine print under the sign-in button: which domain the SIWS message is for. Before the nonce arrives we show the
- * current host; once the server message is in hand we show the domain it actually names, and flag a mismatch.
+ * Fine print under the sign-in button: which domain the request is for. Before the nonce arrives we show the
+ * current host; once the server request is in hand we show the domain it actually names, and flag a mismatch.
  */
-function SiwsDomainNote({ domain, signing }: { domain: string | null; signing: boolean }) {
+function SiwsDomainNote({ domain, signing, transaction }: { domain: string | null; signing: boolean; transaction?: boolean }) {
   const [host, setHost] = useState<string | null>(null);
   useEffect(() => setHost(window.location.host), []);
   const shown = domain ?? host;
@@ -56,9 +80,10 @@ function SiwsDomainNote({ domain, signing }: { domain: string | null; signing: b
   const mismatch = !!domain && !!host && domain !== host;
   return (
     <p className="fine mt-2" aria-live="polite">
-      {signing ? "Message to sign is for " : "Free signature for "}
+      {signing ? "Request to sign is for " : transaction ? "Signature only for " : "Free signature for "}
       <span className="num text-ink-slate">{shown}</span>
-      {mismatch ? <> (this page is <span className="num">{host}</span>)</> : null} · no transaction, no fee.
+      {mismatch ? <> (this page is <span className="num">{host}</span>)</> : null}
+      {transaction ? " · never sent, no fee." : " · no transaction, no fee."}
     </p>
   );
 }
@@ -129,8 +154,9 @@ export function SessionPill({ className, onNavigate, menuAlign = "right" }: { cl
         type="button"
         className={clsx(pill, "border-rule bg-sheet text-ink hover:border-rule-strong", className)}
         disabled={s.signingIn || !s.canSign}
-        onClick={() => void s.signIn().catch(() => undefined)}
-        title={s.error ?? (s.messageDomain ? `Sign a message for ${s.messageDomain} to open your Sealed account` : "Sign a message to open your Sealed account")}
+        onClick={() => void s.signIn().catch(notifySignInError)}
+        title={s.statusText ?? s.error ?? (s.messageDomain ? `Sign in for ${s.messageDomain} to open your Sealed account` : "Sign in to open your Sealed account")}
+        aria-busy={s.signingIn || undefined}
       >
         <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-ink-muted" />
         {s.signingIn ? "Signing…" : "Sign in"}

@@ -22,7 +22,7 @@ export function PillTabs<T extends string>({ tabs, value, onChange, layoutId, si
               role="tab"
               aria-selected={active}
               onClick={() => onChange(t.id)}
-              className={clsx("relative flex shrink-0 items-baseline gap-2 whitespace-nowrap pb-3 pt-1 font-semibold tracking-[-0.01em] transition-colors", size === "sm" ? "text-sm" : "text-[15px] sm:text-base", active ? "text-ink" : "text-ink-muted hover:text-ink-slate")}
+              className={clsx("relative flex shrink-0 items-baseline gap-2 whitespace-nowrap pb-3 pt-1 font-semibold [@media(pointer:coarse)]:pt-2.5 tracking-[-0.01em] transition-colors", size === "sm" ? "text-sm" : "text-[15px] sm:text-base", active ? "text-ink" : "text-ink-muted hover:text-ink-slate")}
             >
               {t.label}
               {t.count !== undefined && <span className={clsx("num text-[11px] font-normal", active ? "text-ink-slate" : "text-ink-muted")}>{String(t.count).padStart(2, "0")}</span>}
@@ -44,7 +44,7 @@ export function PillTabs<T extends string>({ tabs, value, onChange, layoutId, si
             aria-selected={active}
             onClick={() => onChange(t.id)}
             className={clsx(
-              "relative shrink-0 whitespace-nowrap rounded-full font-medium transition-colors",
+              "relative shrink-0 whitespace-nowrap rounded-full font-medium transition-colors [@media(pointer:coarse)]:min-h-[44px]",
               size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
               active ? "text-paper" : "text-ink-slate hover:text-ink",
             )}

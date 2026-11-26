@@ -1,14 +1,13 @@
 "use client";
 // Owned by web-offchain-agent. Bottom sheet on phones, centred dialog from sm up. Portalled to <body>,
-// scroll-locked, Esc / backdrop to close, focus moved in and restored, Tab trapped.
+// scroll-locked, Esc / backdrop / browser Back to close, focus moved in and restored, Tab trapped, keyboard-aware.
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useModal } from "./useModal";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useReducedMotion } from "@/components/motion/reduced";
 import { SPRING } from "../motion/spring";
 import { XIcon } from "../ui/Icons";
-
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea, [tabindex]:not([tabindex="-1"])';
 
 export function Sheet({
   open,
@@ -30,45 +29,8 @@ export function Sheet({
   const [mounted, setMounted] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  const lockedRef = useRef(locked);
-  lockedRef.current = locked;
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-
   useEffect(() => setMounted(true), []);
-
-  useEffect(() => {
-    if (!open) return;
-    const restore = document.activeElement as HTMLElement | null;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const t = setTimeout(() => panel.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus() ?? panel.current?.focus(), 30);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !lockedRef.current) {
-        e.preventDefault();
-        closeRef.current();
-        return;
-      }
-      if (e.key !== "Tab" || !panel.current) return;
-      const items = Array.from(panel.current.querySelectorAll<HTMLElement>(FOCUSABLE));
-      if (!items.length) return;
-      const i = items.indexOf(document.activeElement as HTMLElement);
-      if (e.shiftKey && i <= 0) {
-        e.preventDefault();
-        items[items.length - 1]!.focus();
-      } else if (!e.shiftKey && i === items.length - 1) {
-        e.preventDefault();
-        items[0]!.focus();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => {
-      clearTimeout(t);
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-      restore?.focus?.();
-    };
-  }, [open]);
+  useModal(open && mounted, panel, { onClose, locked });
 
   if (!mounted) return null;
   return createPortal(
@@ -82,7 +44,7 @@ export function Sheet({
             aria-modal="true"
             aria-labelledby={titleId}
             tabIndex={-1}
-            className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-card border border-rule bg-sheet shadow-lift outline-none sm:max-w-[30rem] sm:rounded-card"
+            className="relative flex max-h-[min(92dvh,calc(var(--vvh,100dvh)-12px))] mb-[var(--kb,0px)] w-full flex-col overflow-hidden rounded-t-card border border-rule bg-sheet shadow-lift outline-none sm:max-w-[30rem] sm:rounded-card"
             initial={reduce ? { opacity: 0 } : { y: 48, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={reduce ? { opacity: 0 } : { y: 36, opacity: 0 }}
@@ -104,7 +66,7 @@ export function Sheet({
                 <XIcon width={16} height={16} />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pb-6">{children}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pb-6">{children}</div>
           </motion.div>
         </motion.div>
       )}

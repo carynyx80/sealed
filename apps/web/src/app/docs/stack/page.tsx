@@ -32,7 +32,7 @@ const GROUPS: Array<{ id: string; n: string; title: string; items: Item[] }> = [
     items: [
       { name: "Helius RPC", role: <>RPC endpoint built from <C>HELIUS_API_KEY</C> when <C>SOLANA_RPC_URL</C> is unset; used for deposit detection on the company wallet and by the onchain indexer.</>, where: "apps/api config.ts, src/offchain/custody", status: "dev", statusLabel: "Deposit watcher · key not set" },
       { name: "Helius indexing", role: "getProgramAccounts + onLogs for the onchain-mode indexer; signature history for deposit detection.", where: "workers/indexer.ts, src/offchain", status: "chain-pending", statusLabel: "Onchain indexer · program not deployed" },
-      { name: "Helius Privacy Rings", role: "Confidential amounts for deposits, refunds and payouts. Status probe and indexer proxy are real; escrow funding is simulated in demo and fails closed elsewhere.", where: "services/heliusPrivacy.ts, packages/defi/src/privacy", status: "simulated", statusLabel: "Simulated · proxy live" },
+      { name: "Helius Privacy Rings", role: "Confidential amounts for private deposits and payouts, through the official @heliuslabs/spr SDK behind PRIVACY_RING_ENABLED (on in production). Status probe, indexer and prover proxy are live; private transfers start once the company private address is registered.", where: "apps/api/src/offchain/privacy, packages/defi/src/privacy", status: "rolling", statusLabel: "Rolling out · proxy live" },
     ],
   },
   {
@@ -40,10 +40,10 @@ const GROUPS: Array<{ id: string; n: string; title: string; items: Item[] }> = [
     n: "10.3",
     title: "Liquidity and wallets",
     items: [
-      { name: "Internal CPMM pool", role: "The graduation venue: constant-product, 1% fee in quote to the fee collector, no LP tokens (locked liquidity), same-slot anti-snipe.", where: "program swap / ledger pool", status: "demo" },
+      { name: "Internal CPMM pool", role: "The graduation venue: constant-product, 1% fee in quote to the fee collector, no LP tokens (locked liquidity), same-slot anti-snipe.", where: "program swap / ledger pool", status: "live" },
       { name: "Jupiter v6", role: "Quote and swap-transaction builder for converting between quote assets before a pool swap. Timeouts, never throws into a worker.", where: "packages/defi jupiter.ts, apps/api services/jupiter.ts", status: "offchain-passing" },
       { name: "Raydium", role: "Optional CPMM / LaunchLab adapter that derives addresses and produces a migration plan. Nothing in the protocol calls it: moving liquidity would forfeit the fee routing and anti-snipe guarantees.", where: "packages/defi raydium.ts", status: "offchain-passing", statusLabel: "Optional · not wired" },
-      { name: "Solana Wallet Adapter", role: "Connect, signMessage (SIWS, bid-vault key, reveal authorisation), sendTransaction.", where: "apps/web components/wallet", status: "demo" },
+      { name: "Solana Wallet Adapter", role: "Connect, signMessage (SIWS, bid-vault key, reveal authorisation), sendTransaction.", where: "apps/web components/wallet", status: "live" },
     ],
   },
   {
@@ -51,15 +51,15 @@ const GROUPS: Array<{ id: string; n: string; title: string; items: Item[] }> = [
     n: "10.4",
     title: "Application",
     items: [
-      { name: "Next.js on Vercel", version: "15.0.8 · React 19.0.9", role: "App Router web app and these docs, live at www.sealedsol.xyz. vercel.json installs from the monorepo root and builds shared → defi → web. Next 15.0.8 carries the fix for CVE-2025-66478.", where: "apps/web", status: "demo" },
+      { name: "Next.js on Vercel", version: "15.0.8 · React 19.0.9", role: "App Router web app and these docs, live at www.sealedsol.xyz. vercel.json installs from the monorepo root and builds shared → defi → web. Next 15.0.8 carries the fix for CVE-2025-66478.", where: "apps/web", status: "live" },
       { name: "Fastify on Railway", version: "Node 22", role: "REST, WebSocket hub, workers, the custodial engine and /llms.txt in one process; Dockerfile + railway.json with a /api/health check. Live at api-production-01dc1743.up.railway.app.", where: "apps/api", status: "offchain-passing", statusLabel: "Live · 87/87 tests" },
-      { name: "Postgres + Prisma", role: "Store of record and, in custodial mode, the double-entry ledger (LedgerAccount / LedgerTransaction / LedgerEntry plus users, sessions, deposits, withdrawals and offchain launches). Optional in demo (memory store).", where: "apps/api/prisma", status: "offchain-passing", statusLabel: "Ledger · tests passing · live on Railway" },
+      { name: "Postgres + Prisma", role: "Store of record and, in custodial mode, the double-entry ledger (LedgerAccount / LedgerTransaction / LedgerEntry plus users, sessions, deposits, withdrawals and offchain launches). Local development can run on the in-memory store.", where: "apps/api/prisma", status: "offchain-passing", statusLabel: "Ledger · tests passing · live on Railway" },
       { name: "Redis", role: "Short-TTL response cache and keeper job queue; in-process fallback.", where: "apps/api/src/cache", status: "offchain-passing" },
       { name: "tweetnacl", version: "1.0.3", role: "x25519 nacl.box sealing of auto-reveal payloads; ed25519 signature checks.", where: "shared relayer.ts", status: "offchain-passing" },
       { name: "@noble/hashes keccak_256", role: "The bid commitment hash, matching the program's keccak.", where: "shared commitment.ts", status: "offchain-passing" },
       { name: "WebCrypto (HKDF + AES-GCM)", role: "Encrypts bid salts at rest in IndexedDB with a key derived from a wallet signature.", where: "packages/defi bidVault.ts", status: "offchain-passing" },
-      { name: "framer-motion", version: "11", role: "Restrained motion: springs (260/26), rolling numbers, the rotating seal ring; reduced-motion respected.", where: "apps/web", status: "demo" },
-      { name: "Tailwind CSS", version: "3.4", role: "Design tokens from DESIGN.md: paper, ink, ultramarine signal, hairline rules, 14px cards.", where: "apps/web", status: "demo" },
+      { name: "framer-motion", version: "11", role: "Restrained motion: springs (260/26), rolling numbers, the rotating seal ring; reduced-motion respected.", where: "apps/web", status: "live" },
+      { name: "Tailwind CSS", version: "3.4", role: "Design tokens from DESIGN.md: paper, ink, ultramarine signal, hairline rules, 14px cards.", where: "apps/web", status: "live" },
     ],
   },
   {

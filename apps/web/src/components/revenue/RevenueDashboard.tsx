@@ -42,7 +42,7 @@ export function RevenueDashboard() {
           <MetaRow k="Source">
             <span className="inline-flex items-center gap-1.5">
               <span className={clsx("h-1.5 w-1.5 rounded-full", s ? "bg-gain motion-safe:animate-pulse-soft" : "bg-rule-strong")} />
-              {!s ? "connecting" : s.isDemo ? "simulated" : "indexed"}
+              {!s ? "connecting" : "indexed"}
             </span>
           </MetaRow>
         </dl>
@@ -155,7 +155,7 @@ export function RevenueDashboard() {
 
           <footer className="mt-14 flex flex-col gap-2 border-t border-ink pt-4 text-[11px] text-ink-muted sm:flex-row sm:items-baseline sm:justify-between">
             <p>
-              {s.isDemo ? "Simulated figures on " : "Indexed from "}
+              Indexed from{" "}
               <span className="num text-ink-slate">{networkName(network)}</span>. Transaction links open Solscan.
             </p>
             <p className="num">

@@ -13,10 +13,16 @@ import { WalletReadyState, type WalletName } from "@solana/wallet-adapter-base";
 import { NETWORK_LABEL } from "@/lib/config";
 import { MOBILE_WALLET_ADAPTER_NAME, isAndroid, isMobileDevice, markUserPick, walletDeepLinks } from "@/lib/wallet";
 import { Sheet } from "../custody/Sheet";
+import { useWalletRuntime } from "./runtime";
 import { ArrowUpRight } from "../ui/Icons";
 
 export function SealedWalletModalProvider({ children }: { children: ReactNode }) {
   const [visible, setVisible] = useState(false);
+  const { load } = useWalletRuntime();
+  // Opening the picker is the main "wallet intent": make sure the (lazy) wallet runtime is loading.
+  useEffect(() => {
+    if (visible) load();
+  }, [visible, load]);
   const value = useMemo(() => ({ visible, setVisible }), [visible]);
   return (
     <WalletModalContext.Provider value={value}>
@@ -28,6 +34,7 @@ export function SealedWalletModalProvider({ children }: { children: ReactNode })
 
 function WalletPicker({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { wallets, select, wallet: current, connected } = useWallet();
+  const { ready } = useWalletRuntime();
   const [env, setEnv] = useState<{ mobile: boolean; android: boolean; href: string; origin: string } | null>(null);
   const [showAll, setShowAll] = useState(false);
 
@@ -54,7 +61,7 @@ function WalletPicker({ open, onClose }: { open: boolean; onClose: () => void })
     onClose();
   };
 
-  const mobileNoInjected = !!env?.mobile && detected.length === 0;
+  const mobileNoInjected = ready && !!env?.mobile && detected.length === 0;
   const links = env ? walletDeepLinks(env.href, env.origin) : null;
   const mwa = loadable.find((w) => w.adapter.name === MOBILE_WALLET_ADAPTER_NAME);
   const otherLoadable = loadable.filter((w) => w !== mwa);
@@ -88,7 +95,11 @@ function WalletPicker({ open, onClose }: { open: boolean; onClose: () => void })
 
       {!mobileNoInjected && (
         <section aria-label="Detected wallets">
-          {detected.length > 0 ? (
+          {!ready ? (
+            <p className="rounded-field border border-rule bg-paper-deep/60 p-3 text-[13px] leading-relaxed text-ink-slate" role="status">
+              Looking for wallets…
+            </p>
+          ) : detected.length > 0 ? (
             <>
               <p className="eyebrow mb-2">Detected in this browser</p>
               <ul className="border-t border-ink">

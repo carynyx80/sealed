@@ -28,13 +28,15 @@ export function ServiceStatus() {
         <motion.div
           role="status"
           aria-live="polite"
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: "auto", opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
+          // Floating bar just under the sticky header: it never pushes page content (no layout shift / CLS) and never
+          // collides with the bottom action docks on mobile.
+          initial={{ y: -16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -16, opacity: 0 }}
           transition={SPRING}
-          className="overflow-hidden border-t border-night-rule bg-night text-night-text"
+          className="pointer-events-none fixed inset-x-0 top-[72px] z-40 px-3 sm:px-6"
         >
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+          <div className="pointer-events-auto mx-auto flex max-w-3xl flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-night-rule bg-night px-4 py-3 text-night-text shadow-lift">
             <span className="flex min-w-0 items-center gap-2.5">
               <span aria-hidden className="relative flex h-2 w-2 shrink-0">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-burn-bright opacity-60 motion-reduce:hidden" />
@@ -43,7 +45,7 @@ export function ServiceStatus() {
               <span className="text-[13px] font-semibold">Service unavailable · retrying</span>
             </span>
             <span className="min-w-0 flex-1 text-[12px] leading-relaxed text-night-muted">
-              The Sealed API isn&apos;t responding. Live launches, prices and balances are paused; nothing shown is simulated.
+              The Sealed API isn&apos;t responding. Live launches, prices and balances are paused until it answers again.
             </span>
             <span className="flex shrink-0 items-center gap-3">
               <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-night-muted">
@@ -60,7 +62,7 @@ export function ServiceStatus() {
                     setBusy(false);
                   }
                 }}
-                className="inline-flex min-h-[36px] items-center rounded-full border border-night-rule px-3 text-[12px] font-semibold text-night-text transition-colors hover:border-night-muted disabled:opacity-60"
+                className="inline-flex min-h-[44px] items-center md:[@media(pointer:fine)]:min-h-[36px] rounded-full border border-night-rule px-3 text-[12px] font-semibold text-night-text transition-colors hover:border-night-muted disabled:opacity-60"
               >
                 Retry now
               </button>

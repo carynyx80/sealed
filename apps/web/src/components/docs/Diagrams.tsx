@@ -14,10 +14,10 @@ const pctNum = (bps: number) => (bps / BPS_DENOMINATOR) * 100;
 /** Where the credit capital travels: Credit Pool → vault → burns; fees → repay → Credit Pool → next launch. */
 export function CapitalLoop() {
   const box = "fill-[#FCFBF8] stroke-[#0F0F0D]";
-  const t = "fill-[#0F0F0D] font-sans text-[11.5px] font-semibold";
-  const s = "fill-[#5C5A54] font-mono text-[9px] uppercase tracking-[0.06em]";
+  const t = "fill-[#0F0F0D] font-sans text-[length:calc(11.5px*var(--k,1))] font-semibold";
+  const s = "fill-[#5C5A54] font-mono text-[length:calc(9px*var(--k,1))] uppercase tracking-[0.06em]";
   return (
-    <svg viewBox="0 0 360 300" className="mx-auto h-auto w-full max-w-[460px]" role="img" aria-labelledby="loop-t loop-d">
+    <svg viewBox="0 0 360 300" className="mx-auto h-auto w-full max-w-[460px] [--k:1.2] sm:[--k:1]" role="img" aria-labelledby="loop-t loop-d">
       <title id="loop-t">The Sealed capital loop</title>
       <desc id="loop-d">
         The protocol credit pool advances credit into the launch buyback vault. The vault buys and burns through the pool. Trading fees collect in
@@ -170,16 +170,16 @@ export function TickHistogram({
   const pIndex = Number(result.clearingPrice - floor) / Number(tick);
   const px = left + colW * (pIndex + 0.5);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full max-w-[560px]" role="img" aria-labelledby="hist-t">
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full max-w-[560px] [--k:1.2] sm:[--k:1]" role="img" aria-labelledby="hist-t">
       <title id="hist-t">Revealed demand per price tick, with the uniform clearing price marked</title>
       {/* y grid */}
       {[0, 0.5, 1].map((f) => (
         <line key={f} x1={left} x2={W - 8} y1={bottom - f * (bottom - top)} y2={bottom - f * (bottom - top)} stroke="#DEDAD1" strokeWidth="1" />
       ))}
-      <text x={left - 6} y={top + 3} textAnchor="end" className="fill-[#8F8C84] font-mono text-[8.5px]">
+      <text x={left - 6} y={top + 3} textAnchor="end" className="fill-[#8F8C84] font-mono text-[length:calc(8.5px*var(--k,1))]">
         {(Number(max) / 1000).toFixed(0)}k
       </text>
-      <text x={left - 6} y={bottom + 3} textAnchor="end" className="fill-[#8F8C84] font-mono text-[8.5px]">
+      <text x={left - 6} y={bottom + 3} textAnchor="end" className="fill-[#8F8C84] font-mono text-[length:calc(8.5px*var(--k,1))]">
         0
       </text>
       {Array.from({ length: shownTicks }, (_, i) => {
@@ -196,10 +196,10 @@ export function TickHistogram({
               </>
             )}
             <line x1={x + w / 2} x2={x + w / 2} y1={bottom} y2={bottom + 4} stroke="#8F8C84" strokeWidth="1" />
-            <text x={x + w / 2} y={bottom + 15} textAnchor="middle" className="fill-[#5C5A54] font-mono text-[9px]">
+            <text x={x + w / 2} y={bottom + 15} textAnchor="middle" className="fill-[#5C5A54] font-mono text-[length:calc(9px*var(--k,1))]">
               {priceOf(i).toString()}
             </text>
-            <text x={x + w / 2} y={bottom + 26} textAnchor="middle" className="fill-[#8F8C84] font-mono text-[7.5px]">
+            <text x={x + w / 2} y={bottom + 26} textAnchor="middle" className="fill-[#8F8C84] font-mono text-[length:calc(8.5px*var(--k,1))]">
               t{i}
             </text>
           </g>
@@ -208,7 +208,7 @@ export function TickHistogram({
       <line x1={left} x2={W - 8} y1={bottom} y2={bottom} stroke="#0F0F0D" strokeWidth="1.25" />
       {/* clearing price */}
       <line x1={px} x2={px} y1={top - 10} y2={bottom} stroke="#2E3FE0" strokeWidth="1.25" strokeDasharray="3 3" />
-      <text x={px + 4} y={top - 4} className="fill-[#2E3FE0] font-mono text-[9px]">
+      <text x={px + 4} y={top - 4} className="fill-[#2E3FE0] font-mono text-[length:calc(9px*var(--k,1))]">
         P = {result.clearingPrice.toString()} {unitLabel}
       </text>
     </svg>
@@ -332,7 +332,7 @@ export function ArchitectureMap() {
         </div>
         <div className={node}>
           <p className={nm}>Postgres · Redis</p>
-          <p className={ds}>ledger of record; memory fallback in demo</p>
+          <p className={ds}>ledger of record; memory store in local development</p>
         </div>
       </div>
       <Connector label="RPC" />

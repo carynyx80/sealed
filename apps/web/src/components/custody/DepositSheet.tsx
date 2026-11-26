@@ -383,7 +383,7 @@ function DepositBody({
           <div className="mt-5">
             <label htmlFor="dep-sig" className="label">Sent it already? Paste the signature to speed up detection</label>
             <div className="flex gap-2">
-              <input id="dep-sig" className="input num min-w-0 flex-1 text-[13px]" placeholder="Transaction signature" value={manualSig} onChange={(e) => setManualSig(e.target.value.trim())} autoComplete="off" spellCheck={false} />
+              <input id="dep-sig" className="input num min-w-0 flex-1 text-base sm:text-[13px]" placeholder="Transaction signature" value={manualSig} onChange={(e) => setManualSig(e.target.value.trim())} autoComplete="off" spellCheck={false} />
               <button type="button" className="btn-ghost min-h-[44px] shrink-0" disabled={nudging || manualSig.length < 64} onClick={() => void nudge()}>
                 {nudging ? "Checking…" : "Check"}
               </button>
@@ -450,7 +450,7 @@ function DepositReview({
       <div className="border-t border-rule px-4 py-3">
         <p className="text-[12px] leading-relaxed text-ink-slate">
           Funds go to <span className="font-semibold text-ink">Sealed custody</span>: the company wallet holds them and your Sealed balance is
-          credited after confirmation. You can withdraw to any wallet. Simulated successfully just now.
+          credited after confirmation. You can withdraw to any wallet. Pre-checked successfully just now.
         </p>
         {IS_MAINNET && (
           <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[12px] leading-relaxed text-ink">

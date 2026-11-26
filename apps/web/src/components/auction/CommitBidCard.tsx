@@ -121,7 +121,7 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
           <input
             id="max-price"
             type="range"
-            className="range mt-4 w-full"
+            className="range mt-1.5 w-full cursor-pointer touch-pan-y !h-11 ![background-size:100%_6px] !bg-center !bg-no-repeat"
             min={0}
             max={ticks.length - 1}
             step={1}
@@ -131,7 +131,7 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
             aria-valuetext={`${fmtPrice(maxPrice)} ${q}`}
           />
           {/* tick ruler */}
-          <div className="relative mx-[10px] mt-2 h-3" aria-hidden>
+          <div className="relative mx-[10px] -mt-1 h-3" aria-hidden>
             {ticks.map((_, i) => {
               const major = i % 8 === 0 || i === ticks.length - 1;
               return (
@@ -153,11 +153,11 @@ export function CommitBidCard({ launch }: { launch: LaunchSummary }) {
         <div className="mt-6 grid grid-cols-2 gap-3">
           <div className="min-w-0">
             <label htmlFor="bid-amount" className="label">Bid amount <span className="font-mono text-ink-muted">{q}</span></label>
-            <input id="bid-amount" inputMode="decimal" autoComplete="off" className="input num" placeholder="0.00" value={amountStr} onChange={(e) => setAmountStr(e.target.value.replace(/[^0-9.]/g, ""))} />
+            <input id="bid-amount" inputMode="decimal" autoComplete="off" className="input num text-base sm:text-sm" placeholder="0.00" value={amountStr} onChange={(e) => setAmountStr(e.target.value.replace(/[^0-9.]/g, ""))} />
           </div>
           <div className="min-w-0">
             <label htmlFor="bid-deposit" className="label">Deposit <span className="font-mono text-ink-muted">{q}</span></label>
-            <input id="bid-deposit" inputMode="decimal" autoComplete="off" className="input num" placeholder={amount ? fmtAmount(amount) : "= amount"} value={depositStr} onChange={(e) => setDepositStr(e.target.value.replace(/[^0-9.]/g, ""))} />
+            <input id="bid-deposit" inputMode="decimal" autoComplete="off" className="input num text-base sm:text-sm" placeholder={amount ? fmtAmount(amount) : "= amount"} value={depositStr} onChange={(e) => setDepositStr(e.target.value.replace(/[^0-9.]/g, ""))} />
           </div>
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">

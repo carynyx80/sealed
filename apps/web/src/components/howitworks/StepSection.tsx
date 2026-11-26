@@ -23,12 +23,12 @@ export function StepSection({ id, n, label, title, children, facts, figure, capt
       id={id}
       aria-labelledby={`${id}-title`}
       className={clsx(
-        "scroll-mt-24",
-        night ? "card-night my-10 px-5 py-12 sm:my-14 sm:px-10 sm:py-16" : "border-t border-ink py-14 sm:py-20",
+        "scroll-mt-2",
+        night ? "card-night my-10 px-5 py-12 max-sm:-mx-4 max-sm:rounded-none max-sm:border-x-0 max-sm:px-4 sm:my-14 sm:px-10 sm:py-16" : "border-t border-ink py-14 sm:py-20",
       )}
     >
       <div className="grid gap-10 lg:grid-cols-12 lg:gap-10">
-        <div className={clsx("lg:col-span-5", flip && "lg:order-last")}>
+        <div className={clsx("min-w-0 lg:col-span-5", flip && "lg:order-last")}>
           <div className={clsx("flex items-baseline justify-between gap-4 font-mono text-[11px] uppercase tracking-[0.08em]", night ? "text-night-muted" : "text-ink-muted")}>
             <span>
               § {n} · {label}
@@ -55,8 +55,8 @@ export function StepSection({ id, n, label, title, children, facts, figure, capt
           </dl>
         </div>
 
-        <FadeIn className={clsx("lg:col-span-7", flip ? "lg:pr-4" : "lg:pl-4")}>
-          <figure className={clsx("rounded-card border p-4 sm:p-8", night ? "border-night-rule bg-night-raised" : "border-rule bg-sheet")}>
+        <FadeIn className={clsx("min-w-0 lg:col-span-7", flip ? "lg:pr-4" : "lg:pl-4")}>
+          <figure className={clsx("rounded-card border p-3 max-sm:-mx-4 max-sm:rounded-none max-sm:border-x-0 sm:p-8", night ? "border-night-rule bg-night-raised" : "border-rule bg-sheet")}>
             <div className={clsx("mb-4 flex items-center justify-between font-mono text-[10.5px] uppercase tracking-[0.08em] sm:mb-6", night ? "text-night-muted" : "text-ink-muted")}>
               <span>Fig. {n}</span>
               <span className="truncate pl-4">{label}</span>

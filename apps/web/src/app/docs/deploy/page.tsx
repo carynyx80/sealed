@@ -12,11 +12,11 @@ const API_ENV: Array<[string, string, string]> = [
   ["COMPANY_WALLET_SECRET_KEY", "secret · operator-set", "Signs mainnet withdrawals from the company wallet. Unset → payoutsEnabled=false, no payout worker runs and every withdrawal stays queued (funds locked) until it is set or the withdrawal is rejected. Never commit it; store it only in the Railway secret store."],
   ["ADMIN_TOKEN", "secret", "Required on mainnet. Value of the x-admin-token header for /api/admin/withdrawals (list / approve / reject) and /api/admin/credit-pool/seed. Unset → admin routes answer 503. Use a long random value."],
   ["DEPOSIT_CONFIRMATIONS", "finalized", "\"finalized\" or an integer from 1 to 1000 of confirmed-slot depth before a deposit is credited."],
-  ["CUSTODY_WORKERS", "true", "Run the deposit watcher and payout worker. Default: WORKERS_ENABLED and not demo. Set it to true explicitly on mainnet."],
+  ["CUSTODY_WORKERS", "true", "Run the deposit watcher and payout worker. Set it to true explicitly on mainnet."],
   ["SIWS_DOMAIN", "www.sealedsol.xyz", "Domain shown in, and checked against, the sign-in message. Must match the site users sign in on (the code default is sealed.app)."],
   ["DEPOSIT_POLL_MS / PAYOUT_POLL_MS / OFFCHAIN_TICK_MS", "15000 / 10000 / 2000", "Deposit watcher, payout worker and offchain scheduler cadence."],
+  ["PRIVACY_RING_ENABLED", "true", "Turns on the Helius Privacy Ring service (@heliuslabs/spr): private deposits and payouts once the company private address is registered."],
   ["HELIUS_API_KEY", "secret", "Builds the mainnet Helius RPC URL when SOLANA_RPC_URL is unset; deposit detection, payouts, the browser RPC proxy (POST /api/rpc) and the Privacy Ring proxy. Never sent to the browser."],
-  ["DEMO_MODE", "false", "Must be false on mainnet (demo is disabled there). If unset it defaults to true when SOLANA_RPC_URL is unset; HELIUS_API_KEY alone does not turn demo off."],
   ["DATABASE_URL", "${{Postgres.DATABASE_URL}}", "Postgres: the ledger of record for real funds. Required for custody; turn on automated backups."],
   ["REDIS_URL", "${{Redis.REDIS_URL}}", "Cache and job queue; in-process fallback."],
   ["SOLANA_RPC_URL / SOLANA_WS_URL", "unset", "Explicit RPC; wins over HELIUS_API_KEY."],
@@ -28,14 +28,14 @@ const API_ENV: Array<[string, string, string]> = [
   ["CORS_ORIGIN", "*", "Comma-separated origins, e.g. your Vercel domain."],
   ["PORT / HOST", "4000 / 0.0.0.0", "Railway injects PORT."],
   ["JUPITER_API_URL", "https://quote-api.jup.ag/v6", "Jupiter v6 base."],
-  ["WORKERS_ENABLED / DEMO_TICK_MS", "true / 1000", "In-process workers; demo simulation tick."],
+  ["WORKERS_ENABLED", "true", "In-process workers (indexer, relayer, keeper, schedulers)."],
   ["IDL_PATH", "unset", "Defaults to programs/sealed-launchpad/idl/sealed_launchpad.json."],
 ];
 
 const WEB_ENV: Array<[string, string]> = [
   ["NEXT_PUBLIC_API_URL", "https://<railway-domain> (no trailing slash)"],
   ["NEXT_PUBLIC_WS_URL", "wss://<railway-domain>/ws"],
-  ["NEXT_PUBLIC_NETWORK", "mainnet on production. localnet shows the Demo label"],
+  ["NEXT_PUBLIC_NETWORK", "mainnet on production"],
   ["NEXT_PUBLIC_RPC_URL", "optional public RPC; the web app reaches Solana through the API's POST /api/rpc proxy (rolling out), so no provider key belongs here"],
   ["NEXT_PUBLIC_PROGRAM_ID", "onchain mode program id (roadmap)"],
   ["NEXT_PUBLIC_JUPITER_API_URL", "optional override"],
@@ -49,10 +49,10 @@ export default function Deploy() {
         kicker="Deploy"
         title={
           <>
-            Demo in one command, production in <Accent>three</Accent>.
+            Local in one command, production in <Accent>three</Accent>.
           </>
         }
-        lede="Local demo needs no keys and no infrastructure. The production deployment is the web app on Vercel and the custodial API on Railway with Postgres and Redis, on Solana mainnet with real funds."
+        lede="Sealed runs in production as the web app on Vercel and the custodial API on Railway with Postgres and Redis, on Solana mainnet with real funds. This page covers the variables, the readiness checklist and both hosts."
       />
 
       <Table
@@ -64,12 +64,12 @@ export default function Deploy() {
           ["WebSocket", <C key="ws">wss://api-production-01dc1743.up.railway.app/ws</C>, "Railway"],
           ["Agent guide", <A key="l" href="https://api-production-01dc1743.up.railway.app/llms.txt">/llms.txt</A>, "Railway"],
         ]}
-        caption="Mainnet deployment (rolling out). Check network and isDemo in /api/health, and payoutsEnabled in /api/custody/info, before depositing anything."
+        caption="Mainnet deployment (rolling out). Check network in /api/health, and payoutsEnabled in /api/custody/info, before depositing anything."
       />
       <Note title="Current deployment status" tone="signal">
         <p>
           Web: live on Vercel (Next 15.0.8, React 19.0.9). API: live on Railway with Postgres and Redis and <C>EXECUTION_MODE=offchain</C>. The
-          <strong>mainnet launch is rolling out</strong>: <C>NETWORK=mainnet</C>, <C>DEMO_MODE=false</C>, custody workers on, and the operator secrets{" "}
+          <strong>mainnet launch is rolling out</strong>: <C>NETWORK=mainnet</C>, custody workers on, <C>PRIVACY_RING_ENABLED=true</C>, and the operator secrets{" "}
           <C>COMPANY_WALLET_SECRET_KEY</C>, <C>HELIUS_API_KEY</C> and <C>ADMIN_TOKEN</C> set. Work through the{" "}
           <A href="#mainnet-checklist">mainnet readiness checklist</A> below. Program: roadmap, not deployed.
         </p>
@@ -79,10 +79,10 @@ export default function Deploy() {
       <H2 id="local" n="11.1">Local quickstart</H2>
       <CodeBlock
         lang="bash"
-        title="demo mode"
+        title="local development"
         code={`corepack enable              # or install pnpm 12
 pnpm install
-pnpm dev                     # builds @sealed/shared, then API :4000 + web :3000
+pnpm dev                     # builds @sealed/shared, then API :4000 + web :3000 (in-memory store)
 open http://localhost:3000/docs`}
       />
       <Table
@@ -90,7 +90,7 @@ open http://localhost:3000/docs`}
         head={["Command", "What it does"]}
         rows={[
           [<C key="c">pnpm typecheck · pnpm build</C>, "all workspaces"],
-          [<C key="c">pnpm --filter @sealed/e2e test:invariants</C>, "seeded property tests on clearing, fees, commitment, schema, demo world"],
+          [<C key="c">pnpm --filter @sealed/e2e test:invariants</C>, "seeded property tests on clearing, fees, commitment and schema"],
           [<C key="c">pnpm --filter @sealed/e2e test:e2e</C>, "boots the built API (and web) and checks them black-box"],
           [<C key="c">scripts/verify.sh</C>, "full definition of done with a PASS/FAIL table"],
           [<C key="c">cd apps/api && node --import tsx --test test/*.test.ts</C>, "API unit and integration suite (87 tests), including the custody and offchain engine"],
@@ -127,7 +127,6 @@ open http://localhost:3000/docs`}
         colClass={["min-w-[11rem]", "min-w-[9rem]", "min-w-[16rem]"]}
         rows={[
           [<C key="k">NETWORK</C>, <C key="v">mainnet</C>, <><C>GET /api/health</C> → <C>&quot;network&quot;: &quot;mainnet&quot;</C></>],
-          [<C key="k">DEMO_MODE</C>, <C key="v">false</C>, <><C>GET /api/health</C> → <C>&quot;isDemo&quot;: false</C>; no launch carries <C>isDemo: true</C>; <C>demo-bid</C> answers 403</>],
           [<C key="k">ADMIN_TOKEN</C>, "long random secret", <><C>GET /api/admin/withdrawals</C> without the header is refused; with it returns the queue</>],
           [<C key="k">COMPANY_WALLET_SECRET_KEY</C>, <>secret for <A href={COMPANY_WALLET_EXPLORER}>{COMPANY_WALLET.slice(0, 4)}…{COMPANY_WALLET.slice(-4)}</A></>, <><C>GET /api/custody/info</C> → <C>payoutsEnabled: true</C>; the key&apos;s public key equals <C>COMPANY_WALLET</C></>],
           [<C key="k">HELIUS_API_KEY</C>, "mainnet key", <>A small test deposit is detected and credited; <C>/api/health</C> shows a redacted mainnet RPC</>],
@@ -159,7 +158,7 @@ open http://localhost:3000/docs`}
           <C>NEXT_PUBLIC_NETWORK=mainnet</C>, with <C>NEXT_PUBLIC_API_URL</C> and <C>NEXT_PUBLIC_WS_URL</C> pointing at the Railway API. Redeploy afterwards:
           these values are inlined at build time.
         </li>
-        <li>The site shows no Demo label, no demo launches, and no in-browser demo fallback when the API is unreachable.</li>
+        <li>Every launch on the site is served by the hosted mainnet API.</li>
         <li>No RPC provider key in any <C>NEXT_PUBLIC_*</C> variable; the browser goes through <C>POST /api/rpc</C>.</li>
       </UL>
       <H3 id="checklist-behaviour">Behaviour to verify (rolling out)</H3>
@@ -179,7 +178,7 @@ open http://localhost:3000/docs`}
           <C>/api/health</C> (120 s timeout) and restarts on failure.
         </li>
         <li>
-          Set the variables above. For mainnet custody: <C>NETWORK=mainnet</C>, <C>EXECUTION_MODE=offchain</C>, <C>DEMO_MODE=false</C>,{" "}
+          Set the variables above. For mainnet custody: <C>NETWORK=mainnet</C>, <C>EXECUTION_MODE=offchain</C>, <C>PRIVACY_RING_ENABLED=true</C>,{" "}
           <C>CUSTODY_WORKERS=true</C>, <C>COMPANY_WALLET</C>, <C>COMPANY_WALLET_SECRET_KEY</C> (operator only), <C>ADMIN_TOKEN</C>,{" "}
           <C>DEPOSIT_CONFIRMATIONS</C>, <C>HELIUS_API_KEY</C>, <C>SIWS_DOMAIN=www.sealedsol.xyz</C> and <C>CORS_ORIGIN=https://www.sealedsol.xyz</C>.
           Then seed the credit pool from company funds with <C>POST /api/admin/credit-pool/seed</C>; graduations draw their buyback credit from it and get
@@ -209,8 +208,8 @@ docker run -p 4000:4000 sealed-api`} />
 
       <Note title="Before you go live" tone="warn">
         <p>
-          Never run a public mainnet deployment with DEMO_MODE=true: demo-bid and unauthenticated in-memory launch creation are enabled in demo. Mainnet
-          disables demo mode. Read <A href="/docs/security">Security</A> and finish the <A href="#mainnet-checklist">checklist</A> first.
+          Never run a public deployment without Postgres, <C>ADMIN_TOKEN</C> and <C>NETWORK=mainnet</C>: the in-memory store is for local development
+          only and is not durable. Read <A href="/docs/security">Security</A> and finish the <A href="#mainnet-checklist">checklist</A> first.
         </p>
       </Note>
     </>

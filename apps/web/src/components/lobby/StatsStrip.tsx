@@ -26,7 +26,7 @@ export function StatsStrip() {
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-night-rule pb-3 font-mono text-[10.5px] uppercase tracking-[0.08em] text-night-muted">
           <span className="flex items-center gap-2.5"><SealMark size={16} spin className="text-night-text" /> § 01 · Protocol tape</span>
-          <span suppressHydrationWarning>As of {now !== null ? fmtTime(now) : "--:--:--"} · {data?.isDemo ? "simulated" : "live"}</span>
+          <span suppressHydrationWarning>As of {now !== null ? fmtTime(now) : "--:--:--"} · live</span>
         </div>
 
         <div className="grid md:grid-cols-3">

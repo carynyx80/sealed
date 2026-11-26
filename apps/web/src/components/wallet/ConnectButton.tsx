@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { NETWORK_LABEL, explorerAccountUrl } from "@/lib/config";
 import { useCustodySession } from "@/lib/custody/hooks";
+import { useWalletRuntime } from "./runtime";
 import { ArrowUpRight } from "../ui/Icons";
 
 const spring = { type: "spring", stiffness: 260, damping: 26 } as const;
@@ -19,6 +20,7 @@ function truncate(addr: string): string {
 export function ConnectButton({ className }: { className?: string }) {
   const { publicKey, wallet, connected, connecting, disconnect } = useWallet();
   const { setVisible } = useWalletModal();
+  const { load: warmWallets } = useWalletRuntime();
   const custody = useCustodySession();
   // Render a stable label until mounted: autoConnect state differs between server and client.
   const [mounted, setMounted] = useState(false);
@@ -46,7 +48,7 @@ export function ConnectButton({ className }: { className?: string }) {
   const pill =
     "inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-[transform,background-color,border-color] duration-200 " +
     "hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/40 focus-visible:ring-offset-2 " +
-    "focus-visible:ring-offset-paper disabled:opacity-70 sm:px-5 md:h-10 " +
+    "focus-visible:ring-offset-paper disabled:opacity-70 sm:px-5 md:[@media(pointer:fine)]:h-10 " +
     (address ? "border border-rule bg-sheet text-ink hover:border-rule-strong" : "bg-ink text-paper hover:bg-ink-soft");
 
   return (
@@ -59,6 +61,8 @@ export function ConnectButton({ className }: { className?: string }) {
         aria-expanded={address ? open : undefined}
         aria-busy={mounted && connecting ? true : undefined}
         onClick={() => (address ? setOpen((o) => !o) : setVisible(true))}
+        onPointerEnter={warmWallets}
+        onFocus={warmWallets}
       >
         {address && wallet?.adapter.icon ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -110,6 +114,11 @@ export function ConnectButton({ className }: { className?: string }) {
                     {custody.signingIn ? "Check your wallet…" : "Sign in to Sealed"}
                     <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-muted">free</span>
                   </span>
+                  {(custody.statusText || custody.error) && (
+                    <span className={`mt-1 block text-[11px] leading-snug ${custody.signingIn || custody.errorQuiet ? "text-ink-muted" : "text-burn"}`}>
+                      {custody.signingIn ? custody.statusText : custody.error}
+                    </span>
+                  )}
                 </MenuItem>
               ))}
             <MenuItem

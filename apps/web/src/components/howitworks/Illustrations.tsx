@@ -7,13 +7,21 @@ import { useId, type ReactNode, type RefObject } from "react";
 import { useFig } from "./anim";
 import { EXAMPLE, FACTS, fmtNum, fmtPrice, share } from "./facts";
 
-const L = "font-mono text-[10px] uppercase tracking-[0.08em]";
-const LS = "font-mono text-[9px] uppercase tracking-[0.08em]";
+const L = "font-mono text-[length:calc(10px*var(--k,1))] uppercase tracking-[0.08em]";
+const LS = "font-mono text-[length:calc(9px*var(--k,1))] uppercase tracking-[0.08em]";
 
 function Fig({ title, viewBox, children, className, svgRef }: { title: string; viewBox: string; children: ReactNode; className?: string; svgRef?: RefObject<SVGSVGElement | null> }) {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   return (
-    <svg ref={svgRef} viewBox={viewBox} fill="none" className={clsx("block h-auto w-full", className)} role="img" aria-labelledby={`t${id}`}>
+    <svg
+      ref={svgRef}
+      viewBox={viewBox}
+      fill="none"
+      /* --k scales every label: a 400-unit figure renders at ~260px on a 320px phone, so labels grow there to stay legible. */
+      className={clsx("block h-auto w-full [--k:1.3] min-[480px]:[--k:1.15] sm:[--k:1]", className)}
+      role="img"
+      aria-labelledby={`t${id}`}
+    >
       <title id={`t${id}`}>{title}</title>
       {children}
     </svg>
@@ -43,7 +51,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 
 const LOOP = ["Sign in", "Deposit", "Seal a bid", "Reveal", "Clear", "Claim", "Buy back", "Fees", "Anti-snipe", "Withdraw"];
 
-export function LoopFigure() {
+export function LoopFigure({ stepIds }: { stepIds?: string[] } = {}) {
   const f = useFig();
   const cx = 320;
   const cy = 280;
@@ -53,9 +61,11 @@ export function LoopFigure() {
     return { label, i, x: r2(cx + R * Math.cos(a)), y: r2(cy + R * Math.sin(a)), c: Math.cos(a), s: Math.sin(a), a };
   });
   return (
+    <>
     <Fig
       svgRef={f.ref}
       viewBox="0 0 640 560"
+      className="[--k:1.8] min-[480px]:[--k:1.5] sm:[--k:1.25] lg:[--k:1]"
       title="The Sealed loop in ten steps arranged in a circle: sign in, deposit, seal a bid, reveal, clear at one price, claim, buy back, fees, anti-snipe and withdraw. At the centre, sealed bids resolve to one clearing price."
     >
       {/* fine tick ring */}
@@ -97,17 +107,43 @@ export function LoopFigure() {
         const dy = n.s < -0.9 ? -6 : n.s > 0.9 ? 14 : 5;
         return (
           <motion.g key={n.i} {...f.fade(0.2 + n.i * 0.06)}>
-            <circle cx={n.x} cy={n.y} r="16" className={n.i === 4 ? "fill-ink stroke-ink" : "fill-sheet stroke-ink"} strokeWidth="1.25" />
-            <text x={n.x} y={n.y + 4} textAnchor="middle" className={clsx("font-mono text-[11px]", n.i === 4 ? "fill-paper" : "fill-ink")}>
+            <circle cx={n.x} cy={n.y} r="16" className={clsx("max-sm:[r:23px]", n.i === 4 ? "fill-ink stroke-ink" : "fill-sheet stroke-ink")} strokeWidth="1.25" />
+            <text x={n.x} y={n.y} dominantBaseline="central" textAnchor="middle" className={clsx("font-mono text-[length:calc(11px*var(--k,1))]", n.i === 4 ? "fill-paper" : "fill-ink")}>
               {String(n.i + 1).padStart(2, "0")}
             </text>
-            <text x={lx} y={ly + dy} textAnchor={anchor} className="fill-ink font-sans text-[16px] font-semibold tracking-[-0.01em]">
+            <text x={lx} y={ly + dy} textAnchor={anchor} className="fill-ink font-sans text-[16px] font-semibold tracking-[-0.01em] max-sm:hidden">
               {n.label}
             </text>
           </motion.g>
         );
       })}
     </Fig>
+    {/* Phones: station names would render at ~7px around the ring, so they move into a two-column key below it. */}
+    <nav aria-label="Jump to a step" className="sm:hidden">
+      <ol className="mt-5 grid grid-cols-2 gap-x-6 border-t border-rule">
+        {LOOP.map((label, i) => {
+          const inner = (
+            <>
+              <span className={clsx("num text-[11px]", i === 4 ? "text-signal" : "text-ink-muted")}>{String(i + 1).padStart(2, "0")}</span>
+              {label}
+            </>
+          );
+          const id = stepIds?.[i];
+          return (
+            <li key={label} className="border-b border-rule">
+              {id ? (
+                <a href={`#${id}`} className="flex min-h-[44px] items-center gap-2.5 text-[13px] text-ink">
+                  {inner}
+                </a>
+              ) : (
+                <span className="flex min-h-[44px] items-center gap-2.5 text-[13px] text-ink">{inner}</span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+    </>
   );
 }
 
@@ -126,9 +162,9 @@ export function SignFigure() {
         <rect x="222" y="30" width="160" height="190" rx="6" className="fill-sheet stroke-ink" strokeWidth="1.25" />
         <text x="236" y="52" className={`${LS} fill-ink-muted`}>Message</text>
         <path d="M236 60 H368" className="stroke-rule" strokeWidth="1" />
-        <text x="236" y="80" className="fill-ink font-mono text-[10.5px]">Sign in to Sealed.</text>
-        <text x="236" y="98" className="fill-ink-slate font-mono text-[10.5px]">No transaction.</text>
-        <text x="236" y="116" className="fill-ink-slate font-mono text-[10.5px]">No fee.</text>
+        <text x="236" y="80" className="fill-ink font-mono text-[length:calc(10.5px*var(--k,1))]">Sign in to Sealed.</text>
+        <text x="236" y="98" className="fill-ink-slate font-mono text-[length:calc(10.5px*var(--k,1))]">No transaction.</text>
+        <text x="236" y="116" className="fill-ink-slate font-mono text-[length:calc(10.5px*var(--k,1))]">No fee.</text>
         <path d="M236 136 H368" className="stroke-rule" strokeWidth="1" />
       </motion.g>
       <motion.path
@@ -164,7 +200,7 @@ export function DepositFigure() {
       <motion.g {...f.fade(0.4, -6)}>
         <path d="M190 84 V103" className="stroke-ink-muted" strokeWidth="1" strokeDasharray="2 2" />
         <rect x="132" y="62" width="116" height="22" rx="4" className="fill-sheet stroke-rule-strong" strokeWidth="1" />
-        <text x="190" y="77" textAnchor="middle" className="fill-ink font-mono text-[9.5px]">
+        <text x="190" y="77" textAnchor="middle" className="fill-ink font-mono text-[length:calc(9.5px*var(--k,1))]">
           <tspan className="fill-ink-muted">MEMO </tspan>sealed:7xk2
         </text>
       </motion.g>
@@ -178,7 +214,7 @@ export function DepositFigure() {
         ))}
         <path d="M272 140 H388" className="stroke-ink" strokeWidth="1.25" />
         <text x="330" y="158" textAnchor="middle" className={`${L} fill-ink-muted`}>Company wallet</text>
-        <text x="330" y="172" textAnchor="middle" className="fill-ink-slate font-mono text-[9.5px]">{FACTS.companyWalletShort}</text>
+        <text x="330" y="172" textAnchor="middle" className="fill-ink-slate font-mono text-[length:calc(9.5px*var(--k,1))]">{FACTS.companyWalletShort}</text>
       </motion.g>
 
       {/* finality, then the ledger credit */}
@@ -191,7 +227,7 @@ export function DepositFigure() {
       </motion.g>
       <path d="M16 226 H384" className="stroke-rule" strokeWidth="1" />
       <text x="16" y="246" className={`${L} fill-ink-muted`}>Sealed balance</text>
-      <motion.text x="384" y="246" textAnchor="end" className="fill-gain font-mono text-[12px]" {...f.fade(1.9)}>
+      <motion.text x="384" y="246" textAnchor="end" className="fill-gain font-mono text-[length:calc(12px*var(--k,1))]" {...f.fade(1.9)}>
         +2.50 SOL
       </motion.text>
     </Fig>
@@ -231,7 +267,7 @@ export function SealFigure() {
         <text x={fx + 16} y={fy + 106} className={`${LS} fill-ink-muted`}>Amount</text>
         <motion.rect x={fx + 96} y={fy + 98} width="72" height="10" rx="1" className="fill-ink" {...f.growX(0.85)} />
         <path d={`M${fx + 12} ${fy + 116} H${fx + W - 12}`} className="stroke-rule" strokeWidth="1" />
-        <text x={fx + 16} y={fy + 131} className="fill-ink font-mono text-[9.5px]">
+        <text x={fx + 16} y={fy + 131} className="fill-ink font-mono text-[length:calc(9.5px*var(--k,1))]">
           <tspan className="fill-ink-muted">FINGERPRINT </tspan>0x9f3a…c21e
         </text>
         {/* the wax seal */}
@@ -259,17 +295,17 @@ export function RevealFigure() {
         <text x="76" y="78" className={`${L} fill-gain`}>On</text>
         <text x="20" y="102" className={`${LS} fill-ink-muted`}>We open it for you</text>
       </motion.g>
-      <motion.path d="M126 92 C 160 92, 168 120, 196 120" className="stroke-ink-muted" strokeWidth="1" strokeDasharray="3 3" {...f.draw(0.3, 0.6)} />
+      <motion.path d="M150 84 C 176 84, 180 118, 196 118" className="stroke-ink-muted" strokeWidth="1" strokeDasharray="3 3" {...f.draw(0.3, 0.6)} />
 
       {/* envelope with the card rising out */}
       <path d="M200 64 L280 22 L360 64" className="stroke-ink" strokeWidth="1.25" strokeLinejoin="round" />
       <rect x="200" y="64" width="160" height="92" rx="4" className="fill-sheet stroke-ink" strokeWidth="1.25" />
       <motion.g {...f.fade(0.6, 22)}>
-        <rect x="212" y="30" width="136" height="74" rx="3" className="fill-sheet stroke-ink" strokeWidth="1" />
-        <text x="222" y="50" className={`${LS} fill-ink-muted`}>Max price</text>
-        <text x="338" y="50" textAnchor="end" className="fill-ink font-mono text-[10px]">{fmtPrice(EXAMPLE.bids[2]!.maxPrice)} USDC</text>
-        <text x="222" y="68" className={`${LS} fill-ink-muted`}>Amount</text>
-        <text x="338" y="68" textAnchor="end" className="fill-ink font-mono text-[10px]">{fmtNum(EXAMPLE.bids[2]!.amount)} USDC</text>
+        <rect x="204" y="30" width="152" height="74" rx="3" className="fill-sheet stroke-ink" strokeWidth="1" />
+        <text x="214" y="50" className={`${LS} fill-ink-muted`}>Price</text>
+        <text x="346" y="50" textAnchor="end" className="fill-ink font-mono text-[length:calc(10px*var(--k,1))]">{fmtPrice(EXAMPLE.bids[2]!.maxPrice)} USDC</text>
+        <text x="214" y="68" className={`${LS} fill-ink-muted`}>Amount</text>
+        <text x="346" y="68" textAnchor="end" className="fill-ink font-mono text-[length:calc(10px*var(--k,1))]">{fmtNum(EXAMPLE.bids[2]!.amount)} USDC</text>
       </motion.g>
       <path d="M200 64 L280 108 L360 64 V156 H200 Z" className="fill-sheet stroke-ink" strokeWidth="1.25" strokeLinejoin="round" />
       <path d="M344 158 V188" className="stroke-ink-muted" strokeWidth="1" strokeDasharray="2 2" />
@@ -311,7 +347,7 @@ export function ClearingFigure() {
           <g key={k}>
             <path d={`M${x0 - (major ? 7 : 4)} ${y} H${x0}`} className="stroke-ink" strokeWidth="1" />
             {major && (
-              <text x={x0 - 11} y={y + 3.5} textAnchor="end" className="fill-ink-muted font-mono text-[9.5px]">
+              <text x={x0 - 11} y={y + 3.5} textAnchor="end" className="fill-ink-muted font-mono text-[length:calc(9.5px*var(--k,1))]">
                 {fmtPrice(p)}
               </text>
             )}
@@ -334,7 +370,7 @@ export function ClearingFigure() {
               strokeWidth="1"
               {...f.growX(0.1 + i * 0.1)}
             />
-            <motion.text x={x0 + wOf(b.amount) + 7} y={b.maxPrice === EXAMPLE.price ? y - 4 : y + 3.5} className={clsx("font-mono text-[10px]", b.won ? "fill-ink" : "fill-ink-muted")} {...f.fade(0.5 + i * 0.1)}>
+            <motion.text x={x0 + wOf(b.amount) + 7} y={b.maxPrice === EXAMPLE.price ? y - 4 : y + 3.5} className={clsx("font-mono text-[length:calc(10px*var(--k,1))]", b.won ? "fill-ink" : "fill-ink-muted")} {...f.fade(0.5 + i * 0.1)}>
               {b.who} · {fmtNum(b.amount)}
             </motion.text>
           </g>
@@ -342,11 +378,11 @@ export function ClearingFigure() {
       })}
 
       {/* the clearing line */}
-      <motion.path d={`M${x0 - 20} ${yP} H392`} className="stroke-signal" strokeWidth="1.25" strokeDasharray="4 3" {...f.draw(1, 0.9)} />
+      <motion.path d={`M${x0} ${yP} H392`} className="stroke-signal" strokeWidth="1.25" strokeDasharray="4 3" {...f.draw(1, 0.9)} />
       <motion.g {...f.fade(1.5)}>
-        <text x="392" y={yP - 8} textAnchor="end" className={`${L} fill-signal`}>Clears {fmtPrice(EXAMPLE.price)}</text>
+        <text x="392" y={yP + 16} textAnchor="end" className={`${L} fill-signal`}>Clears {fmtPrice(EXAMPLE.price)}</text>
         <text x="392" y={yP - 26} textAnchor="end" className={`${LS} fill-ink`}>Above: win, pay {fmtPrice(EXAMPLE.price)}</text>
-        <text x="392" y={yP + 20} textAnchor="end" className={`${LS} fill-ink-muted`}>Below: refunded</text>
+        <text x="392" y={yP + 33} textAnchor="end" className={`${LS} fill-ink-muted`}>Below: refunded</text>
       </motion.g>
     </Fig>
   );
@@ -363,7 +399,7 @@ export function ClaimFigure() {
       {/* winning lane */}
       <rect x="16" y="28" width="118" height="58" rx="6" className="fill-sheet stroke-ink" strokeWidth="1.25" />
       <text x="28" y="48" className={`${LS} fill-ink-muted`}>Bid {win.who}</text>
-      <text x="28" y="72" className="fill-ink font-mono text-[12px]">{fmtNum(win.amount)} USDC</text>
+      <text x="28" y="72" className="fill-ink font-mono text-[length:calc(12px*var(--k,1))]">{fmtNum(win.amount)} USDC</text>
       <motion.path d="M142 57 H244" className="stroke-ink" strokeWidth="1.25" {...f.draw(0.2, 0.7)} />
       <path d="M238 51 L245 57 L238 63" className="stroke-ink" strokeWidth="1.25" />
       <text x="193" y="48" textAnchor="middle" className={`${LS} fill-ink-muted`}>at {fmtPrice(EXAMPLE.price)}</text>
@@ -373,7 +409,7 @@ export function ClaimFigure() {
           <path d={`M258 ${74 - k * 11} v5 a24 7 0 0 0 48 0 v-5`} className="fill-sheet stroke-ink" strokeWidth="1.25" />
         </motion.g>
       ))}
-      <text x="316" y="56" className="fill-ink font-mono text-[12px]">{fmtNum(win.tokens)}</text>
+      <text x="316" y="56" className="fill-ink font-mono text-[length:calc(12px*var(--k,1))]">{fmtNum(win.tokens)}</text>
       <text x="316" y="72" className={`${LS} fill-ink-muted`}>Tokens</text>
 
       <path d="M16 120 H384" className="stroke-rule" strokeWidth="1" strokeDasharray="2 3" />
@@ -381,14 +417,14 @@ export function ClaimFigure() {
       {/* refund lane */}
       <rect x="16" y="150" width="118" height="58" rx="6" className="fill-paper-deep stroke-rule-strong" strokeWidth="1" />
       <text x="28" y="170" className={`${LS} fill-ink-muted`}>Bid {lose.who}</text>
-      <text x="28" y="194" className="fill-ink-slate font-mono text-[12px]">{fmtNum(lose.amount)} USDC</text>
+      <text x="28" y="194" className="fill-ink-slate font-mono text-[length:calc(12px*var(--k,1))]">{fmtNum(lose.amount)} USDC</text>
       <motion.path d="M142 179 H244" className="stroke-ink-muted" strokeWidth="1.25" strokeDasharray="4 3" {...f.draw(0.5, 0.7)} />
       <path d="M238 173 L245 179 L238 185" className="stroke-ink-muted" strokeWidth="1.25" />
       <text x="193" y="170" textAnchor="middle" className={`${LS} fill-ink-muted`}>Below the price</text>
       <motion.g {...f.fade(1)}>
         <rect x="252" y="150" width="132" height="58" rx="6" className="fill-gain-tint stroke-gain" strokeWidth="1.25" />
         <text x="264" y="170" className={`${LS} fill-gain`}>Refunded</text>
-        <text x="264" y="194" className="fill-gain font-mono text-[12px]">+{fmtNum(lose.refund)} USDC</text>
+        <text x="264" y="194" className="fill-gain font-mono text-[length:calc(12px*var(--k,1))]">+{fmtNum(lose.refund)} USDC</text>
       </motion.g>
       <text x="16" y="232" className={`${LS} fill-ink-muted`}>Both land in your Sealed balance</text>
     </Fig>
@@ -414,7 +450,7 @@ export function VaultFigure() {
         <path key={k} d={`M${k % 3 === 0 ? 140 : 145} ${66 + k * (140 / ticks)} H152`} className="stroke-night-muted" strokeWidth="1" />
       ))}
       <text x="56" y="80" className={`${LS} fill-night-muted`}>Credit</text>
-      <text x="56" y="96" className="fill-night-text font-mono text-[11px]">{FACTS.creditMin} to {FACTS.creditMax}</text>
+      <text x="56" y="96" className="fill-night-text font-mono text-[length:calc(11px*var(--k,1))]">{FACTS.creditMin} to {FACTS.creditMax}</text>
       <text x="56" y="108" className={`${LS} fill-night-muted`}>of the raise</text>
       <text x="100" y="236" textAnchor="middle" className={`${LS} fill-night-muted`}>Locked · no withdrawals</text>
 
@@ -464,7 +500,7 @@ export function FeesFigure() {
       <text x={x + repay + 8} y="46" className={`${L} fill-ink-slate`}>{pc(FACTS.opsBps)} ops</text>
 
       <text x={x} y="88" className={`${LS} fill-ink-muted`}>Credit repaid</text>
-      <text x={x + W} y="88" textAnchor="end" className="fill-gain font-mono text-[10px]">100%</text>
+      <text x={x + W} y="88" textAnchor="end" className="fill-gain font-mono text-[length:calc(10px*var(--k,1))]">100%</text>
       <rect x={x} y="94" width={W} height="4" className="fill-rule" />
       <motion.rect x={x} y="94" width={W} height="4" className="fill-gain" {...f.growX(0.6)} />
       <motion.path d="M200 108 V128 M194 122 L200 128 L206 122" className="stroke-ink" strokeWidth="1.25" {...f.fade(1.3)} />
@@ -523,7 +559,7 @@ export function AntiSnipeFigure() {
         <g key={t}>
           <path d={`M${xt(t)} ${axis} v${t % 2 === 0 ? 6 : 3}`} className="stroke-ink" strokeWidth="1" />
           {t % 2 === 0 && (
-            <text x={xt(t)} y={axis + 18} textAnchor="middle" className="fill-ink-muted font-mono text-[9.5px]">
+            <text x={xt(t)} y={axis + 18} textAnchor="middle" className="fill-ink-muted font-mono text-[length:calc(9.5px*var(--k,1))]">
               {t}s
             </text>
           )}
@@ -561,8 +597,8 @@ export function WithdrawFigure() {
   return (
     <Fig svgRef={f.ref} viewBox="0 0 400 260" title={`Your Sealed balance goes back to your wallet. Up to ${FACTS.autoWithdrawMax} is sent automatically; larger amounts pass a manual approval first. Proof of reserves compares what is held on chain with what is owed.`}>
       <rect x="16" y="96" width="112" height="60" rx="6" className="fill-sheet stroke-ink" strokeWidth="1.25" />
-      <text x="28" y="116" className={`${LS} fill-ink-muted`}>Sealed balance</text>
-      <text x="28" y="140" className="fill-ink font-mono text-[11px]">{FACTS.assets.join(" · ")}</text>
+      <text x="28" y="116" className={`${LS} fill-ink-muted`}>Your balance</text>
+      <text x="28" y="140" className="fill-ink font-mono text-[length:calc(11px*var(--k,1))]">{FACTS.assets.join(" · ")}</text>
 
       <motion.path d="M128 126 C 160 126, 160 66, 196 66 H254 C 276 66, 286 88, 288 112" className="stroke-ink" strokeWidth="1.25" {...f.draw(0.2, 1)} />
       <text x="200" y="56" className={`${LS} fill-ink`}>Up to {FACTS.autoWithdrawMax} <tspan className="fill-ink-muted">· automatic</tspan></text>
@@ -579,8 +615,8 @@ export function WithdrawFigure() {
 
       <path d="M16 232 H384" className="stroke-rule" strokeWidth="1" />
       <text x="16" y="252" className={`${LS} fill-ink`}>Proof of reserves <tspan className="fill-ink-muted">· held ≥ owed</tspan></text>
-      <motion.rect x="250" y="240" width="134" height="5" className="fill-ink" {...f.growX(0.6)} />
-      <motion.rect x="250" y="249" width="116" height="5" className="fill-paper-deep stroke-rule-strong" strokeWidth="1" {...f.growX(0.8)} />
+      <motion.rect x="290" y="240" width="94" height="5" className="fill-ink" {...f.growX(0.6)} />
+      <motion.rect x="290" y="249" width="81" height="5" className="fill-paper-deep stroke-rule-strong" strokeWidth="1" {...f.growX(0.8)} />
     </Fig>
   );
 }

@@ -19,7 +19,7 @@ import {
   type QuoteAssetSymbol,
 } from "@sealed/shared";
 import { api, ApiError } from "@/lib/api";
-import { IS_MAINNET, NETWORK, networkName } from "@/lib/config";
+import { IS_MAINNET } from "@/lib/config";
 import { fmtAmount, fmtCompact, fmtInt, fmtPrice, fmtUsd } from "@/lib/format";
 import { SPRING } from "../motion/spring";
 import { RollingNumber } from "../motion/RollingNumber";
@@ -32,6 +32,7 @@ import { getSession, useCustodySession } from "@/lib/custody";
 import { isUploadedImageUrl } from "@/lib/upload/tokenImage";
 
 const STEPS = ["Identity & quote", "Auction terms", "Term sheet"] as const;
+const STEPS_SHORT = ["Identity", "Terms", "Review"] as const;
 const MIN_DUR = IS_MAINNET ? MIN_COMMIT_DURATION_SEC_MAINNET : MIN_COMMIT_DURATION_SEC_DEVNET;
 const REVEAL_SEC = 120;
 const TIERS: { id: CreditTier; label: string }[] = [
@@ -158,7 +159,9 @@ export function LaunchWizard() {
   const go = (d: number) => {
     setDir(d);
     setStep((s) => Math.max(0, Math.min(2, s + d)));
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    // Land on the step rail (not the page masthead), but only when it has scrolled out of view.
+    const rail = typeof document !== "undefined" ? document.getElementById("launch-steps") : null;
+    if (rail && rail.getBoundingClientRect().top < 64) rail.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
   };
 
   const deploy = async () => {
@@ -199,9 +202,9 @@ export function LaunchWizard() {
             Three sections. Your token opens with a private commit-reveal auction that clears at one uniform price, and graduates with a buyback vault already funded.
           </p>
         </div>
-        <dl className="grid grid-cols-2 gap-x-6 text-[12px] lg:col-span-4 lg:grid-cols-1">
+        <dl className="grid grid-cols-1 gap-x-6 text-[12px] min-[440px]:grid-cols-2 lg:col-span-4 lg:grid-cols-1">
           {[
-            ["Network", networkName(NETWORK)],
+            ["Network", "Solana"],
             ["Settlement", "Uniform clearing price"],
             ["Day-one credit", "10 to 15% of raise"],
             ["Creator ceiling", "2.00% of supply"],
@@ -214,13 +217,13 @@ export function LaunchWizard() {
         </dl>
       </header>
 
-      <div className="mt-8">
-        <StepRail steps={STEPS} step={step} onGo={(i) => go(i - step)} />
+      <div id="launch-steps" className="mt-8">
+        <StepRail steps={STEPS} short={STEPS_SHORT} step={step} onGo={(i) => go(i - step)} />
       </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-12">
         {/* the document */}
-        <div className="card relative min-w-0 overflow-hidden lg:col-span-8">
+        <div className="card relative min-w-0 overflow-clip lg:col-span-8">
           <div className="px-5 py-7 sm:px-10 sm:py-10">
             <AnimatePresence mode="wait" initial={false} custom={dir}>
               <motion.div
@@ -245,7 +248,7 @@ export function LaunchWizard() {
                         </div>
                       </Clause>
                       <Clause n="1.3" label="Description" htmlFor="tok-desc" hint={`${f.description.length}/280`} error={issues.description}>
-                        <textarea id="tok-desc" className={clsx(lineInput, "min-h-[84px] resize-y text-[15px] leading-relaxed")} maxLength={280} placeholder="What is this token about?" value={f.description} onChange={(e) => set("description", e.target.value)} />
+                        <textarea id="tok-desc" className={clsx(lineInput, "min-h-[84px] resize-y text-base leading-relaxed sm:text-[15px]")} maxLength={280} placeholder="What is this token about?" value={f.description} onChange={(e) => set("description", e.target.value)} />
                       </Clause>
                       <Clause n="1.4" label={<>Token image <span className="font-normal text-ink-muted">(optional)</span></>} hint="square, shown round" error={f.imageUri ? issues.imageUri : undefined}>
                         <ImageUploader
@@ -263,7 +266,7 @@ export function LaunchWizard() {
                             <label htmlFor="tok-uri" className="sr-only">Image link</label>
                             <input
                               id="tok-uri"
-                              className={clsx(lineInput, "num text-sm")}
+                              className={clsx(lineInput, "num text-base sm:text-sm")}
                               placeholder="https://"
                               value={f.imageUri.startsWith("data:") ? "" : f.imageUri}
                               onChange={(e) => {
@@ -272,7 +275,7 @@ export function LaunchWizard() {
                               }}
                               autoComplete="off"
                             />
-                            <p className="fine mt-1">Test networks only. Mainnet launches use uploaded images.</p>
+                            <p className="fine mt-1">The link must stay reachable. Uploaded images are preferred.</p>
                           </details>
                         )}
                         {!f.imageUri && <p className="fine mt-2">No image? The lobby shows your ticker&apos;s initials.</p>}
@@ -385,7 +388,7 @@ export function LaunchWizard() {
                               </label>
                               <div className="min-w-0">
                                 <div className="flex items-baseline gap-2">
-                                  <input id={`px-${k}`} className={clsx(lineInput, "num text-right text-[13px] sm:text-[15px]")} inputMode="decimal" value={f[k]} onChange={(e) => setPricing(k, e.target.value)} />
+                                  <input id={`px-${k}`} className={clsx(lineInput, "num text-right text-base sm:text-[15px]")} inputMode="decimal" value={f[k]} onChange={(e) => setPricing(k, e.target.value)} />
                                   <span className="num w-10 shrink-0 text-[11px] text-ink-muted sm:w-12">{f.quoteAsset}</span>
                                 </div>
                                 {issues[k] && <p role="alert" className="num mt-1 text-right text-[11px] text-burn">{issues[k]}</p>}
@@ -460,7 +463,7 @@ export function LaunchWizard() {
                         <Term k="Floor / tick">{fmtPrice(input.floorPrice)} / {fmtPrice(input.tickSize)}</Term>
                         <Term k="Target raise">{fmtAmount(input.targetRaise)} {f.quoteAsset}</Term>
                         <Term k="Clearing cap">{fmtAmount(input.clearingCap)} {f.quoteAsset}</Term>
-                        <Term k="Network">{networkName(NETWORK)}</Term>
+                        <Term k="Network">Solana</Term>
                       </div>
                     </dl>
 
@@ -489,18 +492,18 @@ export function LaunchWizard() {
             </AnimatePresence>
           </div>
 
-          <footer className="flex items-center justify-between gap-3 border-t border-rule bg-paper/40 px-5 py-4 sm:px-10">
-            <button type="button" className="btn-ghost" onClick={() => go(-1)} disabled={step === 0 || deploying} style={{ visibility: step === 0 ? "hidden" : "visible" }}>
+          <footer className="sticky bottom-0 z-10 flex items-center justify-between gap-3 border-t border-rule bg-sheet px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:px-10 sm:py-4 lg:static lg:bg-paper/40">
+            <button type="button" className="btn-ghost min-h-[44px]" onClick={() => go(-1)} disabled={step === 0 || deploying} style={{ visibility: step === 0 ? "hidden" : "visible" }}>
               Back
             </button>
             <div className="flex items-center gap-4">
-              <span className="num hidden text-[11px] text-ink-muted sm:inline">{step + 1} / 3</span>
+              <span className="num whitespace-nowrap text-[11px] text-ink-muted">{step + 1} / 3</span>
               {step < 2 ? (
-                <button type="button" className="btn-primary" disabled={!canNext} onClick={() => go(1)}>
-                  Continue to § 0{step + 2} <ArrowRight width={14} height={14} />
+                <button type="button" className="btn-primary min-h-[44px]" disabled={!canNext} onClick={() => go(1)}>
+                  Continue<span className="hidden min-[400px]:inline"> to § 0{step + 2}</span> <ArrowRight width={14} height={14} />
                 </button>
               ) : (
-                <button type="button" className="btn-primary sm:px-6" disabled={!parsed.success || issueCount > 0 || deploying} onClick={deploy}>
+                <button type="button" className="btn-primary min-h-[44px] sm:px-6" disabled={!parsed.success || issueCount > 0 || deploying} onClick={deploy}>
                   <LockIcon width={14} height={14} /> {deploying ? "Deploying…" : <>Deploy<span className="hidden sm:inline"> sealed auction</span></>}
                 </button>
               )}

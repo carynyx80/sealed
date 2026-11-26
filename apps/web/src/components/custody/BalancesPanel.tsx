@@ -5,7 +5,6 @@ import clsx from "clsx";
 import { isQuoteAssetSymbol, type BalanceRow } from "@sealed/shared";
 import { openDeposit, openWithdraw, useCustodyAccount } from "@/lib/custody";
 import { fmtUsd } from "@/lib/format";
-import { IS_MAINNET } from "@/lib/config";
 import { CustodyGate } from "./SignInButton";
 import { assetUsd } from "./parts";
 
@@ -53,7 +52,7 @@ function Rows() {
         <div>
           <p className="eyebrow">Quote assets · est. value</p>
           <p className="numeral mt-1 text-[2.5rem] leading-none text-ink sm:text-[3rem]">{fmtUsd(totalUsd, false)}</p>
-          <p className="fine mt-1">{IS_MAINNET ? "At indicative reference prices" : "At demo reference prices"}; launched tokens excluded.</p>
+          <p className="fine mt-1">At indicative reference prices; launched tokens excluded.</p>
         </div>
         <div className="flex w-full gap-2 sm:w-auto">
           <button type="button" className="btn-primary min-h-[44px] flex-1 sm:flex-none" onClick={() => openDeposit((quote[0]?.asset as "SOL") ?? "SOL")}>Deposit</button>

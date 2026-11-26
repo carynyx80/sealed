@@ -2,7 +2,7 @@
 // Owned by web-offchain-agent. React hooks over the custody API: availability, session, account, deposits,
 // withdrawals. Resources are shared stores (one fetch per wallet no matter how many components read them),
 // polled while mounted and the tab is visible, and refetched on WebSocket events.
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
   CUSTODY_ROUTES,
@@ -15,8 +15,9 @@ import {
   type WithdrawalRecord,
 } from "@sealed/shared";
 import { liveSocket } from "../ws";
-import { isUserRejection } from "../defi/config";
-import { signInWithSolana } from "./auth";
+import { IS_MAINNET } from "../config";
+import { SignInError, signInCapabilities, signerFromAdapter, statusText as signInStatusText, type SignInMethod } from "../wallet/signIn";
+import { cancelSignIn, clearSignInError, getSignInFlow, signInWithSigner, subscribeSignInFlow } from "./auth";
 import {
   CustodyError,
   clearSession,
@@ -53,51 +54,90 @@ export interface CustodySessionApi {
   session: CustodySession | null;
   signedIn: boolean;
   availability: CustodyAvailability;
+  /** The connected wallet offers at least one sign-in method (signIn, signMessage or signTransaction). */
   canSign: boolean;
   signingIn: boolean;
-  /** Domain named in the sign-in message currently (or last) being signed, shown next to the wallet prompt. */
+  /** Domain named in the sign-in request currently (or last) being signed, shown next to the wallet prompt. */
   messageDomain: string | null;
+  /** Friendly error of the last attempt for this wallet ("Sign-in cancelled", "Unlock your wallet and try again"…). */
   error: string | null;
+  /** True when the error is a user cancellation: show it muted, not in the error colour. */
+  errorQuiet: boolean;
+  /** Progress line while signing in ("Approve the sign-in request in Phantom"), else null. */
+  statusText: string | null;
+  /** Method in use (or last used): the memo transaction path changes the fine print. */
+  method: SignInMethod | null;
+  walletName: string | null;
   signIn: () => Promise<CustodySession>;
+  /** Stop waiting for the wallet (the wallet's own prompt may stay open; it can be closed there). */
+  cancel: () => void;
   signOut: () => void;
 }
 
+const SERVER_FLOW = getSignInFlow();
+
 export function useCustodySession(): CustodySessionApi {
-  const { publicKey, signMessage, connected } = useWallet();
+  const { publicKey, connected, connecting, wallet: selected } = useWallet();
+  const adapter = selected?.adapter ?? null;
   const wallet = connected && publicKey ? publicKey.toBase58() : null;
   const { availability } = useCustodyInfo();
   const getSnap = useCallback(() => getSession(wallet), [wallet]);
   const session = useSyncExternalStore(subscribeSessions, getSnap, () => null);
-  const [signingIn, setSigningIn] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [messageDomain, setMessageDomain] = useState<string | null>(null);
+  const flow = useSyncExternalStore(subscribeSignInFlow, getSignInFlow, () => SERVER_FLOW);
+  // Capabilities can change after connect (Wallet Standard "change" events), so recompute whenever the key does.
+  const caps = useMemo(() => signInCapabilities(wallet ? adapter : null), [adapter, wallet]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The wallet switched account or disconnected: abort a flow that was started for the previous account.
+  const prevWallet = useRef<string | null>(wallet);
   useEffect(() => {
-    setError(null);
-    setMessageDomain(null);
+    const before = prevWallet.current;
+    prevWallet.current = wallet;
+    if (before && before !== wallet) {
+      cancelSignIn(
+        before,
+        new SignInError(wallet ? "account_changed" : "disconnected", wallet ? "Your wallet switched accounts. Sign in again." : "Wallet disconnected. Connect it again to sign in."),
+      );
+      clearSignInError(before);
+    }
   }, [wallet]);
 
   const signIn = useCallback(async () => {
-    if (!wallet) throw new CustodyError("Connect a wallet first", 0, "no_wallet");
-    if (!signMessage) throw new CustodyError("This wallet cannot sign messages", 0, "no_sign");
-    setSigningIn(true);
-    setError(null);
-    try {
-      return await signInWithSolana(wallet, signMessage, { onMessage: ({ domain }) => setMessageDomain(domain) });
-    } catch (e) {
-      const m = (e as Error)?.message ?? String(e);
-      setError(isUserRejection(e) || /reject/i.test(m) ? "Sign-in request rejected in wallet" : m);
-      throw e;
-    } finally {
-      setSigningIn(false);
+    if (!wallet || !adapter) {
+      throw new CustodyError(connecting ? "Your wallet is still connecting. Try again in a moment." : "Connect a wallet first", 0, connecting ? "not_ready" : "no_wallet");
     }
-  }, [wallet, signMessage]);
+    // autoConnect race: the provider says connected but the adapter hasn't caught up yet.
+    if (!adapter.connected || adapter.publicKey?.toBase58() !== wallet) {
+      throw new CustodyError("Your wallet is still connecting. Try again in a moment.", 0, "not_ready");
+    }
+    const signer = signerFromAdapter(adapter, wallet, { chain: IS_MAINNET ? "solana:mainnet" : "solana:devnet" });
+    return signInWithSigner(signer);
+  }, [wallet, adapter, connecting]);
 
   const signOut = useCallback(() => {
     if (wallet) clearSession(wallet);
   }, [wallet]);
+  const cancel = useCallback(() => cancelSignIn(wallet), [wallet]);
 
-  return { wallet, session, signedIn: !!session, availability, canSign: !!signMessage, signingIn, messageDomain, error, signIn, signOut };
+  const mine = !!wallet && flow.wallet === wallet;
+  const signingIn = mine && !!flow.status;
+  const err = mine && !session ? flow.error : null;
+  return {
+    wallet,
+    session,
+    signedIn: !!session,
+    availability,
+    canSign: !!wallet && caps.any,
+    signingIn,
+    messageDomain: mine ? flow.domain : null,
+    error: err?.message ?? null,
+    errorQuiet: !!err?.quiet,
+    statusText: signingIn ? signInStatusText(flow.status) : null,
+    method: mine ? flow.method : null,
+    walletName: adapter?.name ?? null,
+    signIn,
+    cancel,
+    signOut,
+  };
 }
 
 /* ------------------------------------------------------------------------------- shared resources */

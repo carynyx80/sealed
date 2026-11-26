@@ -47,7 +47,7 @@ export default function DocsOverview() {
           (&ldquo;Onchain mode · roadmap&rdquo;) and is not deployed. Read <A href="/docs/custody">Custody</A> before you deposit.
         </p>
         <p>
-          The mainnet launch is <strong>rolling out</strong>: demo mode is disabled on mainnet, only SOL and USDC are enabled as quote assets,
+          The mainnet launch is <strong>rolling out</strong>: only SOL and USDC are enabled as quote assets,
           and mainnet launches need a {MAINNET_COMMIT_WINDOW} commit window. Check <C>network</C> in <C>/api/health</C> and <C>payoutsEnabled</C> in{" "}
           <C>/api/custody/info</C> before depositing.
         </p>
@@ -131,12 +131,11 @@ export default function DocsOverview() {
       <H2 id="components" n="0.6">Components</H2>
       <Ledger
         items={[
-          { k: "Demo world", s: "demo", v: "Ticking auctions, buyback countdowns, repayment bars and a trade tape for local development only. Disabled on mainnet: no demo launches and no in-browser fallback." },
           { k: "Offchain ledger engine and SIWS", s: "offchain-passing", sLabel: "Off-chain · tests passing", v: "Double-entry ledger, auction/clearing/pool/drip/fee/reward engine, SIWS sign-in and the trade, account, custody and admin routes in apps/api/src/offchain and apps/api/src/routes. Deployed on Railway with Postgres and Redis; moving to mainnet." },
           { k: "Deposits and payouts", s: "rolling", v: "Deposit watcher, withdrawal queue, payout worker and proof of reserves are built and tested. On mainnet they need HELIUS_API_KEY and COMPANY_WALLET_SECRET_KEY on the API and a company wallet funded with SOL for fees. Only SOL and USDC withdraw." },
           { k: "Clearing, fee and commitment math", s: "offchain-passing", v: "Shared TypeScript with unit and seeded property tests (shared 7/7, invariants 34 pass + 1 todo)." },
           { k: "Anchor program", s: "chain-pending", v: "14 instructions. anchor build succeeds; 15/15 Rust unit tests and 18/18 anchor tests (anchor test -- --features test-mode) pass. Roadmap: not deployed." },
-          { k: "Helius Privacy Rings", s: "simulated", v: "Simulated ring in demo; real status probe and indexer proxy implemented; private escrow funding fails closed on real networks." },
+          { k: "Helius Privacy Rings", s: "rolling", v: "Real ring service in the API on the official @heliuslabs/spr SDK, behind PRIVACY_RING_ENABLED (on in production). Private deposits and withdrawals go live once the company private address is registered. Onchain escrow funding fails closed." },
           { k: "Third-party audit", s: "planned", v: "None exists, for the custodial backend or the program." },
         ]}
       />

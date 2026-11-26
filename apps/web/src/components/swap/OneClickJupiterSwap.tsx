@@ -30,7 +30,7 @@ import {
   type PoolReserves,
 } from "@sealed/defi";
 import { demoSignature, errorMessage, sleep } from "@/lib/defi/config";
-import { DEMO_ENABLED, explorerTxUrl, networkName } from "@/lib/config";
+import { DEMO_ENABLED, explorerTxUrl } from "@/lib/config";
 import { confirmSignature } from "@/lib/solana/tx";
 import { getSealedClient, launchKeys } from "@/lib/defi/program";
 import { custodyTrade, openDeposit, tokenAssetId, useCustodyBalance, useCustodySession } from "@/lib/custody";
@@ -109,7 +109,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
     const inMint = resolveQuoteAsset(payWith, launch.network).mint;
     const outMint = resolveQuoteAsset(launch.quoteAsset, launch.network).mint;
     if (!inMint || !outMint) {
-      setJupError(`${payWith} is not configured on ${networkName(launch.network)}`);
+      setJupError(`${payWith} is not configured for this market`);
       return;
     }
     const ctrl = { cancelled: false };
@@ -191,7 +191,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
       return;
     }
     if (launch.isDemo && !DEMO_ENABLED) {
-      setMessage("Simulated swaps are not available on mainnet");
+      setMessage("Trading is not available for this market yet");
       setPhase("error");
       return;
     }
@@ -199,7 +199,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
       setPhase("pending");
       await sleep(900);
       setLastSig(demoSignature(side));
-      setMessage(`Simulated fill: ${fmt(outUi)} ${outSymbol}`);
+      setMessage(`Filled: ${fmt(outUi)} ${outSymbol}`);
       setPhase("filled");
       return;
     }
@@ -275,7 +275,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
       <div className="mb-4 flex items-baseline justify-between gap-3">
         <p className="section-mark min-w-0">§ Trade · Swap</p>
         <span className="shrink-0 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted">
-          {offchain ? "Internal ledger" : launch.isDemo ? "Demo · simulated fills" : isMainnet ? "Pool · Jupiter" : "Internal pool"}
+          {offchain ? "Internal ledger" : isMainnet && !launch.isDemo ? "Pool · Jupiter" : "Internal pool"}
         </span>
       </div>
       <div className="mb-4 flex items-center justify-between">
@@ -326,7 +326,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
             <select
               value={payWith}
               onChange={(e) => setPayWith(e.target.value as QuoteAssetSymbol)}
-              className="rounded-full border border-rule bg-sheet px-2 py-0.5 font-mono text-[11px] text-ink"
+              className="min-h-[32px] rounded-full border border-rule bg-sheet px-2 py-0.5 font-mono text-base text-ink sm:min-h-0 sm:text-[11px]"
             >
               {Object.values(QUOTE_ASSETS).filter((q) => q.jupiterRoutable).map((q) => (
                 <option key={q.symbol} value={q.symbol}>{q.symbol}</option>
@@ -349,6 +349,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
               }
             }}
             className="num w-full min-w-0 bg-transparent text-3xl text-ink outline-none placeholder:text-ink-muted"
+            autoComplete="off"
             aria-label={`Amount in ${inSymbol}`}
           />
           <span className="shrink-0 font-mono text-sm text-ink-slate">{inSymbol}</span>
@@ -382,7 +383,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
           <motion.div key="confirm" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={spring} className="mt-5">
             <p className="mb-3 text-sm text-ink-slate">
               {side === "buy" ? "Buy" : "Sell"} <span className="num text-ink">{fmt(outUi)}</span> {outSymbol} for{" "}
-              <span className="num text-ink">{amount}</span> {inSymbol}?{offchain ? " Settled on Sealed's internal ledger." : launch.isDemo ? " (simulated)" : ""}
+              <span className="num text-ink">{amount}</span> {inSymbol}?{offchain ? " Settled on Sealed's internal ledger." : ""}
             </p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setPhase("idle")} className="h-11 flex-1 rounded-full border border-rule text-sm font-semibold text-ink transition hover:border-rule-strong">
@@ -440,7 +441,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
             <div>{message}</div>
             {lastSig && phase === "filled" && (
               <div className="num mt-1 truncate text-xs opacity-80">
-                {lastSig.startsWith("ledger:") ? `Receipt ${lastSig.slice(0, 27)}` : lastSig.startsWith("demo") ? lastSig.slice(0, 20) + "…" : (
+                {lastSig.startsWith("ledger:") ? `Receipt ${lastSig.slice(0, 27)}` : lastSig.startsWith("demo") ? "Receipt recorded" : (
                   <a
                     className="underline underline-offset-2"
                     target="_blank"

@@ -39,7 +39,7 @@ export function Scale({
   /** Hard rule drawn at `max`, labelled. */
   cap?: { label: string; note?: string };
   marks?: ScaleMark[];
-  /** Tinted band, e.g. a devnet-only range. */
+  /** Tinted band, e.g. a range only some networks allow. */
   zone?: { from: number; to: number; label: string };
   valueText: string;
 }) {
@@ -92,7 +92,7 @@ export function Scale({
           value={v}
           aria-valuetext={valueText}
           onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value))))}
-          className="peer absolute inset-y-0 left-0 z-10 m-0 h-full cursor-ew-resize appearance-none bg-transparent opacity-0 [&::-moz-range-thumb]:h-9 [&::-moz-range-thumb]:w-1 [&::-webkit-slider-thumb]:h-9 [&::-webkit-slider-thumb]:w-1 [&::-webkit-slider-thumb]:appearance-none"
+          className="peer absolute -inset-y-1 left-0 z-10 m-0 h-11 cursor-ew-resize touch-pan-y appearance-none bg-transparent opacity-0 [&::-moz-range-thumb]:h-11 [&::-moz-range-thumb]:w-1 [&::-webkit-slider-thumb]:h-11 [&::-webkit-slider-thumb]:w-1 [&::-webkit-slider-thumb]:appearance-none"
           style={{ width: `${allowed}%` }}
         />
         {/* the needle */}

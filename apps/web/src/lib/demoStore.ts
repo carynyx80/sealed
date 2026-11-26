@@ -4,7 +4,9 @@
  * ticking auctions, buyback drips and repayment bars. Built on the shared deterministic
  * simulator (createDemoWorld / tickDemoWorld / demoStats).
  * NEVER on mainnet: every entry point is guarded by DEMO_ENABLED (lib/config) so a mainnet build cannot
- * construct, tick or display a demo world, even if a caller forgets to check.
+ * construct, tick or display a demo world, even if a caller forgets to check. On top of that, mainnet builds
+ * swap this module for ./demoStore.disabled (next.config.mjs), so the simulator never ships to mainnet browsers.
+ * Keep the two modules' exports in sync (the stub is type-checked against this file).
  */
 import {
   createDemoWorld,
@@ -14,6 +16,7 @@ import {
   type CreateLaunchInput,
   type DemoWorld,
   type LaunchSummary,
+  type ProtocolStats,
   type RevenueResponse,
 } from "@sealed/shared";
 import { DEMO_ENABLED, NETWORK } from "./config";
@@ -115,6 +118,11 @@ export function demoVersion() {
 export function findDemoLaunch(idOrMint: string): LaunchSummary | undefined {
   if (!DEMO_ENABLED) return undefined;
   return getDemoWorld().launches.find((l) => l.id === idOrMint || l.mint === idOrMint);
+}
+
+/** Protocol stats of the demo world (throws DemoDisabledError on mainnet, like getDemoWorld). */
+export function demoProtocolStats(): ProtocolStats {
+  return demoStats(getDemoWorld(), nowSec());
 }
 
 export function demoRevenue(): RevenueResponse {

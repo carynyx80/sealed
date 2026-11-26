@@ -7,21 +7,20 @@ import { A, Accent, C, DocHeader, H2, H3, Note, P, StatusBadge, Table, UL } from
 export const metadata: Metadata = { title: "API reference" };
 
 const PUBLIC: Array<[string, string, string]> = [
-  ["GET", API_ROUTES.health, "HealthResponse: network, isDemo, db, cache, redacted rpc, programId, uptime, version. Also /health."],
+  ["GET", API_ROUTES.health, "HealthResponse: network, db, cache, redacted rpc, programId, uptime, version. Also /health."],
   ["GET", API_ROUTES.stats, "ProtocolStats: volume, fees, credit deployed/repaid, solvency, burns, payouts, counts."],
   ["GET", `${API_ROUTES.launches}?status=&quote=&limit=`, "LaunchListResponse. status: a LaunchStatus or auctions | vaults | graduated; quote: a symbol, stocks or all; limit 1 to 200 (50)."],
   ["GET", API_ROUTES.launch(":idOrMint"), "LaunchSummary, 404 if unknown."],
   ["GET", `${API_ROUTES.trades(":idOrMint")}?limit=`, "{ trades: Trade[] }"],
   ["GET", `${API_ROUTES.chart(":idOrMint")}?interval=1m|5m|1h`, "{ points: PricePoint[] }"],
-  ["POST", API_ROUTES.launches, `Offchain mode with a bearer token (required when not in demo): creates a real launch with creator = session wallet. On mainnet the commit window must be ${MAINNET_COMMIT_WINDOW} and the quote asset SOL or USDC (rolling out). Demo without a token: in-memory demo launch. Onchain mode, not demo: 501 \"sign client-side\" with create_launch args in atoms. 400 on invalid input (e.g. > 200 bps).`],
+  ["POST", API_ROUTES.launches, `Requires a bearer token: creates a real launch with creator = session wallet. On mainnet the commit window must be ${MAINNET_COMMIT_WINDOW} and the quote asset SOL or USDC (rolling out). 401 without a session; onchain mode: 501 \"sign client-side\" with create_launch args in atoms. 400 on invalid input (e.g. > 200 bps).`],
   ["GET", API_ROUTES.auction(":idOrMint"), "{ launch, serverTimeTs }, public aggregates only."],
-  ["POST", API_ROUTES.demoBid(":idOrMint"), "Demo only (403 otherwise; disabled on mainnet). { commitment, deposit, wallet? }; 409 if the commit window is closed."],
   ["GET", API_ROUTES.vault(":mint"), "{ launch, recentBuybacks (30), serverTimeTs }"],
   ["GET", API_ROUTES.rewards(":mint", ":wallet"), "HolderReward: staked, claimable, claimed, eligible (false for snipers)."],
   ["GET", API_ROUTES.revenue, "{ stats, recentBuybacks, ledger, daily (14 days) }"],
   ["GET", API_ROUTES.relayerPubkey, "{ pubkey (base64 x25519), relayerAddress }"],
   ["POST", API_ROUTES.relayerReveals, "SealedRevealEnvelope → { accepted, id }. 400 malformed / wrong key / bad payload, 401 bad signature, 404, 409 window closed."],
-  ["GET", API_ROUTES.privacyStatus, "PrivacyStatusResponse: available, simulated, ringId, escrowFunding, reason."],
+  ["GET", API_ROUTES.privacyStatus, "PrivacyStatusResponse: available, enabled, ringId, companyShieldedAddress, companyRegistered, reason."],
   ["POST", API_ROUTES.privacyRpc, "{ method, params } → raw Helius JSON-RPC (8 whitelisted methods, 120/min/IP)."],
   ["POST", "/api/rpc", "Browser RPC proxy (rolling out). JSON-RPC 2.0 body { jsonrpc, id, method, params } for an allowlisted set of Solana methods; others are rejected. Rate-limited per client (429). The RPC provider key stays on the server."],
   ["GET", API_ROUTES.llms, "text/plain agent guide, generated from live config and shared constants."],
@@ -74,7 +73,7 @@ export default function ApiReference() {
       <UL>
         <li>
           Base URL: <C>https://api-production-01dc1743.up.railway.app</C> (Solana mainnet, real funds, rolling out) or your own host (local{" "}
-          <C>http://localhost:4000</C>). REST under <C>/api</C>. Check <C>network</C> and <C>isDemo</C> in <C>/api/health</C> first.
+          <C>http://localhost:4000</C>). REST under <C>/api</C>. Check <C>network</C> in <C>/api/health</C> first.
         </li>
         <li>Amounts are UI units (JS numbers already divided by decimals); on-chain code uses bigint atoms. Prices are quote per whole token; tokens have 6 decimals.</li>
         <li>Timestamps are unix seconds. Use <C>serverTimeTs</C> to correct your clock before computing countdowns.</li>
@@ -98,7 +97,6 @@ export default function ApiReference() {
         code={`{
   "ok": true,
   "network": "mainnet",
-  "isDemo": false,
   "db": "postgres",
   "cache": "redis",
   "rpc": "https://mainnet.helius-rpc.com/?api-key=***",
@@ -125,7 +123,7 @@ export default function ApiReference() {
       "targetRaise": 231.61, "clearingCap": 347.415, "clearingPrice": null, "totalRaised": null
     },
     "market": null, "vault": null, "credit": null,
-    "network": "mainnet", "isDemo": false
+    "network": "mainnet"
   }],
   "total": 5
 }`}
@@ -137,15 +135,17 @@ export default function ApiReference() {
       <Note title="Mainnet" tone="warn">
         <p>
           On mainnet the API is custodial with real funds: deposits go to the company wallet, only SOL and USDC are enabled, withdrawals may need manual
-          approval, and launched tokens cannot be withdrawn on-chain yet. Demo endpoints are disabled. Read <A href="/docs/custody">Custody</A> first.
+          approval, and launched tokens cannot be withdrawn on-chain yet. Read <A href="/docs/custody">Custody</A> first.
         </p>
       </Note>
-      <H3 id="ex-create">Example: create a launch (local demo)</H3>
+      <H3 id="ex-create">Example: create a launch (mainnet)</H3>
       <CodeBlock
         lang="bash"
         title="curl"
-        code={`curl -s -X POST http://localhost:4000/api/launches \\
+        code={`# TOKEN comes from POST /api/auth/verify (SIWS sign-in); the session wallet becomes the creator
+curl -s -X POST https://api-production-01dc1743.up.railway.app/api/launches \\
   -H 'content-type: application/json' \\
+  -H "Authorization: Bearer $TOKEN" \\
   -d '{"name":"Quiet Money","ticker":"QUIET","quoteAsset":"USDC","creditTier":"standard",
        "creatorAllocationBps":150,"auctionSupplyBps":4000,"commitDurationSec":1200,
        "revealDurationSec":120,"floorPrice":0.0001,"tickSize":0.000005,
@@ -240,7 +240,7 @@ const account = await fetch(\`\${api}/api/account\`, { headers: { authorization:
 
       <H2 id="llms" n="9.5">/llms.txt for AI agents</H2>
       <P>
-        <C>GET /llms.txt</C> returns a plain-text guide rendered from the running config: mode (demo or live), network (mainnet on the hosted API), the
+        <C>GET /llms.txt</C> returns a plain-text guide rendered from the running config: execution mode, network (mainnet on the hosted API), the
         real-funds custody disclosure, program id, REST and WS URLs, the
         mechanics with numbers pulled from shared constants, every endpoint with example JSON, the WS protocol, a step-by-step &ldquo;how an agent
         participates&rdquo; recipe (discover → bid → auto-reveal → settle → trade and earn) and the Privacy Ring status. Point an agent at it first.

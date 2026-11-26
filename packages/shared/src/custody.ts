@@ -26,14 +26,72 @@ export const SIWS_STATEMENT = "Sign in to Sealed. This request will not trigger 
 export type AssetId = QuoteAssetSymbol | `tok:${string}`;
 
 // ---------------- auth ----------------
+/** SPL Memo text a hardware-wallet (Ledger) sign-in transaction must carry: `sealed-login:<nonce>`. */
+export const AUTH_LOGIN_MEMO_PREFIX = "sealed-login:";
+
 export const AuthNonceRequestSchema = z.object({ wallet: Base58Schema });
-export interface AuthNonceResponse { nonce: string; message: string; expiresTs: number }
-export const AuthVerifyRequestSchema = z.object({
-  wallet: Base58Schema,
-  nonce: z.string().min(16),
-  signature: z.string(), // base58 ed25519 signature over `message` (utf8)
-});
+
+/**
+ * Wallet Standard `solana:signIn` input that reproduces `message` field-for-field
+ * (createSignInMessageText(signInInput) === message). Pass it unchanged to `wallet.signIn(signInInput)`.
+ */
+export interface AuthSignInInput {
+  domain: string;
+  address: string;
+  statement: string;
+  uri: string;
+  version: "1";
+  nonce: string;
+  issuedAt: string; // ISO-8601
+  expirationTime: string; // ISO-8601
+}
+export interface AuthNonceResponse { nonce: string; message: string; expiresTs: number; signInInput: AuthSignInInput }
+
+const ByteArraySchema = (max: number) => z.array(z.number().int().min(0).max(255)).min(1).max(max);
+/** base58 / base64 / base64url / hex string, or a plain byte array (Array.from(Uint8Array)). */
+const SignatureInputSchema = z.union([z.string().min(64).max(200), ByteArraySchema(64)]);
+
+/**
+ * Exactly one proof:
+ *  (a) `signature` over the exact `message` (signMessage)                                  — base58 or base64 accepted
+ *  (b) `signedMessage` (base64 bytes the wallet signed) + `signature` (+ `address`)       — Wallet Standard signIn output
+ *  (c) `signedTransaction` (base64 serialized legacy/v0 tx; fee payer = wallet; only ComputeBudget + one SPL Memo
+ *      `sealed-login:<nonce>`). Never broadcast by the server.                             — Ledger / hardware fallback
+ */
+export const AuthVerifyRequestSchema = z
+  .object({
+    wallet: Base58Schema,
+    nonce: z.string().min(16).max(128),
+    signature: SignatureInputSchema.optional(),
+    signedMessage: z.union([z.string().min(1).max(3000), ByteArraySchema(2048)]).optional(),
+    signatureType: z.literal("ed25519").optional(),
+    address: Base58Schema.optional(),
+    signedTransaction: z.string().min(1).max(3000).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.signedTransaction !== undefined) {
+      if (v.signedMessage !== undefined) ctx.addIssue({ code: "custom", path: ["signedTransaction"], message: "send either signedTransaction or signedMessage, not both" });
+    } else if (v.signature === undefined) {
+      ctx.addIssue({ code: "custom", path: ["signature"], message: "signature (or signedTransaction) is required" });
+    }
+  });
+export type AuthVerifyRequest = z.infer<typeof AuthVerifyRequestSchema>;
 export interface AuthVerifyResponse { token: string; wallet: string; expiresTs: number }
+
+/** Stable machine-readable auth error codes (`{error, code}` on every /api/auth/* failure). */
+export type AuthErrorCode =
+  | "malformed" // request/proof could not be decoded
+  | "invalid_signature" // signature does not verify for this wallet
+  | "expired" // nonce / signed message expired (or issuedAt outside allowed clock skew)
+  | "domain_mismatch" // signed message is for a different site / uri / chain
+  | "nonce_used" // unknown, already-used or replayed nonce
+  | "nonce_mismatch" // signed message / memo carries a different nonce
+  | "wallet_mismatch" // nonce issued for another wallet, or a different account signed
+  | "invalid_transaction" // hardware-wallet tx is not a pure Sealed login memo tx
+  | "rate_limited"
+  | "unauthorized"
+  | "auth_unavailable";
+export interface AuthErrorResponse { error: string; code: AuthErrorCode; details?: unknown }
 
 // ---------------- account ----------------
 export interface BalanceRow {

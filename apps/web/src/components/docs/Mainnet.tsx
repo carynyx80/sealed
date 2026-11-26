@@ -68,7 +68,7 @@ export function MainnetRollout() {
     <Ledger
       items={[
         { k: "Network", s: "rolling", v: <>API <C>NETWORK=mainnet</C>, web <C>NEXT_PUBLIC_NETWORK=mainnet</C>. Confirm with <C>network</C> in <C>GET /api/health</C> and <C>GET /api/custody/info</C>.</> },
-        { k: "Demo mode", s: "rolling", v: <>Disabled on mainnet: no demo launches, no <C>demo-bid</C>, and the web app does not fall back to the in-browser demo world when the API is unreachable. <C>isDemo</C> is false everywhere.</> },
+        { k: "Privacy Rings", s: "rolling", v: <>Helius Privacy Rings run in the API through the official <C>@heliuslabs/spr</C> SDK, behind <C>PRIVACY_RING_ENABLED</C> (on in production). Private deposits and withdrawals switch on once the company private address is registered.</> },
         { k: "Quote assets", s: "rolling", v: <>SOL and USDC are enabled. Tokenized stocks ({STOCK_SYMBOLS}) are <strong>coming soon</strong>: their mainnet mints are not verified yet, so they cannot be deposited or used as a quote asset.</> },
         { k: "Withdrawal limits", s: "rolling", v: <>USD limits use live prices from the Jupiter Price API. If no fresh price is available the withdrawal fails safe to <C>pending_approval</C> instead of being auto-approved.</> },
         { k: "Payout pause", s: "rolling", v: "When the company wallet does not hold enough SOL for transaction fees, payouts pause and report a reason; queued withdrawals wait with funds locked until it is topped up." },

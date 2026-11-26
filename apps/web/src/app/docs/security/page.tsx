@@ -60,7 +60,7 @@ export default function Security() {
           { k: "Clearing", s: "offchain-passing", v: "Every winner pays one uniform price ≤ their max; Σspent ≤ cap; Σtokens ≤ supply for sale; refund + spent = deposit; no bid below P wins; adding a bid never lowers P; order independence." },
           { k: "Fees", s: "offchain-passing", v: "The split sums exactly to the input; repayment never exceeds outstanding; the flip happens at exactly 0 with crossover overflow to the flywheel; drips drain the vault to exactly 0." },
           { k: "Commitment", s: "offchain-passing", v: "80-byte layout; distinct salts give distinct commitments; changing any field changes the hash." },
-          { k: "Schema and demo world", s: "offchain-passing", v: "Creator allocation > 200 bps rejected; only legal status transitions; vault ≥ 0; repaidPct within 0 to 100." },
+          { k: "Schema and state model", s: "offchain-passing", v: "Creator allocation > 200 bps rejected; only legal status transitions; vault ≥ 0; repaidPct within 0 to 100." },
           { k: "API and e2e", s: "offchain-passing", v: "API suite 87/87 (node --import tsx --test test/*.test.ts in apps/api), defi 13/13; e2e checks that auctions expose no per-bid fields and the 2% cap returns 400." },
           { k: "Program", s: "chain-pending", v: "anchor build OK; 15/15 Rust unit tests (14 in math.rs plus the generated id test); 18/18 anchor tests with --features test-mode (commit-reveal, clearing, refunds, cap, vault guard, flywheel flip, sniper exclusion). Not deployed." },
           { k: "Custodial ledger", s: "offchain-passing", v: "Random-op fuzz keeps Σ postings = 0 per transaction and stored balances = Σ entries with no negative user balance; idempotent replays; serialized concurrent debits; end-to-end lifecycle reconciles supply and liabilities." },
@@ -129,7 +129,7 @@ export default function Security() {
           still accepts 2 minutes.
         </li>
         <li>
-          <strong>Onchain-mode launch creation.</strong> With <C>EXECUTION_MODE=onchain</C> and no demo, <C>POST /api/launches</C> returns 501 with
+          <strong>Onchain-mode launch creation.</strong> With <C>EXECUTION_MODE=onchain</C>, <C>POST /api/launches</C> returns 501 with
           create_launch args and omits <C>drip_interval_sec</C> / <C>drip_count</C>, so clients must add them. (Offchain, a signed-in creator gets a real
           launch.)
         </li>
@@ -138,8 +138,8 @@ export default function Security() {
           withdrawal fails safe to manual approval, which can delay it.
         </li>
         <li>
-          <strong>Demo mode is not secure mode.</strong> <C>demo-bid</C> and unauthenticated in-memory launch creation exist only with{" "}
-          <C>DEMO_MODE=true</C>, which is disabled on mainnet.
+          <strong>The in-memory store is for local development.</strong> Without <C>DATABASE_URL</C> the API keeps state in memory, which is not durable.
+          Production runs on Postgres with backups.
         </li>
       </UL>
 
@@ -147,7 +147,7 @@ export default function Security() {
       <Ledger
         items={[
           { k: "Custodial backend", s: "offchain-passing", sLabel: "Built · tests passing", v: "Ledger engine, SIWS, deposit watcher, payouts, proof of reserves, admin queue. Deployed on Railway." },
-          { k: "Mainnet custody", s: "rolling", v: "NETWORK=mainnet, DEMO_MODE=false, COMPANY_WALLET_SECRET_KEY, HELIUS_API_KEY and ADMIN_TOKEN set, company wallet funded with SOL for fees, credit pool seeded. See the mainnet readiness checklist in Deploy." },
+          { k: "Mainnet custody", s: "rolling", v: "NETWORK=mainnet, COMPANY_WALLET_SECRET_KEY, HELIUS_API_KEY and ADMIN_TOKEN set, company wallet funded with SOL for fees, credit pool seeded. See the mainnet readiness checklist in Deploy." },
           { k: "On-chain withdrawal of launched tokens", s: "planned", v: "Today only SOL and USDC withdraw." },
           { k: "Custody hardening", s: "planned", v: "Multisig or MPC for the company wallet, hot/cold split, independent reserve attestations, ledger export." },
           { k: "Program deployment", s: "planned", v: "Anchor suite passes locally; next: deploy the program, fix keeper wiring, run the indexer against it." },

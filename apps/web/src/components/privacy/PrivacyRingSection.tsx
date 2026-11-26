@@ -3,7 +3,7 @@
 // Helius Solana Privacy Ring closes the last leak (the escrow deposit).
 import { FadeIn } from "@/components/motion/FadeIn";
 import { usePrivacyRing } from "@/lib/privacy/usePrivacyRing";
-import { DEMO_ENABLED, networkName } from "@/lib/config";
+import { networkName } from "@/lib/config";
 import { RingDiagram, RingMark } from "./RingMotif";
 
 const SEALED: Array<{ what: string; how: string; until: string }> = [
@@ -24,7 +24,7 @@ const PUBLIC: Array<{ what: string; why: string }> = [
 
 export function PrivacyRingSection() {
   const ring = usePrivacyRing();
-  const mode = ring.loading ? "checking ring…" : ring.privateEnabled ? `live · ${networkName(ring.network)}` : ring.simulated ? "simulated in demo" : "not live yet";
+  const mode = ring.loading ? "checking ring…" : ring.privateEnabled ? `live · ${networkName(ring.network)}` : "not live yet";
 
   return (
     <section aria-labelledby="privacy-ring-title" className="bleed mt-20 bg-night text-night-text sm:mt-28">
@@ -96,7 +96,7 @@ export function PrivacyRingSection() {
             SPL and Token-2022; you decrypt your own with a viewing key.
           </p>
           <p className="font-serif italic sm:col-span-7">
-            ¹ {DEMO_ENABLED ? "In demo the ring is simulated and holds no real funds. " : ""}Private deposits and withdrawals open once Sealed enables
+            ¹ Private deposits and withdrawals open once Sealed enables
             them on this network. Your Privacy Ring keys come from one wallet signature and never leave your browser tab.
           </p>
         </div>
