@@ -1,15 +1,19 @@
 "use client";
-// Owned by privacy-web-agent. In-memory shielded identity for the connected wallet (Helius Solana Privacy Rings).
+// Owned by privacy-web-agent. In-memory private Sealed wallet ("burner") for the connected wallet (Helius Solana
+// Privacy Rings). See ./burner.ts for the derivation and ./spr.ts for every SDK call.
 //  - The SDK module (./spr) is imported lazily on first use; nothing here pulls it into a page bundle.
-//  - Keys live only in this module's memory for the session: never persisted, cleared on wallet change/disconnect.
-//  - Exposes a tiny external store + useShieldedIdentity() for every private surface.
+//  - Keys live only in this module's memory: never persisted, destroyed on wallet change/disconnect and on Lock.
+//    Signing the same message again with the same wallet re-creates the same burner, so nothing needs storing.
+//  - Link status (GET/POST /api/privacy/link) is kept per main wallet so withdrawals can pay the linked burner.
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import type { Adapter } from "@solana/wallet-adapter-base";
+import type { Connection, Transaction as LegacyTransaction } from "@solana/web3.js";
 import { errorMessage, isUserRejection } from "../defi/config";
-import { NETWORK } from "../config";
-import type { PrivateAsset } from "./contract";
-import type { Balances, Identity, WalletBridge } from "./spr";
+import { CustodyError, custodyFetch, getSession, subscribeSessions } from "../custody/client";
+import { muteWalletErrorToasts, toBytes } from "../wallet/signIn";
+import { PRIVACY_ROUTES, type PrivateAsset } from "./contract";
+import type { Balances, Identity, MainWalletBridge, PublicBalances } from "./spr";
 
 type Spr = typeof import("./spr");
 let sprPromise: Promise<Spr> | null = null;
@@ -23,21 +27,58 @@ export function loadSpr(): Promise<Spr> {
 }
 
 export type IdentityPhase = "locked" | "unlocking" | "ready" | "error";
-export type PrivateOp = null | "register" | "shield" | "unshield" | "send" | "sync";
+export type PrivateOp = null | "register" | "fund" | "shield" | "unshield" | "send" | "sweep";
+
+export type LinkStatus =
+  | "unknown" // not checked yet
+  | "signed_out" // no Sealed session for the main wallet
+  | "checking"
+  | "linked" // linked to THIS burner (or, while locked, to some burner)
+  | "none" // signed in, nothing linked
+  | "other" // linked to a different burner than the one open now
+  | "taken" // this burner belongs to another Sealed account
+  | "unavailable" // privacy routes off / unreachable
+  | "error";
+
+export interface LinkState {
+  status: LinkStatus;
+  /** The burner the backend has linked to the main wallet's account. */
+  linkedBurner: string | null;
+  error: string | null;
+}
 
 export interface IdentityState {
+  /** The connected main wallet. */
   owner: string | null;
   phase: IdentityPhase;
+  /** The private wallet's public Solana address. */
+  burner: string | null;
   shieldedAddress: string | null;
   registered: boolean | null;
   balances: Balances | null;
+  pub: PublicBalances | null;
   op: PrivateOp;
   syncing: boolean;
   error: string | null;
   syncedAt: number | null;
+  link: LinkState;
 }
 
-const EMPTY: IdentityState = { owner: null, phase: "locked", shieldedAddress: null, registered: null, balances: null, op: null, syncing: false, error: null, syncedAt: null };
+const NO_LINK: LinkState = { status: "unknown", linkedBurner: null, error: null };
+const EMPTY: IdentityState = {
+  owner: null,
+  phase: "locked",
+  burner: null,
+  shieldedAddress: null,
+  registered: null,
+  balances: null,
+  pub: null,
+  op: null,
+  syncing: false,
+  error: null,
+  syncedAt: null,
+  link: NO_LINK,
+};
 let state: IdentityState = EMPTY;
 let identity: Identity | null = null;
 const listeners = new Set<() => void>();
@@ -50,103 +91,176 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l);
 };
 
+function destroyCurrent() {
+  const id = identity;
+  identity = null;
+  if (id) void loadSpr().then((spr) => spr.destroyIdentity(id)).catch(() => undefined);
+}
+
 /** Forget all key material (wallet switched or disconnected). */
 export function clearIdentity(owner: string | null = null) {
-  try {
-    identity?.keys.destroy();
-  } catch {
-    /* already destroyed */
-  }
-  identity = null;
+  destroyCurrent();
+  lastLinkKey = null;
   state = { ...EMPTY, owner };
+  listeners.forEach((l) => l());
+}
+
+/** Lock: destroy the keys but keep the link status (it's not secret). */
+function lockIdentity(owner: string | null) {
+  destroyCurrent();
+  state = { ...EMPTY, owner, link: state.owner === owner ? state.link : NO_LINK };
   listeners.forEach((l) => l());
 }
 
 /* ------------------------------------------------------------------------------- wallet bridge */
 
-type StdSignTx = {
-  supportedTransactionVersions: readonly ("legacy" | 0 | 1)[];
-  signTransaction: (...inputs: { account: unknown; transaction: Uint8Array; chain?: string }[]) => Promise<readonly { signedTransaction: Uint8Array }[]>;
-};
-type StdWallet = { accounts: readonly { address: string }[]; features: Record<string, unknown> };
-
-function standardWalletOf(adapter: Adapter | undefined): StdWallet | null {
-  const a = adapter as (Adapter & { standard?: boolean; wallet?: StdWallet }) | undefined;
-  return a?.standard && a.wallet ? a.wallet : null;
-}
-
-/** Does the connected wallet sign version 1 transactions (what every Privacy Ring transaction is)? */
-export function walletSignsV1(adapter: Adapter | undefined): boolean {
-  const w = standardWalletOf(adapter);
-  const f = w?.features["solana:signTransaction"] as StdSignTx | undefined;
-  return !!f && Array.isArray(f.supportedTransactionVersions) && f.supportedTransactionVersions.includes(1);
-}
-
-function makeBridge(owner: string, adapter: Adapter | undefined, signMessage: ((m: Uint8Array) => Promise<Uint8Array>) | undefined): WalletBridge {
-  if (!signMessage) throw new Error("Your wallet can't sign messages, which the Privacy Ring needs to derive your keys.");
+function makeBridge(
+  main: string,
+  signMessage: ((m: Uint8Array) => Promise<Uint8Array>) | undefined,
+  sendTransaction: ((tx: LegacyTransaction, c: Connection, o?: { preflightCommitment?: "confirmed"; maxRetries?: number }) => Promise<string>) | undefined,
+): MainWalletBridge {
   return {
-    owner,
-    signMessage,
-    signTransactionBytes: async (wire) => {
-      const w = standardWalletOf(adapter);
-      const f = w?.features["solana:signTransaction"] as StdSignTx | undefined;
-      const account = w?.accounts.find((a) => a.address === owner);
-      if (!w || !f || !account || !f.supportedTransactionVersions.includes(1)) {
-        throw new Error("Your wallet can't sign version 1 transactions yet, which Privacy Ring transactions use. Try another wallet.");
+    main,
+    signMessage: async (m) => {
+      if (!signMessage) throw new Error(NO_SIGN_MESSAGE);
+      // The wallet UI explains a refusal itself and so does this panel: keep the global raw-error toast quiet.
+      const release = muteWalletErrorToasts();
+      try {
+        return toBytes(await signMessage(m));
+      } finally {
+        release();
       }
-      const [out] = await f.signTransaction({ account, transaction: wire, chain: NETWORK === "mainnet" ? "solana:mainnet" : "solana:devnet" });
-      if (!out?.signedTransaction) throw new Error("Your wallet returned no signed transaction");
-      return out.signedTransaction;
+    },
+    sendLegacy: async (tx, c) => {
+      if (!sendTransaction) throw new Error("Your wallet can't send transactions from this page.");
+      const release = muteWalletErrorToasts();
+      try {
+        return await sendTransaction(tx, c, { preflightCommitment: "confirmed", maxRetries: 3 });
+      } finally {
+        release();
+      }
     },
   };
 }
 
+const NO_SIGN_MESSAGE =
+  "This wallet can't sign messages, so it can't open a private Sealed wallet. Hardware wallets such as Ledger don't support it yet; connect a browser or mobile wallet instead.";
+
 /* ------------------------------------------------------------------------------------- actions */
 
-/**
- * Helius' SDK derives Privacy Ring keys from a signature over a Solana off-chain message (v0 envelope, 0xff
- * "solana offchain" header). Some wallets, notably Phantom, refuse to sign bytes in that format through
- * signMessage ("You cannot sign solana transactions using sign message"); the SDK accepts no other message.
- */
-const OFFCHAIN_UNSUPPORTED = /cannot sign solana transactions using sign message|offchain message|off-chain message|not support(ed)? .*message format|invalid message format/i;
-
 async function friendly(e: unknown): Promise<string> {
-  if (isUserRejection(e)) return "You declined in your wallet. Nothing was sent.";
-  if (OFFCHAIN_UNSUPPORTED.test(errorMessage(e))) {
-    return "Your wallet can't sign the message Helius Privacy Rings use to create your private keys yet (Phantom blocks it). Try another wallet such as Solflare or Backpack for private deposits. Standard deposits work with any wallet.";
-  }
+  if (isUserRejection(e)) return "You declined in your wallet. Nothing was signed or sent.";
+  const m = errorMessage(e);
+  if (/not (be )?supported|unsupported/i.test(m) && /message/i.test(m)) return NO_SIGN_MESSAGE;
   try {
-    const m = (await loadSpr()).describeSprError(e);
-    if (m) return m;
+    const d = (await loadSpr()).describeSprError(e);
+    if (d) return d;
   } catch {
     /* sdk failed to load */
   }
-  return errorMessage(e);
+  return m;
 }
 
-async function refreshRegistration(owner: string) {
+async function refreshRegistration(id: Identity) {
   try {
     const spr = await loadSpr();
-    const registered = await spr.isRegistered(owner);
-    if (state.owner === owner) emit({ registered });
+    const registered = await spr.isRegistered(id.burner);
+    if (identity === id) emit({ registered });
   } catch {
-    if (state.owner === owner) emit({ registered: null });
+    if (identity === id) emit({ registered: null });
   }
 }
 
-async function doUnlock(bridge: WalletBridge) {
-  if (state.phase === "unlocking") return;
-  emit({ phase: "unlocking", error: null, owner: bridge.owner });
+async function refreshPublic(id: Identity) {
   try {
     const spr = await loadSpr();
-    const id = await spr.deriveIdentity(bridge);
-    if (state.owner !== bridge.owner) {
-      id.keys.destroy();
+    const pub = await spr.publicBalances(id.burner, state.registered);
+    if (identity === id) emit({ pub });
+  } catch {
+    /* keep the last figures */
+  }
+}
+
+/* ------------------------------------------------------------------------------------------- link */
+
+let linkRun = 0;
+let lastLinkKey: string | null = null;
+
+function linkErr(e: unknown): { status: LinkStatus; error: string } {
+  const err = e as CustodyError;
+  if (err?.code === "burner_taken" || err?.status === 409)
+    return {
+      status: "taken",
+      error: "This private wallet is already linked to another Sealed account, so Sealed can't credit its private deposits to you. Sign in with the wallet that opened it.",
+    };
+  if (err?.status === 401) return { status: "signed_out", error: "" };
+  if (err?.status === 404 || err?.status === 503) return { status: "unavailable", error: "Linking isn't available on Sealed right now." };
+  return { status: "error", error: errorMessage(e) };
+}
+
+/** GET the link for `main`; when a burner is open and nothing is linked, link it (one local signature, no prompt). */
+async function syncLink(main: string, autoLink: boolean) {
+  const run = ++linkRun;
+  if (!getSession(main)) {
+    if (state.owner === main) emit({ link: { status: "signed_out", linkedBurner: null, error: null } });
+    return;
+  }
+  if (state.owner === main) emit({ link: { ...state.link, status: "checking", error: null } });
+  try {
+    const r = await custodyFetch<{ burner: string | null }>(PRIVACY_ROUTES.link, { wallet: main });
+    if (run !== linkRun || state.owner !== main) return;
+    const linked = r?.burner ?? null;
+    const id = identity && identity.main === main ? identity : null;
+    if (!id) return emit({ link: { status: linked ? "linked" : "none", linkedBurner: linked, error: null } });
+    if (linked === id.burner) return emit({ link: { status: "linked", linkedBurner: linked, error: null } });
+    if (linked && !autoLink) return emit({ link: { status: "other", linkedBurner: linked, error: null } });
+    if (!linked && !autoLink) return emit({ link: { status: "none", linkedBurner: null, error: null } });
+    await postLink(main, id, run);
+  } catch (e) {
+    if (run !== linkRun || state.owner !== main) return;
+    const { status, error } = linkErr(e);
+    emit({ link: { status, linkedBurner: state.link.linkedBurner, error: error || null } });
+  }
+}
+
+async function postLink(main: string, id: Identity, run = ++linkRun) {
+  const spr = await loadSpr();
+  const signature = spr.signLink(id);
+  const r = await custodyFetch<{ linked: true; burner: string }>(PRIVACY_ROUTES.link, { method: "POST", wallet: main, body: { burner: id.burner, signature } });
+  if (run !== linkRun || state.owner !== main) return;
+  emit({ link: { status: "linked", linkedBurner: r?.burner ?? id.burner, error: null } });
+}
+
+/** Make sure Sealed attributes this burner's private deposits to the signed-in account; throws a readable reason. */
+async function ensureLinked(id: Identity) {
+  if (state.link.status === "linked" && state.link.linkedBurner === id.burner) return;
+  if (!getSession(id.main)) throw new Error("Sign in to Sealed first so your private deposit is credited to your account.");
+  try {
+    await postLink(id.main, id);
+  } catch (e) {
+    const { status, error } = linkErr(e);
+    emit({ link: { status, linkedBurner: state.link.linkedBurner, error: error || null } });
+    throw new Error(error || "Sealed couldn't link your private wallet. Nothing was sent.");
+  }
+  if (!(state.link.status === "linked" && state.link.linkedBurner === id.burner)) throw new Error("Sealed couldn't link your private wallet. Nothing was sent.");
+}
+
+/* ---------------------------------------------------------------------------------- unlock / sync */
+
+async function doUnlock(bridge: MainWalletBridge) {
+  if (state.phase === "unlocking") return;
+  emit({ phase: "unlocking", error: null, owner: bridge.main });
+  try {
+    const spr = await loadSpr();
+    const id = await spr.openBurner(bridge);
+    if (state.owner !== bridge.main) {
+      spr.destroyIdentity(id);
       return;
     }
+    destroyCurrent();
     identity = id;
-    emit({ phase: "ready", shieldedAddress: id.shieldedAddress });
-    void refreshRegistration(bridge.owner);
+    emit({ phase: "ready", burner: id.burner, shieldedAddress: id.shieldedAddress });
+    void refreshRegistration(id).then(() => refreshPublic(id));
     await doSync();
   } catch (e) {
     emit({ phase: identity ? "ready" : "error", error: await friendly(e) });
@@ -157,6 +271,7 @@ async function doSync() {
   const id = identity;
   if (!id) return;
   emit({ syncing: true, error: null });
+  void refreshPublic(id);
   try {
     const spr = await loadSpr();
     const balances = await spr.syncBalances(id);
@@ -168,88 +283,133 @@ async function doSync() {
 
 async function runOp<T>(op: Exclude<PrivateOp, null>, fn: (spr: Spr, id: Identity) => Promise<T>): Promise<T> {
   const id = identity;
-  if (!id) throw new Error("Unlock your private balance first");
-  if (state.op) throw new Error("Another private transaction is in progress");
+  if (!id) throw new Error("Open your private wallet first");
+  if (state.op) throw new Error("Another private wallet transaction is in progress");
   emit({ op, error: null });
   try {
     const out = await fn(await loadSpr(), id);
     const b = (out as { balances?: Balances })?.balances;
     if (identity === id) emit({ op: null, ...(b ? { balances: b, syncedAt: Date.now() } : {}) });
+    void refreshPublic(id);
     return out;
   } catch (e) {
     const msg = await friendly(e);
     if (identity === id) emit({ op: null, error: msg });
+    void refreshPublic(id);
     throw new Error(msg);
   }
 }
 
 /* ---------------------------------------------------------------------------------------- hook */
 
+function useSessionToken(wallet: string | null): string | null {
+  const get = useCallback(() => getSession(wallet)?.token ?? null, [wallet]);
+  return useSyncExternalStore(subscribeSessions, get, () => null);
+}
+
 export function useShieldedIdentity() {
-  const { publicKey, wallet, signMessage, connected } = useWallet();
+  const { publicKey, signMessage, sendTransaction, connected, wallet } = useWallet();
   const owner = connected && publicKey ? publicKey.toBase58() : null;
   const s = useSyncExternalStore(subscribe, () => state, () => EMPTY);
-  const adapter = wallet?.adapter;
+  const token = useSessionToken(owner);
 
-  // Wallet change or disconnect: wipe the keys.
+  // Wallet change or disconnect: destroy the keys.
   useEffect(() => {
     if (state.owner !== owner) clearIdentity(owner);
   }, [owner]);
 
+  // Signed in / out (or a burner just opened): refresh the link status.
+  // Every mounted surface runs this effect: only the first one per (wallet, session, burner) fetches.
+  useEffect(() => {
+    if (!owner) return;
+    const key = `${owner}|${token ?? ""}|${s.burner ?? ""}`;
+    if (lastLinkKey === key) return;
+    lastLinkKey = key;
+    void syncLink(owner, true);
+  }, [owner, token, s.burner]);
+
   const bridge = useCallback(() => {
     if (!owner) throw new Error("Connect a wallet first");
-    return makeBridge(owner, adapter, signMessage);
-  }, [owner, adapter, signMessage]);
+    return makeBridge(owner, signMessage, sendTransaction as Parameters<typeof makeBridge>[2]);
+  }, [owner, signMessage, sendTransaction]);
 
   const unlock = useCallback(async () => {
     try {
       await doUnlock(bridge());
     } catch (e) {
-      emit({ phase: "error", error: errorMessage(e) });
+      emit({ phase: "error", error: await friendly(e) });
     }
   }, [bridge]);
 
   const register = useCallback(
     () =>
       runOp("register", async (spr, id) => {
-        const sig = await spr.register(id, bridge());
+        const sig = await spr.register(id);
         emit({ registered: true });
         return sig;
       }),
-    [bridge],
+    [],
   );
-  const shield = useCallback((asset: PrivateAsset, amount: number) => runOp("shield", (spr, id) => spr.shield(id, bridge(), asset, amount)), [bridge]);
-  const unshield = useCallback((asset: PrivateAsset, amount: number) => runOp("unshield", (spr, id) => spr.unshield(id, bridge(), asset, amount)), [bridge]);
+  const fund = useCallback((asset: PrivateAsset, amount: number) => runOp("fund", (spr, id) => spr.fundBurner(id, bridge(), asset, amount)), [bridge]);
+  const shield = useCallback((asset: PrivateAsset, amount: number) => runOp("shield", (spr, id) => spr.shield(id, asset, amount)), []);
+  const unshield = useCallback((asset: PrivateAsset, amount: number) => runOp("unshield", (spr, id) => spr.unshield(id, asset, amount)), []);
+  const sweep = useCallback((asset: PrivateAsset, amount: number) => runOp("sweep", (spr, id) => spr.sweepToMain(id, asset, amount)), []);
   const sendToCompany = useCallback(
-    (companyShieldedAddress: string, asset: PrivateAsset, amount: number) => runOp("send", (spr, id) => spr.sendPrivateToCompany(id, bridge(), companyShieldedAddress, asset, amount)),
-    [bridge],
+    (companyShieldedAddress: string, asset: PrivateAsset, amount: number) =>
+      runOp("send", async (spr, id) => {
+        await ensureLinked(id);
+        return spr.sendPrivateToCompany(id, companyShieldedAddress, asset, amount);
+      }),
+    [],
   );
+  const relink = useCallback(async () => {
+    const id = identity;
+    if (!id) return;
+    try {
+      await postLink(id.main, id);
+    } catch (e) {
+      const { status, error } = linkErr(e);
+      emit({ link: { status, linkedBurner: state.link.linkedBurner, error: error || null } });
+    }
+  }, []);
 
   const view = s.owner === owner ? s : { ...EMPTY, owner };
+  const adapter: Adapter | undefined = wallet?.adapter;
   return {
     ...view,
     connected: !!owner,
-    /** The wallet can sign Privacy Ring (version 1) transactions. Unlocking only needs signMessage. */
-    signsV1: walletSignsV1(adapter),
+    signedIn: !!token,
     canSignMessage: !!signMessage,
+    walletName: adapter?.name ?? null,
     unlock,
-    lock: () => clearIdentity(owner),
+    lock: () => lockIdentity(owner),
     sync: () => doSync(),
     register,
+    fund,
     shield,
     unshield,
+    sweep,
     sendToCompany,
-    /** UI units from atoms (null while locked). */
+    relink,
+    /** UI units from private-balance atoms (null while locked). */
     uiBalance: (asset: PrivateAsset): number | null => {
       const v = view.balances?.[asset];
-      if (v === null || v === undefined) return null;
-      const d = asset === "SOL" ? 9 : 6;
-      const str = v.toString().padStart(d + 1, "0");
-      return Number(`${str.slice(0, -d)}.${str.slice(-d)}`);
+      return v === null || v === undefined ? null : atomsToUi(v, asset);
+    },
+    /** UI units of the burner's PUBLIC balance (null while unknown / no token account). */
+    uiPublic: (asset: PrivateAsset): number | null => {
+      const v = asset === "SOL" ? view.pub?.sol : view.pub?.usdc;
+      return v === null || v === undefined ? null : atomsToUi(v, asset);
     },
   };
 }
 export type ShieldedIdentityApi = ReturnType<typeof useShieldedIdentity>;
+
+export function atomsToUi(v: bigint, asset: PrivateAsset): number {
+  const d = asset === "SOL" ? 9 : 6;
+  const str = v.toString().padStart(d + 1, "0");
+  return Number(`${str.slice(0, -d)}.${str.slice(-d)}`);
+}
 
 /* ------------------------------------------------------------- "open deposit sheet on private" */
 

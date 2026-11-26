@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
-import { PRIVACY_ROUTES, PrivateDepositClaimSchema, type PrivacyStatusResponse } from "@sealed/shared";
+import { PRIVACY_ROUTES, PrivacyLinkRequestSchema, PrivateDepositClaimSchema, type PrivacyLinkResponse, type PrivacyLinkStatus, type PrivacyStatusResponse, type PrivacyUnlinkResponse } from "@sealed/shared";
 import { sendError, zodDetails, type AppContext } from "../context.js";
 import { RateLimiter } from "../offchain/auth/rateLimit.js";
 import { requireAuth } from "../offchain/auth/requireAuth.js";
@@ -38,6 +38,7 @@ function limiter(perMinute: number) {
 export async function privacyRoutes(app: FastifyInstance, ctx: AppContext, service = new HeliusPrivacyService(ctx.cfg), privacy?: PrivacyRuntime) {
   const allow = limiter(120);
   const claimLimit = new RateLimiter(10);
+  const linkLimit = new RateLimiter(10);
 
   app.get(PRIVACY_ROUTES.status, async (): Promise<PrivacyStatusResponse> => {
     const base = await service.status();
@@ -69,6 +70,33 @@ export async function privacyRoutes(app: FastifyInstance, ctx: AppContext, servi
     if (!privacy.config.enabled) return disabled(reply);
     reply.header("cache-control", "no-store");
     return { deposits: await privacy.listDeposits(req.wallet!) };
+  });
+
+  // Private Sealed wallet (burner) link. Gated on the flag only: linking is bookkeeping and works while the ring is
+  // briefly unreachable. Errors carry a machine-readable `code`.
+  app.get(PRIVACY_ROUTES.link, { preHandler: requireAuth }, async (req, reply): Promise<PrivacyLinkStatus | FastifyReply> => {
+    if (!privacy.config.enabled) return disabled(reply);
+    reply.header("cache-control", "no-store");
+    return privacy.linkStatus(req.wallet!);
+  });
+
+  app.post(PRIVACY_ROUTES.link, { bodyLimit: SMALL_BODY, preHandler: requireAuth }, async (req, reply): Promise<PrivacyLinkResponse | FastifyReply> => {
+    if (!privacy.config.enabled) return disabled(reply);
+    if (!linkLimit.hit(req.wallet!)) return reply.code(429).send({ error: "too many link requests, slow down", code: "rate_limited" });
+    const p = PrivacyLinkRequestSchema.safeParse(req.body ?? {});
+    if (!p.success) return reply.code(400).send({ error: "invalid link request", code: "invalid_request", details: zodDetails(p.error) });
+    const r = await privacy.link(req.wallet!, p.data.burner, p.data.signature);
+    reply.header("cache-control", "no-store");
+    if (!r.ok) return reply.code(r.status).send({ error: r.error, code: r.code });
+    return { linked: true, burner: r.burner };
+  });
+
+  app.delete(PRIVACY_ROUTES.link, { preHandler: requireAuth }, async (req, reply): Promise<PrivacyUnlinkResponse | FastifyReply> => {
+    if (!privacy.config.enabled) return disabled(reply);
+    if (!linkLimit.hit(req.wallet!)) return reply.code(429).send({ error: "too many link requests, slow down", code: "rate_limited" });
+    await privacy.unlink(req.wallet!);
+    reply.header("cache-control", "no-store");
+    return { linked: false };
   });
 
   app.post(PRIVACY_ROUTES.claimDeposit, { bodyLimit: SMALL_BODY, preHandler: requireAuth }, async (req, reply) => {

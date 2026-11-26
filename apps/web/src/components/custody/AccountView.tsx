@@ -11,7 +11,7 @@ import { CustodyGate, CustodyOffline, SignInButton } from "./SignInButton";
 import { DisclosureList, StatusChip, explorerAccount, explorerTx } from "./parts";
 import { ArrowUpRight } from "../ui/Icons";
 import { Address } from "../ui/Address";
-import { PrivateBalancePanel } from "../privacy/ShieldedIdentity";
+import { PrivateWalletPanel } from "../privacy/ShieldedIdentity";
 
 function fmtWhen(ts: number): string {
   const ms = ts > 1e12 ? ts : ts * 1000;
@@ -93,8 +93,8 @@ export function AccountView() {
         </aside>
       </div>
 
-      {/* Helius Privacy Ring private balance: renders nothing unless private features are enabled */}
-      {mounted && <PrivateBalancePanel className="mt-8" />}
+      {/* Helius Privacy Ring private Sealed wallet: renders nothing unless private features are enabled */}
+      {mounted && <PrivateWalletPanel className="mt-8" />}
 
       {/* proof of reserves — night band */}
       <section className="card-night mt-8 overflow-hidden" aria-labelledby="por-title">

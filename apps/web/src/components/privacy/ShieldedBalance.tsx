@@ -1,6 +1,6 @@
 "use client";
-// Owned by privacy-web-agent. The connected wallet's real Helius Privacy Ring balance: redacted glyphs until the owner
-// unlocks it with one message signature, then decrypted locally (SDK syncWallet + viewing key). Hidden entirely
+// Owned by privacy-web-agent. The private Sealed wallet's real Helius Privacy Ring balance: redacted glyphs until the
+// user opens it with one plain message signature, then decrypted locally (SDK syncWallet + viewing key). Hidden entirely
 // unless private features are enabled for this network, and for assets the ring path does not support here.
 import clsx from "clsx";
 import type { QuoteAssetSymbol } from "@sealed/shared";
@@ -27,7 +27,7 @@ export function ShieldedBalance({ quoteAsset, compact = false }: { quoteAsset: Q
   const action =
     id.phase !== "ready" ? (
       <button type="button" onClick={() => void id.unlock()} disabled={busy} className="font-semibold text-signal underline decoration-signal/30 decoration-1 underline-offset-4 transition hover:decoration-signal disabled:opacity-50">
-        {busy ? "Unlocking…" : compact ? "Unlock" : "Unlock with a signature"}
+        {busy ? "Opening…" : compact ? "Open" : "Open private wallet"}
       </button>
     ) : (
       <button type="button" onClick={id.lock} className="font-semibold text-ink-slate underline decoration-rule-strong decoration-1 underline-offset-4 transition hover:decoration-ink">
@@ -52,7 +52,7 @@ export function ShieldedBalance({ quoteAsset, compact = false }: { quoteAsset: Q
     <div className="rounded-card border border-rule bg-sheet p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <p className="eyebrow flex items-center gap-2">
-          <RingMark size={14} active={busy} className="text-signal" /> Private balance
+          <RingMark size={14} active={busy} className="text-signal" /> Private wallet balance
         </p>
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted">Helius Privacy Ring</span>
       </div>

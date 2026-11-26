@@ -171,13 +171,13 @@ passes the signature to `LocalKeys.fromDerivationSeed` — verified offline to b
   (`PRIVACY_POLL_MS`, only with custody workers on) runs `syncWallet` for the company wallet, decrypts locally, and for each
   inbound history row (`privateTransfer` / `deposit`) waits for `getTransaction(…, "finalized")`, then attributes:
   1. a note memo equal to the user's `depositRef` (`<ref>` or `sealed:<ref>`; only deposits can carry one via the SDK);
-  2. else the transaction's Solana signers → exactly one Sealed account (accounts are keyed by their sign-in wallet).
+  2. else the transaction's Solana signers → exactly one Sealed account (a signer is the account's sign-in wallet or
+     its active linked burner, see "Private Sealed wallet" below).
   **Why**: the SDK's transfer builders expose no memo/data field (only `buildDepositTransaction({memo})`), and the
   Default Ring keeps the sender public, so the sending wallet is a reliable, documented attribution key.
   Anything else (unknown ref, unknown/multiple senders, conflicting ref vs sender, unsupported mint, below
   `PRIVACY_MIN_SOL`/`PRIVACY_MIN_USDC`) is stored `rejected` (manual resolution) and never credited. Exactly-once:
-  `DepositRec.key = spr:<signature>:<leafIndex>` + ledger idempotency `dep:<key>` (same table as public deposits, no
-  schema change). Transactions signed by the company wallet are internal and ignored.
+  `DepositRec.key = spr:<signature>:<leafIndex>` + ledger idempotency `dep:<key>` (same table as public deposits). Transactions signed by the company wallet are internal and ignored.
 - **Payouts**: `POST /api/account/withdrawals` with `privateTo` (registered owner address, or base58 99-byte shielded
   address) → same limits / approval / ledger lock as public; stored as `destination = "spr:<privateTo>"` (cannot be paid
   by the public path). The PayoutWorker branch syncs, checks the company shielded balance (else holds with a user-safe
@@ -193,6 +193,40 @@ passes the signature to `LocalKeys.fromDerivationSeed` — verified offline to b
   company funds with `buildDepositTransaction` to the company's own shielded address — signed by the company, so the
   watcher ignores it); company wallet state is in memory (full resync after restart; exactly-once is DB-keyed);
   escrow funding (§5) unchanged.
+
+### Private Sealed wallet (burner link) — any wallet
+
+**Why**: Phantom, Solflare, Backpack and others refuse to sign the SDK's binary off-chain derivation message
+(`ed25519DerivationMessage`), so users cannot derive Privacy Ring keys from their main wallet.
+
+**Design**: the browser asks the main wallet for a plain-text signature over a domain-bound message, derives a separate
+Ed25519 keypair from it deterministically (the *burner*, shown as the user's "private Sealed wallet"), and the burner owns
+the user's ring identity: it registers, shields and signs every ring transaction itself. The backend links the burner
+to the account:
+
+- `POST /api/privacy/link` (Bearer) `{burner, signature}` where `signature` is the burner's raw ed25519 signature
+  (base58) over UTF-8 `sealed-privacy-link:v1:<sessionWallet>:<burner>` (`privacyLinkMessage` in @sealed/shared)
+  → `{linked:true, burner}`. Errors carry `{error, code}`: `invalid_signature`, `burner_is_session_wallet`,
+  `burner_is_company` (400); `burner_taken` (409: active on another account, or is another account's sign-in wallet).
+  One active burner per account: re-linking the same burner is idempotent, a new burner replaces the old one (the old
+  row is kept as history, `active=false`, and stops attributing). 10 link/unlink calls per account per minute.
+- `GET /api/privacy/link` → `{burner|null, linkedAt?}` (unix seconds); `DELETE /api/privacy/link` → `{linked:false}`.
+- `GET /api/privacy/deposit-info` adds `linkedBurner` and `linkMessage` (template with `{burner}` placeholder).
+- **Attribution rule 2** now maps each signer to an account if it is a sign-in wallet **or an active linked burner**;
+  exactly one account → credited; more than one → `rejected` (manual resolution). Memo rule stays first; finality and
+  exactly-once keys are unchanged. Old/revoked burners map to nobody.
+- **Payouts**: `privateTo: "linked"` resolves to the linked burner's registered ring owner address (400
+  `no_linked_burner` when none is linked or it is not registered). Explicit burner addresses keep working.
+- Storage: Prisma `PrivacyLink` (additive; `activeWallet`/`activeBurner` nullable unique columns enforce one active
+  link per account and per burner); the memory repo mirrors it in no-DB mode.
+
+**Trust model**: the burner secret is a pure function of the main wallet's signature over the derivation message.
+Anyone who obtains that signature controls the private wallet and its shielded funds, so the browser must never send
+or persist it (or the burner secret) and the message is domain-bound (names Sealed and the purpose) so no other site
+can obtain it by asking for an innocuous-looking signature. Losing the main wallet loses the burner; re-signing the
+same message on any device re-derives it. The link signature proves possession of the burner only; the session proves
+the account, and it is bound to the session wallet so it cannot be replayed for another account. Linking gives the
+backend no key material: the company can only credit deposits the burner signs and pay out to its address.
 
 ### Turning it on (operator)
 1. Devnet first: `NETWORK=devnet`, `HELIUS_API_KEY`, `COMPANY_WALLET`/`COMPANY_WALLET_SECRET_KEY`, `ADMIN_TOKEN`,

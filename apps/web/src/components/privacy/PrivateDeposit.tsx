@@ -1,9 +1,11 @@
 "use client";
 // Owned by privacy-web-agent. DepositSheet "Private (Helius Privacy Ring)" method: a confidential transfer from the
-// user's private balance to Sealed's shielded address. Flow: unlock → amount → review → wallet signs → POST claim →
-// poll /api/privacy/deposits until credited. Attribution: the claim is made with the user's Sealed session and the
-// transaction is signed by their wallet (sender stays visible on-chain), so the backend can match it to the account.
+// private Sealed wallet's private balance to Sealed's shielded address. Flow: open private wallet → amount → review →
+// the private wallet signs in this tab → POST claim → poll /api/privacy/deposits until credited. Attribution: the
+// private wallet is linked to the signed-in account (POST /api/privacy/link, done before sending), and the claim is
+// made with the user's Sealed session.
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import clsx from "clsx";
 import { COMPANY_WALLET } from "@sealed/shared";
 import { useShieldedIdentity } from "@/lib/privacy/session";
@@ -15,7 +17,7 @@ import { shortAddr } from "@/lib/format";
 import { cleanAmount } from "@/components/custody/parts";
 import { ArrowUpRight } from "@/components/ui/Icons";
 import { RingMark } from "./RingMotif";
-import { REDACTED, UnlockPrompt, V1Notice, fmtPrivate } from "./ShieldedIdentity";
+import { REDACTED, UnlockPrompt, fmtPrivate } from "./ShieldedIdentity";
 
 type Phase = "edit" | "review" | "sending" | "sent";
 
@@ -68,13 +70,14 @@ export function PrivateDeposit({ wallet, initialAsset, onBusy }: { wallet: strin
       <p className="flex items-start gap-2.5 rounded-field border border-signal/20 bg-signal-tint/50 p-3 text-[12px] leading-relaxed text-signal-ink">
         <RingMark size={18} className="mt-px shrink-0 text-signal" />
         <span>
-          Paid from your Helius Privacy Ring balance. The amount is encrypted on-chain; your wallet address and Sealed&apos;s stay visible.
+          Paid from your private wallet&apos;s Helius Privacy Ring balance. The amount is encrypted on-chain; your private wallet&apos;s address and
+          Sealed&apos;s stay visible.
         </span>
       </p>
 
       {!ready ? (
         <div className="mt-4">
-          <UnlockPrompt id={id} why="Unlock your private balance first: your wallet signs one message to derive your Privacy Ring keys in this tab." />
+          <UnlockPrompt id={id} why="Open your private wallet first: your wallet signs one plain text message (no funds move, no fee) and Sealed recreates your private wallet in this tab." />
         </div>
       ) : phase === "sent" && sig ? (
         <section className="mt-4" aria-live="polite" aria-label="Private deposit status">
@@ -95,7 +98,12 @@ export function PrivateDeposit({ wallet, initialAsset, onBusy }: { wallet: strin
         </section>
       ) : (
         <>
-          <V1Notice id={id} />
+          {bal !== null && bal <= 0 && (
+            <p className="mt-4 rounded-field border border-rule bg-paper-deep/60 p-3 text-[12.5px] leading-relaxed text-ink-slate">
+              Your private {asset} balance is empty. Fund your private wallet and move funds to its private balance on{" "}
+              <Link href="/account" className="underline underline-offset-2">your account page</Link> first.
+            </p>
+          )}
           <div role="radiogroup" aria-label="Private asset" className="mt-4 flex gap-1.5">
             {assets.map((a) => (
               <button
@@ -130,11 +138,11 @@ export function PrivateDeposit({ wallet, initialAsset, onBusy }: { wallet: strin
               if (v !== null) setAmount(v);
             }}
           />
-          {over && <p className="mt-1 text-[12px] text-burn">More than your private balance. Move funds to it on your account page first.</p>}
+          {over && <p className="mt-1 text-[12px] text-burn">More than your private balance. Move more to it on your account page first.</p>}
           {under && <p className="mt-1 text-[12px] text-burn">The minimum private deposit is {min} {asset}.</p>}
 
           {phase === "edit" ? (
-            <button type="button" className="btn-primary mt-3 min-h-[48px] w-full" disabled={!(n > 0) || over || under || !id.signsV1} onClick={() => { setAck(false); setPhase("review"); }}>
+            <button type="button" className="btn-primary mt-3 min-h-[48px] w-full" disabled={!(n > 0) || over || under || bal === null} onClick={() => { setAck(false); setPhase("review"); }}>
               Review private deposit
             </button>
           ) : (
@@ -153,13 +161,14 @@ export function PrivateDeposit({ wallet, initialAsset, onBusy }: { wallet: strin
                   </dt>
                   <dd className="num mt-1 break-all text-[11px] leading-snug text-ink-muted">{shortAddr(d.companyShieldedAddressBytes ?? d.companyShieldedAddress, 14)}</dd>
                 </div>
+                <Row k="From" v={id.burner ? shortAddr(id.burner, 4) : ""} />
                 <Row k="Reference" v={d.reference} />
-                <Row k="Fees" v="network + ring fee, shown in your wallet" />
+                <Row k="Fees" v="network + ring fee, paid by your private wallet" />
               </dl>
               <div className="border-t border-rule px-4 py-3">
                 <p className="text-[12px] leading-relaxed text-ink-slate">
                   Sealed holds the funds and credits your Sealed balance once the transfer is confirmed. A zero knowledge proof is generated by the
-                  Helius prover (attested enclave) and your wallet signs the transaction.
+                  Helius prover (attested enclave) and your private wallet signs the transaction in this tab, so your main wallet shows no prompt.
                 </p>
                 <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[12px] leading-relaxed text-ink">
                   <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-ink" checked={ack} onChange={(e) => setAck(e.target.checked)} disabled={phase === "sending"} />

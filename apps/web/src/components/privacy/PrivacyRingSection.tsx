@@ -11,7 +11,7 @@ const SEALED: Array<{ what: string; how: string; until: string }> = [
   { what: "Bid size", how: "keccak-256 commitment", until: "until you reveal" },
   { what: "Bid deposit", how: "a lock inside your Sealed balance, never an on-chain transfer", until: "always" },
   { what: "Private deposit amount", how: "Helius Privacy Ring confidential transfer to Sealed custody", until: "always" },
-  { what: "Private withdrawal amount", how: "confidential transfer to your shielded address", until: "always" },
+  { what: "Private withdrawal amount", how: "confidential transfer into your private Sealed wallet", until: "always" },
 ];
 
 const PUBLIC: Array<{ what: string; why: string }> = [
@@ -97,7 +97,7 @@ export function PrivacyRingSection() {
           </p>
           <p className="font-serif italic sm:col-span-7">
             ¹ Private deposits and withdrawals open once Sealed enables
-            them on this network. Your Privacy Ring keys come from one wallet signature and never leave your browser tab.
+            them on this network. Your private Sealed wallet is recreated from one plain wallet signature, and its keys never leave your browser tab.
           </p>
         </div>
       </div>

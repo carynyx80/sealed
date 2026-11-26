@@ -676,3 +676,9 @@ export function markSignInActive(): () => void {
     setTimeout(() => (activeFlows = Math.max(0, activeFlows - 1)), 0);
   };
 }
+
+/**
+ * Same mute for other wallet prompts that explain their own errors (e.g. opening the private Sealed wallet): while
+ * active, SolanaProviders' onError skips the raw wallet toast. Returns the release function.
+ */
+export const muteWalletErrorToasts = markSignInActive;

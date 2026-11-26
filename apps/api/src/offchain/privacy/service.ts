@@ -1,5 +1,18 @@
 import type { FastifyBaseLogger } from "fastify";
-import type { PrivacyAsset, PrivateDepositClaimResponse, PrivateDepositInfo, PrivateDepositRecord, QuoteAssetSymbol } from "@sealed/shared";
+import { PublicKey } from "@solana/web3.js";
+import bs58 from "bs58";
+import {
+  PRIVACY_LINK_MESSAGE_PREFIX,
+  privacyLinkMessage,
+  type PrivacyAsset,
+  type PrivacyLinkErrorCode,
+  type PrivacyLinkStatus,
+  type PrivateDepositClaimResponse,
+  type PrivateDepositInfo,
+  type PrivateDepositRecord,
+  type QuoteAssetSymbol,
+} from "@sealed/shared";
+import { ed25519Verify } from "../auth/siws.js";
 import type { AppConfig } from "../../config.js";
 import { fromAtoms, toAtoms, type CustodyAsset } from "../custody/chain.js";
 import { depositToDto } from "../custody/deposits.js";
@@ -50,6 +63,7 @@ export interface PrivacyDeps {
 }
 
 type Attribution = { wallet: string; depositRef: string | null } | { reject: string; depositRef: string | null };
+export type LinkResult = { ok: true; burner: string; changed: boolean } | { ok: false; status: number; code: PrivacyLinkErrorCode; error: string };
 
 /**
  * Custodial Helius Privacy Ring integration (docs/PRIVACY.md §7).
@@ -63,7 +77,8 @@ type Attribution = { wallet: string; depositRef: string | null } | { reject: str
  *   1. note memo == the user's depositRef ("<ref>" or "sealed:<ref>") → that user (unless a different Sealed account
  *      signed the transaction → rejected as conflicting);
  *   2. otherwise the transaction's Solana signers (public in the Default Ring) → exactly one Sealed account
- *      (users are keyed by their sign-in wallet) → that account;
+ *      (a signer maps to an account when it IS the account's sign-in wallet, or is the account's ACTIVE linked
+ *      burner — the "private Sealed wallet", POST /api/privacy/link) → that account;
  *   3. anything else (unknown ref, unknown sender, several accounts, unsupported asset, below minimum) is recorded as
  *      `rejected` for manual resolution and NEVER credited. Transactions signed by the company wallet itself (treasury
  *      top-ups, change of our own payouts) are internal and ignored.
@@ -261,7 +276,55 @@ export class PrivacyRuntime {
       assets,
       network: this.app.network,
       minAmount: { ...this.config.minAmount },
+      linkedBurner: (await this.custody.repo.getActivePrivacyLink(wallet))?.burner ?? null,
+      linkMessage: `${PRIVACY_LINK_MESSAGE_PREFIX}:${wallet}:{burner}`,
     };
+  }
+
+  /* ------------------------------------------------------------------- burner link ("private Sealed wallet") */
+
+  /**
+   * POST /api/privacy/link. The burner proves possession by signing (raw ed25519, UTF-8)
+   * `sealed-privacy-link:v1:<sessionWallet>:<burner>`; the session proves the account. One active burner per account.
+   */
+  async link(wallet: string, burner: string, signature: string): Promise<LinkResult> {
+    const bad = (status: number, code: PrivacyLinkErrorCode, error: string): LinkResult => ({ ok: false, status, code, error });
+    let pk: Uint8Array;
+    let sig: Uint8Array;
+    try {
+      pk = new PublicKey(burner).toBytes();
+      sig = bs58.decode(signature);
+    } catch {
+      return bad(400, "invalid_signature", "burner must be a base58 public key and signature base58");
+    }
+    if (burner === wallet) return bad(400, "burner_is_session_wallet", "the private wallet must differ from your sign-in wallet");
+    if (burner === this.custody.config.companyWallet) return bad(400, "burner_is_company", "the private wallet cannot be the company address");
+    if (!ed25519Verify(new TextEncoder().encode(privacyLinkMessage(wallet, burner)), sig, pk)) {
+      return bad(400, "invalid_signature", "signature does not match the private wallet and link message");
+    }
+    // A burner that is itself another Sealed account would make its transfers map to two accounts.
+    if (await this.custody.repo.getUser(burner)) return bad(409, "burner_taken", "this private wallet is already in use by another account");
+    const r = await this.custody.repo.setPrivacyLink(wallet, burner, new Date(this.now()));
+    if (!r.ok) return bad(409, "burner_taken", "this private wallet is already linked to another account");
+    if (r.changed) this.log.info({ wallet, burner }, "privacy: private wallet linked");
+    return { ok: true, burner, changed: r.changed };
+  }
+
+  async linkStatus(wallet: string): Promise<PrivacyLinkStatus> {
+    const l = await this.custody.repo.getActivePrivacyLink(wallet);
+    return l ? { burner: l.burner, linkedAt: Math.floor(l.createdAt.getTime() / 1000) } : { burner: null };
+  }
+
+  async unlink(wallet: string): Promise<void> {
+    if (await this.custody.repo.revokePrivacyLink(wallet, new Date(this.now()))) this.log.info({ wallet }, "privacy: private wallet unlinked");
+  }
+
+  /** `privateTo: "linked"` → the linked burner's registered ring owner address, or null (none / not registered). */
+  async resolveLinkedRecipient(wallet: string): Promise<RecipientCheck | null> {
+    const l = await this.custody.repo.getActivePrivacyLink(wallet);
+    if (!l) return null;
+    const chk = await this.checkRecipient(l.burner);
+    return chk.ok ? chk : null;
   }
 
   async listDeposits(wallet: string): Promise<PrivateDepositRecord[]> {
@@ -352,8 +415,14 @@ export class PrivacyRuntime {
 
   private async attribute(n: InboundNote, signers: string[]): Promise<Attribution> {
     const repo = this.custody.repo;
+    // Accounts behind the signers: a signer that is a sign-in wallet, or an active linked burner (replaced/revoked
+    // burners no longer map). Several distinct accounts → conflict (rejected below).
     const signerUsers = new Set<string>();
-    for (const s of signers) if (await repo.getUser(s)) signerUsers.add(s);
+    for (const s of signers) {
+      if (await repo.getUser(s)) signerUsers.add(s);
+      const l = await repo.getActivePrivacyLinkByBurner(s);
+      if (l) signerUsers.add(l.wallet);
+    }
     const memo = n.memo?.trim() || null;
     if (memo) {
       const ref = memo.startsWith("sealed:") ? memo.slice(7) : memo;
@@ -367,7 +436,7 @@ export class PrivacyRuntime {
       return { wallet: w, depositRef: (await repo.getUser(w))?.depositRef ?? null };
     }
     if (signerUsers.size > 1) return { reject: "several Sealed accounts signed this transfer", depositRef: null };
-    return { reject: "sender is not a Sealed account (send from your signed-in wallet)", depositRef: null };
+    return { reject: "sender is not a Sealed account (send from your signed-in wallet or your linked private wallet)", depositRef: null };
   }
 
   /** POST /api/privacy/deposits/claim. Nudges a scan; never reveals another account's deposit. */

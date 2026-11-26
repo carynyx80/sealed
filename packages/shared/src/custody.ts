@@ -260,6 +260,8 @@ export const PRIVACY_ROUTES = {
   deposits: "/api/privacy/deposits", // GET → { deposits: PrivateDepositRecord[] }
   withdrawals: "/api/account/withdrawals", // POST WithdrawRequest + privateTo → WithdrawalRecord (private payout)
   adminRegister: "/api/admin/privacy/register", // POST → registers the company shielded address (admin, costs SOL)
+  /** GET → PrivacyLinkStatus · POST PrivacyLinkRequest → PrivacyLinkResponse · DELETE → {linked:false}. */
+  link: "/api/privacy/link",
 } as const;
 
 /** Returned (HTTP 503) by every privacy route while the feature is off or unavailable. */
@@ -286,6 +288,10 @@ export interface PrivateDepositInfo {
   assets: PrivacyAsset[];
   network: "mainnet" | "devnet" | "localnet";
   minAmount: Record<PrivacyAsset, number>;
+  /** The account's active linked private Sealed wallet (burner), or null. Transfers it signs are attributed here. Additive. */
+  linkedBurner?: string | null;
+  /** `sealed-privacy-link:v1:<sessionWallet>:{burner}` — replace `{burner}` with the burner's base58 pubkey. Additive. */
+  linkMessage?: string;
 }
 
 export const PrivateDepositClaimSchema = z.object({ signature: z.string().min(64).max(100) });
@@ -303,11 +309,47 @@ export interface PrivateDepositRecord {
   reason?: string;
 }
 
+/** `privateTo` value that resolves to the account's linked burner (its registered ring owner address). */
+export const PRIVATE_TO_LINKED = "linked";
+
 /** POST /api/account/withdrawals with `privateTo` → confidential transfer instead of a public payout. */
 export const PrivateWithdrawRequestSchema = WithdrawRequestSchema.extend({
   /**
    * Recipient Shielded Address: a REGISTERED Solana owner address (base58, 32 bytes), or base58 of
-   * `ShieldedAddress.toBytes()` (99 bytes).
+   * `ShieldedAddress.toBytes()` (99 bytes), or `"linked"` → the account's linked burner (400 `no_linked_burner`
+   * when there is none or it is not registered on the ring).
    */
-  privateTo: z.string().min(32).max(160).regex(/^[1-9A-HJ-NP-Za-km-z]+$/).optional(),
+  privateTo: z.union([z.literal(PRIVATE_TO_LINKED), z.string().min(32).max(160).regex(/^[1-9A-HJ-NP-Za-km-z]+$/)]).optional(),
 });
+
+// ---------------- Privacy link: "private Sealed wallet" (burner) → account ----------------
+/**
+ * Wallets refuse to sign the SDK's binary derivation message, so the browser derives a separate Ed25519 keypair
+ * (the burner) from a plain-text signature of the user's main wallet. The burner owns the user's ring identity and
+ * signs ring transactions itself; linking it lets the backend attribute burner-signed private deposits.
+ * The BURNER signs (raw ed25519 over UTF-8) `privacyLinkMessage(sessionWallet, burner)`.
+ */
+export const PRIVACY_LINK_MESSAGE_PREFIX = "sealed-privacy-link:v1";
+export const privacyLinkMessage = (sessionWallet: string, burner: string) => `${PRIVACY_LINK_MESSAGE_PREFIX}:${sessionWallet}:${burner}`;
+
+export const PrivacyLinkRequestSchema = z.object({
+  /** base58 Ed25519 public key of the burner. */
+  burner: z.string().min(32).max(44).regex(/^[1-9A-HJ-NP-Za-km-z]+$/),
+  /** base58 64-byte ed25519 signature BY THE BURNER over `privacyLinkMessage(sessionWallet, burner)`. */
+  signature: z.string().min(64).max(100).regex(/^[1-9A-HJ-NP-Za-km-z]+$/),
+});
+export type PrivacyLinkRequest = z.infer<typeof PrivacyLinkRequestSchema>;
+export interface PrivacyLinkResponse {
+  linked: true;
+  burner: string;
+}
+export interface PrivacyLinkStatus {
+  burner: string | null;
+  /** Unix seconds the active link was created. */
+  linkedAt?: number;
+}
+export interface PrivacyUnlinkResponse {
+  linked: false;
+}
+/** Machine-readable `code` on privacy link / linked-payout errors (body: {error, code}). */
+export type PrivacyLinkErrorCode = "invalid_signature" | "burner_is_session_wallet" | "burner_is_company" | "burner_taken" | "no_linked_burner";

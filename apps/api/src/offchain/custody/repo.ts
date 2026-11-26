@@ -66,6 +66,22 @@ export interface WithdrawalRec {
   sentAt: Date | null;
 }
 
+/**
+ * Privacy Ring link: a separate "private Sealed wallet" (burner Ed25519 key, derived in the browser from a plain-text
+ * signature of the user's main wallet) that owns the user's ring identity. At most ONE active link per account and per
+ * burner; replaced / revoked links are kept as history (active=false, revokedAt set) and stop attributing deposits.
+ */
+export interface PrivacyLinkRec {
+  id: string;
+  /** The Sealed account (sign-in wallet). */
+  wallet: string;
+  burner: string;
+  active: boolean;
+  createdAt: Date;
+  revokedAt: Date | null;
+}
+export type SetPrivacyLinkResult = { ok: true; rec: PrivacyLinkRec; changed: boolean } | { ok: false; code: "burner_taken" };
+
 export interface CustodyRepo {
   readonly kind: "memory" | "postgres";
   // users
@@ -99,6 +115,16 @@ export interface CustodyRepo {
   transitionWithdrawal(id: string, from: WithdrawalStatus[], patch: Partial<Omit<WithdrawalRec, "id" | "wallet" | "createdAt">>): Promise<WithdrawalRec | null>;
   /** USD value of this wallet's withdrawals since `since` that are not rejected/failed (daily cap). */
   withdrawnUsdSince(wallet: string, since: Date): Promise<number>;
+  // privacy links (burner → account)
+  getActivePrivacyLink(wallet: string): Promise<PrivacyLinkRec | null>;
+  getActivePrivacyLinkByBurner(burner: string): Promise<PrivacyLinkRec | null>;
+  /**
+   * Atomically make `burner` the account's only active link: same burner → idempotent (changed=false); another
+   * burner → the old link is revoked (history kept). Burner active for a different account → burner_taken.
+   */
+  setPrivacyLink(wallet: string, burner: string, now: Date): Promise<SetPrivacyLinkResult>;
+  /** Revoke the account's active link (if any). Returns true when one was revoked. */
+  revokePrivacyLink(wallet: string, now: Date): Promise<boolean>;
   close?(): Promise<void>;
 }
 
@@ -119,6 +145,7 @@ export class MemoryCustodyRepo implements CustodyRepo {
   private sessions = new Map<string, SessionRec>();
   private deposits = new Map<string, DepositRec>();
   private withdrawals = new Map<string, WithdrawalRec>();
+  private links: PrivacyLinkRec[] = [];
 
   async getUser(wallet: string) {
     return this.users.get(wallet) ?? null;
@@ -220,5 +247,30 @@ export class MemoryCustodyRepo implements CustodyRepo {
       if (w.wallet === wallet && w.createdAt >= since && w.status !== "rejected" && w.status !== "failed") sum += w.usdValue;
     }
     return sum;
+  }
+  async getActivePrivacyLink(wallet: string) {
+    const l = this.links.find((x) => x.active && x.wallet === wallet);
+    return l ? { ...l } : null;
+  }
+  async getActivePrivacyLinkByBurner(burner: string) {
+    const l = this.links.find((x) => x.active && x.burner === burner);
+    return l ? { ...l } : null;
+  }
+  async setPrivacyLink(wallet: string, burner: string, now: Date): Promise<SetPrivacyLinkResult> {
+    const taken = this.links.find((x) => x.active && x.burner === burner);
+    if (taken && taken.wallet !== wallet) return { ok: false, code: "burner_taken" };
+    if (taken) return { ok: true, rec: { ...taken }, changed: false };
+    for (const l of this.links) if (l.active && l.wallet === wallet) Object.assign(l, { active: false, revokedAt: now });
+    const rec: PrivacyLinkRec = { id: randomBytes(12).toString("hex"), wallet, burner, active: true, createdAt: now, revokedAt: null };
+    this.links.push(rec);
+    return { ok: true, rec: { ...rec }, changed: true };
+  }
+  async revokePrivacyLink(wallet: string, now: Date) {
+    let n = 0;
+    for (const l of this.links) if (l.active && l.wallet === wallet) {
+      Object.assign(l, { active: false, revokedAt: now });
+      n++;
+    }
+    return n > 0;
   }
 }

@@ -273,6 +273,23 @@ model Withdrawal {
   @@index([status, createdAt])
 }
 
+/// Privacy Ring link: the account's "private Sealed wallet" (burner key that owns its ring identity). Additive.
+/// One ACTIVE link per account and per burner, enforced by the nullable unique columns activeWallet / activeBurner
+/// (set to wallet / burner while active, NULL once revoked; Postgres unique ignores NULLs). History rows are kept.
+model PrivacyLink {
+  id           String    @id
+  wallet       String // the Sealed account (sign-in wallet)
+  burner       String
+  active       Boolean   @default(true)
+  activeWallet String?   @unique
+  activeBurner String?   @unique
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+
+  @@index([wallet])
+  @@index([burner])
+}
+
 model LedgerAccount {
   id        String   @id @default(uuid())
   key       String   @unique // `${owner}|${asset}|${kind}`

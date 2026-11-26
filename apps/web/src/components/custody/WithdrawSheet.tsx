@@ -21,8 +21,8 @@ import { quoteAssetOffered } from "@/lib/quoteAssets";
 import { ArrowUpRight } from "../ui/Icons";
 import { usePrivacyRing } from "@/lib/privacy/usePrivacyRing";
 import { useShieldedIdentity } from "@/lib/privacy/session";
-import { isPrivateAsset } from "@/lib/privacy/contract";
-import { PrivateWithdrawOption } from "../privacy/PrivateWithdrawOption";
+import { PRIVATE_TO_LINKED, isPrivateAsset } from "@/lib/privacy/contract";
+import { PrivateWithdrawOption, linkedPrivateWallet } from "../privacy/PrivateWithdrawOption";
 
 function validAddress(a: string): boolean {
   try {
@@ -59,14 +59,14 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
   const [amount, setAmount] = useState("");
   const [dest, setDest] = useState(s.wallet ?? "");
   const [err, setErr] = useState<string | null>(null);
-  // Confidential payout to the user's own Shielded Address (Helius Privacy Ring), when enabled for this network.
+  // Confidential payout into the user's linked private Sealed wallet (Helius Privacy Ring), when enabled here.
   const ring = usePrivacyRing();
   const shielded = useShieldedIdentity();
   const [privateOut, setPrivateOut] = useState(false);
   const [sentPrivate, setSentPrivate] = useState(false);
   const privateAvailable = ring.privateEnabled && isPrivateAsset(asset);
   const usePrivate = privateAvailable && privateOut;
-  const privateTo = usePrivate && shielded.phase === "ready" ? shielded.shieldedAddress : null;
+  const privateTo = usePrivate && linkedPrivateWallet(shielded) ? PRIVATE_TO_LINKED : null;
 
   useEffect(() => {
     if (!dest && s.wallet) setDest(s.wallet);
@@ -107,11 +107,11 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
         <dl className="grid grid-cols-2 border-y border-ink text-sm">
           <div className="border-b border-rule py-3 pr-3"><dt className="eyebrow">Amount</dt><dd className="num mt-1">{live.amount} {live.asset}</dd></div>
           <div className="border-b border-l border-rule py-3 pl-3"><dt className="eyebrow">Status</dt><dd className="mt-1"><StatusChip status={live.status} /></dd></div>
-          <div className="col-span-2 py-3"><dt className="eyebrow">Destination</dt><dd className="num mt-1 break-all text-[13px]">{sentPrivate ? "Your shielded address · amount hidden on-chain" : live.destination}</dd></div>
+          <div className="col-span-2 py-3"><dt className="eyebrow">Destination</dt><dd className="num mt-1 break-all text-[13px]">{sentPrivate ? "Your private wallet · amount hidden on-chain" : live.destination}</dd></div>
         </dl>
         <p className="mt-3 text-[13px] leading-relaxed text-ink-slate">
           {live.status === "sent" ? (
-            <>{sentPrivate ? "Sent privately from Sealed's shielded balance to yours." : "Sent from the company wallet."}</>
+            <>{sentPrivate ? "Sent privately from Sealed's shielded balance into your private wallet. Refresh its private balance on your account page to see it." : "Sent from the company wallet."}</>
           ) : live.status === "pending_approval" ? (
             <>
               This withdrawal is being reviewed by Sealed. The amount stays locked until it&apos;s sent or returned.
@@ -205,7 +205,7 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
       </button>
       <p className="fine mt-2">
         {usePrivate
-          ? "Sent from Sealed's shielded balance to yours. Solscan shows the transfer and both addresses, not the amount."
+          ? "Sent from Sealed's shielded balance into your private wallet. Solscan shows the transfer and both addresses, not the amount."
           : <>Paid out from Sealed&apos;s company wallet; arrival is visible on Solscan once sent.</>}
       </p>
     </div>

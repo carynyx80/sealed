@@ -1,6 +1,7 @@
-import type { PrismaClient, Deposit as DepositRow, Withdrawal as WithdrawalRow } from "@prisma/client";
+import type { PrismaClient, Deposit as DepositRow, PrivacyLink as PrivacyLinkRow, Withdrawal as WithdrawalRow } from "@prisma/client";
+import { randomBytes } from "node:crypto";
 import type { DepositStatus, QuoteAssetSymbol, WithdrawalStatus } from "@sealed/shared";
-import { newDepositRef, type CustodyRepo, type DepositRec, type NonceRec, type SessionRec, type UserRec, type WithdrawalRec } from "./repo.js";
+import { newDepositRef, type CustodyRepo, type DepositRec, type NonceRec, type PrivacyLinkRec, type SessionRec, type SetPrivacyLinkResult, type UserRec, type WithdrawalRec } from "./repo.js";
 
 /** Postgres custody persistence (models User / AuthNonce / Session / Deposit / Withdrawal in schema.prisma). */
 export class PrismaCustodyRepo implements CustodyRepo {
@@ -114,7 +115,42 @@ export class PrismaCustodyRepo implements CustodyRepo {
     });
     return r._sum.usdValue ?? 0;
   }
+
+  async getActivePrivacyLink(wallet: string): Promise<PrivacyLinkRec | null> {
+    const r = await this.db.privacyLink.findUnique({ where: { activeWallet: wallet } });
+    return r ? link(r) : null;
+  }
+  async getActivePrivacyLinkByBurner(burner: string): Promise<PrivacyLinkRec | null> {
+    const r = await this.db.privacyLink.findUnique({ where: { activeBurner: burner } });
+    return r ? link(r) : null;
+  }
+  async setPrivacyLink(wallet: string, burner: string, now: Date): Promise<SetPrivacyLinkResult> {
+    try {
+      return await this.db.$transaction(async (tx) => {
+        const taken = await tx.privacyLink.findUnique({ where: { activeBurner: burner } });
+        if (taken && taken.wallet !== wallet) return { ok: false, code: "burner_taken" } as const;
+        if (taken) return { ok: true, rec: link(taken), changed: false } as const;
+        await tx.privacyLink.updateMany({ where: { activeWallet: wallet }, data: { active: false, activeWallet: null, activeBurner: null, revokedAt: now } });
+        const r = await tx.privacyLink.create({
+          data: { id: randomBytes(12).toString("hex"), wallet, burner, active: true, activeWallet: wallet, activeBurner: burner, createdAt: now },
+        });
+        return { ok: true, rec: link(r), changed: true } as const;
+      });
+    } catch (e) {
+      // Unique race on activeBurner / activeWallet: re-read and answer from the winner.
+      if ((e as { code?: string }).code !== "P2002") throw e;
+      const cur = await this.getActivePrivacyLinkByBurner(burner);
+      if (cur && cur.wallet === wallet) return { ok: true, rec: cur, changed: false };
+      return { ok: false, code: "burner_taken" };
+    }
+  }
+  async revokePrivacyLink(wallet: string, now: Date): Promise<boolean> {
+    const r = await this.db.privacyLink.updateMany({ where: { activeWallet: wallet }, data: { active: false, activeWallet: null, activeBurner: null, revokedAt: now } });
+    return r.count > 0;
+  }
 }
+
+const link = (r: PrivacyLinkRow): PrivacyLinkRec => ({ id: r.id, wallet: r.wallet, burner: r.burner, active: r.active, createdAt: r.createdAt, revokedAt: r.revokedAt });
 
 const dep = (r: DepositRow): DepositRec => ({ ...r, asset: r.asset as QuoteAssetSymbol | null, status: r.status as DepositStatus });
 const wd = (r: WithdrawalRow): WithdrawalRec => ({ ...r, asset: r.asset as QuoteAssetSymbol, status: r.status as WithdrawalStatus });

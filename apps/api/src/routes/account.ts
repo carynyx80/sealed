@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   COMPANY_WALLET,
   DepositClaimSchema,
+  PRIVATE_TO_LINKED,
   PrivateWithdrawRequestSchema,
   QUOTE_ASSETS,
   isQuoteAssetSymbol,
@@ -99,7 +100,11 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext, custo
       if (!privacy.supports(pub.asset)) return sendError(reply, 400, `${pub.asset} cannot be withdrawn privately`);
       let chk;
       try {
-        chk = await privacy.checkRecipient(privateTo);
+        if (privateTo === PRIVATE_TO_LINKED) {
+          // Convenience: pay out to the account's linked private Sealed wallet (its registered ring owner address).
+          chk = await privacy.resolveLinkedRecipient(req.wallet!);
+          if (!chk) return reply.code(400).send({ error: "no linked private wallet registered on the Privacy Ring", code: "no_linked_burner" });
+        } else chk = await privacy.checkRecipient(privateTo);
       } catch (err) {
         req.log.warn({ err: redact((err as Error).message) }, "privacy: recipient check failed");
         return sendError(reply, 503, "Privacy Ring temporarily unreachable, try again shortly");
