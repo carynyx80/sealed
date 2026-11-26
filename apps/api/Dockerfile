@@ -24,8 +24,8 @@ COPY apps/api/package.json apps/api/
 COPY apps/api/prisma apps/api/prisma
 
 # Only the API and its workspace deps (@sealed/shared).
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter "@sealed/api..."
+# (No BuildKit cache mount: Railway requires service-scoped cache ids.)
+RUN pnpm install --frozen-lockfile --filter "@sealed/api..."
 
 COPY packages/shared packages/shared
 COPY apps/api apps/api
