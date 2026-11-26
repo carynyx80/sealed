@@ -34,16 +34,17 @@ export function renderOgImage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
             <SealRing px={64} />
-            <div style={{ fontSize: 44, fontWeight: 700, letterSpacing: -1 }}>Sealed</div>
+            <div style={{ display: "flex", fontSize: 44, fontWeight: 700, letterSpacing: -1 }}>Sealed</div>
           </div>
           <div style={{ display: "flex", fontSize: 22, letterSpacing: 3, textTransform: "uppercase", color: BRAND.ultramarine }}>Solana</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 48 }}>
           <div style={{ display: "flex", flexDirection: "column", maxWidth: 720 }}>
-            <div style={{ fontSize: 76, fontWeight: 700, lineHeight: 1.02, letterSpacing: -3 }}>Every bid sealed.</div>
-            <div style={{ fontSize: 76, fontWeight: 700, lineHeight: 1.02, letterSpacing: -3, color: BRAND.ultramarine }}>One clearing price.</div>
-            <div style={{ fontSize: 28, marginTop: 28, lineHeight: 1.35, opacity: 0.75 }}>
-              {SITE_TAGLINE}: day-one fee-credit buybacks, auto-repay, permanent holder flywheel.
+            <div style={{ display: "flex", fontSize: 76, fontWeight: 700, lineHeight: 1.02, letterSpacing: -3 }}>Every bid sealed.</div>
+            <div style={{ display: "flex", fontSize: 76, fontWeight: 700, lineHeight: 1.02, letterSpacing: -3, color: BRAND.ultramarine }}>One clearing price.</div>
+            {/* Satori: a div with >1 child node needs display:flex — keep this a single string. */}
+            <div style={{ display: "flex", fontSize: 28, marginTop: 28, lineHeight: 1.35, opacity: 0.75 }}>
+              {`${SITE_TAGLINE}: day-one fee-credit buybacks, auto-repay, permanent holder flywheel.`}
             </div>
           </div>
           <SealRing px={300} />
