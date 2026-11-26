@@ -16,13 +16,15 @@ export const sha256Hex = (s: string) => createHash("sha256").update(s, "utf8").d
  */
 export function buildSiwsMessage(p: { domain: string; wallet: string; nonce: string; issuedAt: Date; expiresAt: Date }): string {
   return [
+    // Strict Sign In With Solana / CAIP-122 layout: wallets (Phantom, Solflare, Backpack…) parse this and refuse
+    // messages with unknown fields ("invalid formatting"). Only spec fields, in spec order.
     `${p.domain} wants you to sign in with your Solana account:`,
     p.wallet,
     "",
     SIWS_STATEMENT,
     "",
-    `Domain: ${p.domain}`,
-    `Wallet: ${p.wallet}`,
+    `URI: https://${p.domain}`,
+    `Version: 1`,
     `Nonce: ${p.nonce}`,
     `Issued At: ${p.issuedAt.toISOString()}`,
     `Expiration Time: ${p.expiresAt.toISOString()}`,
