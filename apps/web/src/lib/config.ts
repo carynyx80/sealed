@@ -32,6 +32,21 @@ export function networkName(network?: Network | string | null): string {
   return network === "mainnet" ? "mainnet" : "test network";
 }
 
+/**
+ * WalletConnect (Reown) project id: enables the "WalletConnect" option (QR on desktop, wallet-app deep link on
+ * phones; Jupiter Mobile, Trust, OKX, …). Public by design (it identifies the dApp, it is not a secret); create one
+ * free at cloud.reown.com. Unset → the option is hidden. Outside production builds `window.__SEALED_WC_PROJECT_ID__`
+ * can override it for local testing.
+ */
+const WALLETCONNECT_PROJECT_ID_ENV = (process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "").trim();
+export function walletConnectProjectId(): string {
+  if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+    const o = (window as unknown as { __SEALED_WC_PROJECT_ID__?: unknown }).__SEALED_WC_PROJECT_ID__;
+    if (typeof o === "string" && o.trim()) return o.trim();
+  }
+  return WALLETCONNECT_PROJECT_ID_ENV;
+}
+
 /** Explicit RPC override (e.g. a dedicated provider URL). Never put a secret API key here: it ships to browsers. */
 const rawRpc = process.env.NEXT_PUBLIC_RPC_URL || undefined;
 /** A devnet/testnet RPC left over in a mainnet build's env is ignored (it would silently point wallets at devnet). */

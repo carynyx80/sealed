@@ -2,9 +2,10 @@
 // Connection / Wallet / wallet-modal providers for the whole app (mounted once in app/layout.tsx).
 //  - RPC: lib/config RPC_ENDPOINT (the Sealed API's allowlisted /api/rpc proxy unless NEXT_PUBLIC_RPC_URL is set),
 //    commitment "confirmed". Network comes from lib/config only.
-//  - Wallets: Wallet Standard auto-detection (Phantom, Solflare, Backpack, …) plus explicit Phantom + Solflare
-//    adapters (install hints + Solflare's web wallet). The provider drops an explicit adapter whenever a Wallet
-//    Standard wallet with the same name is detected, so the modal never lists a wallet twice.
+//  - Wallets: Wallet Standard auto-detection (Phantom, Solflare, Backpack, Jupiter, OKX, …) plus explicit Phantom +
+//    Solflare adapters, WalletConnect (when NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is set) and lazily loaded legacy
+//    adapters (see ./WalletRuntime). An explicit adapter is dropped whenever a Wallet Standard wallet with the same
+//    name is detected, so the modal never lists a wallet twice.
 //  - autoConnect only for the wallet this browser connected before (or the one the user just picked).
 //  - Errors become quiet toasts (rejections) or actionable ones (not installed → install / open-in-app link).
 //  - Perf: the real providers + adapters + @solana/web3.js live in ./WalletRuntime, a lazy chunk. It loads right
@@ -32,6 +33,7 @@ import { clearSession } from "@/lib/custody/client";
 import { isUserRejection } from "@/lib/defi/config";
 import {
   MOBILE_WALLET_ADAPTER_NAME,
+  WALLETCONNECT_NAME,
   consumeUserPick,
   getLastWallet,
   isMobileDevice,
@@ -100,7 +102,10 @@ export function SolanaProviders({ children }: { children: ReactNode }) {
     // (never pop a web-wallet window or a mobile wallet intent on load).
     const ok =
       getLastWallet() === adapter.name &&
-      (adapter.readyState === WalletReadyState.Installed || adapter.name === MOBILE_WALLET_ADAPTER_NAME);
+      (adapter.readyState === WalletReadyState.Installed ||
+        adapter.name === MOBILE_WALLET_ADAPTER_NAME ||
+        // WalletConnect's autoConnect only restores a stored session; it never opens the QR modal.
+        adapter.name === WALLETCONNECT_NAME);
     silentConnect.current = ok;
     return ok;
   }, []);
@@ -117,6 +122,20 @@ export function SolanaProviders({ children }: { children: ReactNode }) {
     const name = adapter?.name ?? "Wallet";
     if (isUserRejection(error) || isUserRejection((error as { error?: unknown }).error)) {
       pushWalletToast({ tone: "info", title: "Request cancelled", body: `${name} request was declined in the wallet.` }, 3_500);
+      return;
+    }
+    if (error.name === "WalletWindowClosedError") {
+      pushWalletToast({ tone: "info", title: "Connection cancelled", body: `The ${name} window was closed before connecting.` }, 3_500);
+      return;
+    }
+    if (name === WALLETCONNECT_NAME) {
+      const raw = `${error.message ?? ""} ${(error as { error?: { message?: string } }).error?.message ?? ""}`;
+      const body = /project|unauthori[sz]ed|forbidden|\b40[13]\b/i.test(raw)
+        ? "WalletConnect isn't available right now. Use a browser wallet or open Sealed in your wallet app."
+        : /socket|network|relay|fetch|timed? ?out|offline/i.test(raw)
+          ? "Couldn't reach WalletConnect. Check your connection and try again."
+          : "Your wallet app didn't finish connecting. Try again from the wallet list.";
+      pushWalletToast({ tone: "error", title: "WalletConnect didn't connect", body });
       return;
     }
     if (error instanceof WalletNotReadyError || error.name === "WalletNotReadyError") {

@@ -18,14 +18,42 @@ export function isAndroid(): boolean {
   return typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent || "");
 }
 
-/** Universal links that open the current page inside the wallet app's in-app browser (wallet is injected there). */
-export function walletDeepLinks(href: string, origin: string): { phantom: string; solflare: string } {
+/**
+ * Universal links that open the current page inside the wallet app's in-app browser (wallet is injected there).
+ * Only formats confirmed in each wallet's own docs: Phantom (docs.phantom.com deeplinks/browse), Solflare
+ * (docs.solflare.com deeplinks/browse), Backpack (docs.backpack.app deeplinks/other-methods/browse). Wallets without
+ * a documented browse link (OKX, Trust, Bitget, Magic Eden, Jupiter Mobile) are reached through WalletConnect.
+ */
+export function walletDeepLinks(href: string, origin: string): { phantom: string; solflare: string; backpack: string } {
   const url = encodeURIComponent(href);
   const ref = encodeURIComponent(origin);
   return {
     phantom: `https://phantom.app/ul/browse/${url}?ref=${ref}`,
     solflare: `https://solflare.com/ul/v1/browse/${url}?ref=${ref}`,
+    backpack: `https://backpack.app/ul/v1/browse/${url}?ref=${ref}`,
   };
+}
+
+/** Adapter name of the (lazy) WalletConnect option. */
+export const WALLETCONNECT_NAME = "WalletConnect";
+export const JUPITER_MOBILE_URL = "https://jup.ag/mobile";
+
+/** Popular wallets offered as install links on desktop when not detected (icons come from a matching adapter if any). */
+export const INSTALL_WALLETS: readonly { name: string; href: string; host: string }[] = [
+  { name: "Phantom", href: "https://phantom.com/download", host: "phantom.com" },
+  { name: "Solflare", href: "https://solflare.com/download", host: "solflare.com" },
+  { name: "Backpack", href: "https://backpack.app/downloads", host: "backpack.app" },
+  { name: "Jupiter", href: "https://chromewebstore.google.com/detail/iledlaeogohbilgbfhmbgkgmpplbfboh", host: "jup.ag" },
+  { name: "OKX Wallet", href: "https://web3.okx.com/download", host: "okx.com" },
+  { name: "Coinbase Wallet", href: "https://www.coinbase.com/wallet/downloads", host: "coinbase.com" },
+  { name: "Trust", href: "https://trustwallet.com/download", host: "trustwallet.com" },
+  { name: "Bitget", href: "https://web3.bitget.com/en/wallet-download", host: "bitget.com" },
+  { name: "Magic Eden", href: "https://wallet.magiceden.io/", host: "magiceden.io" },
+];
+
+/** Loose wallet-name key so "Bitget Wallet" / "Bitget", "Trust Wallet" / "Trust" match. */
+export function walletKey(name: string): string {
+  return name.toLowerCase().replace(/\bwallet\b/g, "").replace(/[^a-z0-9]/g, "");
 }
 
 /* ------------------------------------------------------------------------------ connect memory */

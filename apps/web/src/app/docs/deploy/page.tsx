@@ -39,6 +39,7 @@ const WEB_ENV: Array<[string, string]> = [
   ["NEXT_PUBLIC_RPC_URL", "optional public RPC; the web app reaches Solana through the API's POST /api/rpc proxy (rolling out), so no provider key belongs here"],
   ["NEXT_PUBLIC_PROGRAM_ID", "onchain mode program id (roadmap)"],
   ["NEXT_PUBLIC_JUPITER_API_URL", "optional override"],
+  ["NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID", "optional Reown project id (cloud.reown.com); enables WalletConnect for phone wallets such as Jupiter Mobile, hidden when unset"],
 ];
 
 export default function Deploy() {
