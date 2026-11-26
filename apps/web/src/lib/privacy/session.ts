@@ -103,8 +103,18 @@ function makeBridge(owner: string, adapter: Adapter | undefined, signMessage: ((
 
 /* ------------------------------------------------------------------------------------- actions */
 
+/**
+ * Helius' SDK derives Privacy Ring keys from a signature over a Solana off-chain message (v0 envelope, 0xff
+ * "solana offchain" header). Some wallets, notably Phantom, refuse to sign bytes in that format through
+ * signMessage ("You cannot sign solana transactions using sign message"); the SDK accepts no other message.
+ */
+const OFFCHAIN_UNSUPPORTED = /cannot sign solana transactions using sign message|offchain message|off-chain message|not support(ed)? .*message format|invalid message format/i;
+
 async function friendly(e: unknown): Promise<string> {
   if (isUserRejection(e)) return "You declined in your wallet. Nothing was sent.";
+  if (OFFCHAIN_UNSUPPORTED.test(errorMessage(e))) {
+    return "Your wallet can't sign the message Helius Privacy Rings use to create your private keys yet (Phantom blocks it). Try another wallet such as Solflare or Backpack for private deposits. Standard deposits work with any wallet.";
+  }
   try {
     const m = (await loadSpr()).describeSprError(e);
     if (m) return m;
