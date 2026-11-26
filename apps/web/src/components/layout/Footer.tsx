@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NETWORK } from "@/lib/config";
+import { DEMO_ENABLED, IS_MAINNET, NETWORK_LABEL } from "@/lib/config";
 import { Wordmark } from "./Wordmark";
 
 const NOTES = [
@@ -11,7 +11,6 @@ const NOTES = [
 ];
 
 export function Footer() {
-  const net = NETWORK === "mainnet" ? "Mainnet-beta" : NETWORK === "localnet" ? "Localnet" : "Devnet";
   return (
     <footer className="mt-28 border-t border-ink">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
@@ -55,7 +54,11 @@ export function Footer() {
           </div>
         </div>
         <div className="flex flex-col gap-2 border-t border-rule py-5 font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-muted sm:flex-row sm:items-center sm:justify-between">
-          <span>Experimental software · Not investment advice · {net} &amp; demo data are simulated</span>
+          <span>
+            {IS_MAINNET
+              ? "Solana mainnet · Custodial: Sealed holds deposited funds · Not investment advice"
+              : `Experimental software · Not investment advice · ${NETWORK_LABEL}${DEMO_ENABLED ? " & demo data are simulated" : ""}`}
+          </span>
           <span>Set in Schibsted Grotesk, Libre Caslon &amp; Fragment Mono</span>
         </div>
       </div>

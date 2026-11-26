@@ -1,5 +1,5 @@
 import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
-import { QUOTE_ASSETS, QUOTE_ASSET_LIST, resolveQuoteMint, type Network, type QuoteAssetSymbol } from "@sealed/shared";
+import { QUOTE_ASSETS, QUOTE_ASSET_LIST, QUOTE_ASSET_MAINNET, resolveQuoteMint, type Network, type QuoteAssetSymbol } from "@sealed/shared";
 
 /** Program ids (classic SPL Token only — Token-2022 deposits are rejected). */
 export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -15,7 +15,13 @@ export function ata(owner: string | PublicKey, mint: string | PublicKey): Public
   return PublicKey.findProgramAddressSync([o.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), m.toBuffer()], ASSOCIATED_TOKEN_PROGRAM_ID)[0];
 }
 
-/** Quote assets that are depositable on this network: native SOL + every SPL asset with a resolved mint. */
+/**
+ * Quote assets that are depositable on this network.
+ *  - mainnet: ONLY the verified allowlist in shared QUOTE_ASSET_MAINNET (enabled + classic SPL Token or native);
+ *    env QUOTE_MINT_*_MAINNET overrides are ignored so a bad env var can never redirect real deposits/payouts.
+ *  - devnet/localnet: native SOL + every SPL asset with a resolved mint (registry or env override).
+ * `usdPrice` is the static demo price (devnet limits only; mainnet limits use the live PriceService).
+ */
 export interface CustodyAsset {
   symbol: QuoteAssetSymbol;
   mint: string | null; // null = native SOL
@@ -24,6 +30,16 @@ export interface CustodyAsset {
 }
 export function custodyAssets(network: Network, env: Record<string, string | undefined> = process.env): CustodyAsset[] {
   const out: CustodyAsset[] = [];
+  if (network === "mainnet") {
+    for (const q of QUOTE_ASSET_LIST) {
+      const m = QUOTE_ASSET_MAINNET[q.symbol];
+      if (!m?.enabled) continue;
+      if (m.tokenProgram === "native") out.push({ symbol: q.symbol, mint: null, decimals: q.decimals, usdPrice: q.demoUsdPrice });
+      else if (m.tokenProgram === "spl-token" && m.mint) out.push({ symbol: q.symbol, mint: m.mint, decimals: q.decimals, usdPrice: q.demoUsdPrice });
+      // token-2022 is never enabled here: the deposit parser / payout builder only support classic SPL Token.
+    }
+    return out;
+  }
   for (const q of QUOTE_ASSET_LIST) {
     if (q.kind === "native") {
       out.push({ symbol: q.symbol, mint: null, decimals: q.decimals, usdPrice: q.demoUsdPrice });

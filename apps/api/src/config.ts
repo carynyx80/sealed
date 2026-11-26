@@ -26,6 +26,10 @@ const EnvSchema = z.object({
   KEEPER_SECRET_KEY: optStr,
   CORS_ORIGIN: z.preprocess(emptyToUndef, z.string().default("*")),
   JUPITER_API_URL: z.preprocess(emptyToUndef, z.string().default("https://quote-api.jup.ag/v6")),
+  /** Jupiter Price API v3 base (mainnet withdrawal-limit pricing). `?ids=<mints>` is appended. */
+  JUPITER_PRICE_API_URL: z.preprocess(emptyToUndef, z.string().url().default("https://lite-api.jup.ag/price/v3")),
+  /** Optional Jupiter API key (sent as x-api-key; needed for api.jup.ag, not for lite-api). */
+  JUPITER_API_KEY: optStr,
   IDL_PATH: optStr,
   DEMO_TICK_MS: z.coerce.number().int().positive().default(1000),
   WORKERS_ENABLED: z.preprocess(emptyToUndef, boolish.default(true)),
@@ -57,6 +61,13 @@ export interface AppConfig {
   /** offchain (default): custodial ledger engine; onchain: Anchor program (non-custodial). */
   executionMode: "offchain" | "onchain";
   offchainTickMs: number;
+  jupiterPriceApiUrl: string;
+  jupiterApiKey?: string;
+  /**
+   * Configuration problems detected at load time that were corrected fail-safe (e.g. DEMO_MODE forced off on
+   * mainnet). buildServer logs each one at ERROR level on startup.
+   */
+  startupErrors: string[];
   version: string;
 }
 
@@ -71,10 +82,17 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (!rpcUrl && e.HELIUS_API_KEY) {
     rpcUrl = `https://${e.NETWORK === "mainnet" ? "mainnet" : "devnet"}.helius-rpc.com/?api-key=${e.HELIUS_API_KEY}`;
   }
-  const isDemo = e.DEMO_MODE ?? !e.SOLANA_RPC_URL;
+  const startupErrors: string[] = [];
+  let isDemo = e.DEMO_MODE ?? !e.SOLANA_RPC_URL;
+  // MAINNET GUARD: the demo world (simulated launches, demo bids, demo ticker) must never run next to real funds.
+  // DEMO_MODE=true (or the implicit demo default when SOLANA_RPC_URL is unset) is FORCED OFF on mainnet.
+  if (e.NETWORK === "mainnet" && isDemo) {
+    isDemo = false;
+    if (e.DEMO_MODE === true) startupErrors.push("NETWORK=mainnet with DEMO_MODE=true is not allowed — DEMO_MODE has been FORCED OFF. Remove DEMO_MODE from the mainnet environment.");
+  }
   const cors = e.CORS_ORIGIN.trim();
   const corsOrigin: AppConfig["corsOrigin"] = cors === "*" ? true : cors.includes(",") ? cors.split(",").map((s) => s.trim()).filter(Boolean) : cors;
-  return {
+  const out: AppConfig = {
     port: e.PORT,
     host: e.HOST,
     nodeEnv: e.NODE_ENV,
@@ -97,7 +115,16 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     workersEnabled: e.WORKERS_ENABLED,
     executionMode: e.EXECUTION_MODE,
     offchainTickMs: e.OFFCHAIN_TICK_MS,
+    jupiterPriceApiUrl: e.JUPITER_PRICE_API_URL.replace(/\/$/, ""),
+    jupiterApiKey: e.JUPITER_API_KEY,
+    startupErrors,
     version: "0.1.0",
     ...overrides,
   };
+  // Overrides cannot re-enable demo on mainnet either.
+  if (out.network === "mainnet" && out.isDemo) {
+    out.isDemo = false;
+    out.startupErrors = [...out.startupErrors, "isDemo override ignored on mainnet — demo mode FORCED OFF."];
+  }
+  return out;
 }

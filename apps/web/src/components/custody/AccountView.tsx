@@ -8,7 +8,7 @@ import { openDeposit, useCustodyAccount, useCustodyInfo, useCustodySession, useD
 import { fmtAmount, shortAddr } from "@/lib/format";
 import { BalancesPanel } from "./BalancesPanel";
 import { CustodyGate, CustodyOffline, SignInButton } from "./SignInButton";
-import { DisclosureList, StatusChip, explorerAccount, explorerTx } from "./parts";
+import { DisclosureList, PayoutsPausedNotice, StatusChip, explorerAccount, explorerTx, payoutsPausedCopy } from "./parts";
 import { ArrowUpRight } from "../ui/Icons";
 
 function fmtWhen(ts: number): string {
@@ -60,6 +60,11 @@ export function AccountView() {
           <CustodyOffline />
         </div>
       )}
+      {mounted && availability === "available" && info?.payoutsEnabled === false && (
+        <div className="mt-8">
+          <PayoutsPausedNotice reason={info.payoutsReason} />
+        </div>
+      )}
 
       {/* balances + disclosure */}
       <div className="mt-8 grid gap-6 lg:grid-cols-12">
@@ -85,6 +90,7 @@ export function AccountView() {
               <p className="fine mt-1">
                 Mode <span className="num">{info.mode}</span> · network <span className="num">{info.network}</span> · payouts{" "}
                 <span className={clsx("num", info.payoutsEnabled ? "text-gain" : "text-burn")}>{info.payoutsEnabled ? "automatic" : "manual approval"}</span>
+                {!info.payoutsEnabled && <> · <span>{payoutsPausedCopy(info.payoutsReason)}</span></>}
               </p>
             )}
           </div>

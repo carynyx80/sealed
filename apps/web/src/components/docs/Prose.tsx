@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 
 /* ---------------------------------------------------------------- status */
 
-export type Status = "demo" | "chain-pending" | "chain-passing" | "offchain-passing" | "simulated" | "planned" | "partial" | "dev";
+export type Status = "demo" | "chain-pending" | "chain-passing" | "offchain-passing" | "simulated" | "planned" | "partial" | "dev" | "rolling";
 
 const STATUS: Record<Status, { label: string; cls: string; dot: string }> = {
   demo: { label: "Live in demo", cls: "border-gain/30 bg-gain-tint text-gain", dot: "bg-gain" },
@@ -18,6 +18,7 @@ const STATUS: Record<Status, { label: string; cls: string; dot: string }> = {
   simulated: { label: "Simulated", cls: "border-dashed border-ink-slate/50 bg-paper text-ink-slate", dot: "border border-dashed border-ink-slate" },
   planned: { label: "Planned", cls: "border-dashed border-rule-strong bg-transparent text-ink-muted", dot: "bg-rule-strong" },
   dev: { label: "Live · needs operator key", cls: "border-signal/30 bg-signal-tint text-signal-ink", dot: "bg-signal" },
+  rolling: { label: "Rolling out", cls: "border-dashed border-signal/40 bg-signal-tint text-signal-ink", dot: "bg-signal" },
   partial: { label: "Partial", cls: "border-burn/30 bg-burn-tint text-burn", dot: "bg-burn" },
 };
 
@@ -33,11 +34,12 @@ export function StatusBadge({ status, label, className }: { status: Status; labe
 
 export function StatusLegend() {
   const order: Array<[Status, string]> = [
-    ["demo", "Runs today in the demo world (API DEMO_MODE or the in-browser fallback). No real funds."],
+    ["rolling", "Part of the switch to Solana mainnet. Being deployed now; check /api/health and /api/custody/info on the hosted API before relying on it."],
+    ["demo", "Runs in the demo world (local development or a devnet API with DEMO_MODE). Disabled on mainnet. No real funds."],
     ["chain-pending", "Implemented in the Anchor program. anchor build succeeds, the 15 Rust unit tests and the 18-test anchor suite (with --features test-mode) pass locally. Not deployed to devnet or mainnet."],
     ["offchain-passing", "TypeScript implementation with unit, invariant or e2e tests that pass today."],
     ["simulated", "A stand-in that models the behaviour (for example the simulated Privacy Ring)."],
-    ["dev", "Built, tested and deployed on Railway, but switched off until the operator sets a secret (COMPANY_WALLET_SECRET_KEY for payouts, HELIUS_API_KEY for deposit detection)."],
+    ["dev", "Built, tested and deployed on Railway, but only active once the operator has set its secret (COMPANY_WALLET_SECRET_KEY for payouts, HELIUS_API_KEY for deposit detection). /api/custody/info reports payoutsEnabled."],
     ["partial", "Code exists but a known gap stops it working end to end. The gap is described next to the badge."],
     ["planned", "Designed, not built."],
   ];

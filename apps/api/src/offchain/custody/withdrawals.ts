@@ -4,6 +4,7 @@ import { WITHDRAWAL_LIMITS, type QuoteAssetSymbol, type WithdrawalRecord } from 
 import { fromAtoms, isValidDestination, toAtoms, type CustodyAsset } from "./chain.js";
 import type { CustodyConfig } from "./config.js";
 import { ledgerErrorCode, type CustodyLedger } from "./ledgerPort.js";
+import { StaticPriceService, type PriceQuote, type PriceService } from "./prices.js";
 import type { CustodyRepo, WithdrawalRec } from "./repo.js";
 
 /** Smallest SOL payout: keeps new destination accounts above the rent-exempt minimum (890,880 lamports). */
@@ -37,6 +38,7 @@ export class WithdrawalService {
     private readonly assets: CustodyAsset[],
     private readonly log: FastifyBaseLogger,
     private readonly now: () => Date = () => new Date(),
+    private readonly prices: PriceService = new StaticPriceService(),
   ) {}
 
   asset(symbol: QuoteAssetSymbol): CustodyAsset | undefined {
@@ -80,10 +82,24 @@ export class WithdrawalService {
     if (atoms > 0xffff_ffff_ffff_ffffn) throw new CustodyError(400, "amount too large");
     if (a.mint === null && atoms < MIN_SOL_WITHDRAWAL_LAMPORTS) throw new CustodyError(400, "minimum SOL withdrawal is 0.001 SOL");
 
-    const usdValue = fromAtoms(atoms, a.decimals) * a.usdPrice;
+    let quote: PriceQuote | null = null;
+    try {
+      quote = await this.prices.usdPrice(a.symbol);
+    } catch {
+      quote = null;
+    }
+    // Recorded usdValue (feeds the 24h cap): the fresh price, else the last known one, else the demo reference.
+    const approxPrice = quote?.usd ?? this.prices.lastKnown(a.symbol)?.usd ?? a.usdPrice;
+    const usdValue = fromAtoms(atoms, a.decimals) * approxPrice;
     const now = this.now();
     const usedToday = await this.repo.withdrawnUsdSince(wallet, new Date(now.getTime() - DAY_MS));
-    const needsApproval = usdValue > WITHDRAWAL_LIMITS.autoApproveMaxUsd || usedToday + usdValue > WITHDRAWAL_LIMITS.dailyPerWalletUsd;
+    const { autoApproveMaxUsd, dailyPerWalletUsd } = WITHDRAWAL_LIMITS;
+    let reason: string | null = null;
+    if (this.cfg.manualApprovalOnly) reason = "manual approval required (ADMIN_TOKEN not configured on mainnet)";
+    else if (!quote) reason = `no fresh ${a.symbol} USD price: manual approval required`;
+    else if (usdValue > autoApproveMaxUsd) reason = `above auto-approve limit ($${autoApproveMaxUsd})`;
+    else if (usedToday + usdValue > dailyPerWalletUsd) reason = `daily limit ($${dailyPerWalletUsd}) exceeded`;
+    const needsApproval = reason !== null;
     const id = randomUUID();
 
     try {
@@ -95,11 +111,7 @@ export class WithdrawalService {
     const rec: WithdrawalRec = {
       id, wallet, asset: a.symbol, mint: a.mint, amountAtoms: atoms, destination: input.destination, usdValue,
       status: needsApproval ? "pending_approval" : "queued",
-      reason: needsApproval
-        ? usdValue > WITHDRAWAL_LIMITS.autoApproveMaxUsd
-          ? `above auto-approve limit ($${WITHDRAWAL_LIMITS.autoApproveMaxUsd})`
-          : `daily limit ($${WITHDRAWAL_LIMITS.dailyPerWalletUsd}) exceeded`
-        : null,
+      reason,
       signature: null, rawTx: null, blockhash: null, lastValidBlockHeight: null, attempts: 0, approvedBy: null,
       createdAt: now, updatedAt: now, sentAt: null,
     };
@@ -109,7 +121,7 @@ export class WithdrawalService {
       await this.ledger.unlock(wallet, a.symbol, atoms, `wd:${id}:unlock`, { type: "withdrawal_unlock", withdrawalId: id, reason: "record failed" }).catch(() => undefined);
       throw e;
     }
-    this.log.info({ withdrawalId: id, wallet, asset: a.symbol, atoms: atoms.toString(), status: rec.status }, "custody: withdrawal requested");
+    this.log.info({ withdrawalId: id, wallet, asset: a.symbol, atoms: atoms.toString(), status: rec.status, usd: Math.round(usdValue * 100) / 100, priceSource: quote?.source ?? null }, "custody: withdrawal requested");
     return rec;
   }
 

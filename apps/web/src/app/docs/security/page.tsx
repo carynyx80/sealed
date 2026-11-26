@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { COMPANY_WALLET, NO_REVEAL_SLASH_BPS, WITHDRAWAL_LIMITS } from "@sealed/shared";
+import { MAINNET_COMMIT_WINDOW, RealFundsDisclosure } from "@/components/docs/Mainnet";
 import { A, Accent, C, DocHeader, H2, H3, Ledger, Note, P, StatusBadge, Table, UL } from "@/components/docs/Prose";
 
 export const metadata: Metadata = { title: "Security" };
@@ -18,14 +19,15 @@ export default function Security() {
         lede="An honest account of the trust model in each execution mode, the invariants the test suites check, and the gaps we know about."
       >
         <StatusBadge status="planned" label="No audit" />
-        <StatusBadge status="planned" label="No mainnet deployment" />
+        <StatusBadge status="rolling" label="Mainnet custodial · real funds · rolling out" />
       </DocHeader>
 
-      <Note title="Custody disclosure" tone="warn">
+      <RealFundsDisclosure />
+      <Note title="Custody in one line" tone="signal">
         <p>
-          In the default offchain mode Sealed is <strong>custodial</strong>. Deposits sit in the company wallet <C>{COMPANY_WALLET}</C>; your balance is a
-          ledger entry. Sealed can see your bids once submitted, can delay or refuse withdrawals, and could lose funds if the operator key is compromised.
-          There is no insurance, no audit and no regulatory licence behind this service. See <A href="/docs/custody">Custody</A>.
+          Sealed is <strong>custodial on Solana mainnet</strong>: deposits sit in the company wallet <C>{COMPANY_WALLET}</C> and your balance is a ledger
+          entry. Sealed can see your bids once submitted, can delay or refuse withdrawals, and could lose funds if the operator key is compromised. There
+          is no insurance, no audit and no regulatory licence behind this service. See <A href="/docs/custody">Custody</A>.
         </p>
       </Note>
 
@@ -35,7 +37,8 @@ export default function Security() {
         head={["Party", "Can", "Cannot"]}
         rows={[
           ["Operator (company wallet key)", "move reserves; pause, delay or reject withdrawals; read every bid after submission", "forge your SIWS signature; hide reserves from proof of reserves (they are on-chain)"],
-          ["Admin token holder (x-admin-token)", <>approve or reject withdrawals held above <C>${WITHDRAWAL_LIMITS.autoApproveMaxUsd}</C> or the daily cap; reject queued ones; seed the credit pool ledger account</>, "send funds without the wallet key"],
+          ["Admin token holder (x-admin-token)", <>approve or reject withdrawals held above <C>${WITHDRAWAL_LIMITS.autoApproveMaxUsd}</C>, over the daily cap or without a fresh price; reject queued ones; seed the credit pool ledger account. Admin routes require <C>ADMIN_TOKEN</C></>, "send funds without the wallet key"],
+          ["Browser (via POST /api/rpc)", "call the allowlisted JSON-RPC methods the web app needs, within the rate limit", "see the RPC provider key or call methods outside the allowlist"],
           ["Other users", "see aggregate auction counters", "see your bid before reveal (the API never returns it)"],
           ["Chain observers", "see deposits to and withdrawals from the company wallet", "see bids, fills or internal trades"],
         ]}
@@ -93,9 +96,18 @@ export default function Security() {
           <strong>Anti-snipe binds wallets, not tokens.</strong> A flagged buyer can move tokens to a fresh wallet.
         </li>
         <li>
-          <strong>Hosted API runs in demo.</strong> <C>DEMO_MODE=true</C> on Railway merges simulated launches with real offchain ones (each carries{" "}
-          <C>isDemo</C>) and keeps the custody workers off unless <C>CUSTODY_WORKERS=true</C>. <C>COMPANY_WALLET_SECRET_KEY</C> and <C>HELIUS_API_KEY</C> are
-          not set, so no deposit is detected and no withdrawal is sent.
+          <strong>Real funds in one hot wallet.</strong> Every mainnet deposit sits in a single company wallet controlled by one key held as a Railway
+          secret. No multisig, MPC or hot/cold split yet.
+        </li>
+        <li>
+          <strong>Launched tokens are ledger-only.</strong> Tokens won or bought on Sealed are custodial ledger balances and cannot be withdrawn on-chain yet.
+          Only SOL and USDC withdraw.
+        </li>
+        <li>
+          <strong>Tokenized stocks are coming soon.</strong> Their mainnet mints are not verified, so only SOL and USDC are enabled on mainnet.
+        </li>
+        <li>
+          <strong>Payouts depend on a SOL fee balance.</strong> If the company wallet runs low on SOL, payouts pause with a reason until it is topped up.
         </li>
         <li>
           <strong>Relayer sees your bid twice.</strong> The relayer decrypts an auto-reveal envelope once on submission to check it matches the commitment
@@ -113,7 +125,8 @@ export default function Security() {
           operator seeds it (<C>POST /api/admin/credit-pool/seed</C>) a graduating launch gets no buyback vault and goes straight to the flywheel split.
         </li>
         <li>
-          <strong>Network bounds differ.</strong> The API schema accepts a 2-minute commit window on any network; only the program enforces 15 minutes on mainnet.
+          <strong>Network bounds.</strong> On mainnet the API requires a {MAINNET_COMMIT_WINDOW} commit window (rolling out); devnet and localnet still accept
+          2 minutes.
         </li>
         <li>
           <strong>Onchain-mode launch creation.</strong> With <C>EXECUTION_MODE=onchain</C> and no demo, <C>POST /api/launches</C> returns 501 with
@@ -121,11 +134,12 @@ export default function Security() {
           launch.)
         </li>
         <li>
-          <strong>Withdrawal limits use demo prices</strong> from the quote-asset registry for USD conversion.
+          <strong>Withdrawal limits depend on a price feed.</strong> USD limits use live Jupiter Price API prices (rolling out); without a fresh price the
+          withdrawal fails safe to manual approval, which can delay it.
         </li>
         <li>
           <strong>Demo mode is not secure mode.</strong> <C>demo-bid</C> and unauthenticated in-memory launch creation exist only with{" "}
-          <C>DEMO_MODE=true</C>.
+          <C>DEMO_MODE=true</C>, which is disabled on mainnet.
         </li>
       </UL>
 
@@ -133,12 +147,13 @@ export default function Security() {
       <Ledger
         items={[
           { k: "Custodial backend", s: "offchain-passing", sLabel: "Built · tests passing", v: "Ledger engine, SIWS, deposit watcher, payouts, proof of reserves, admin queue. Deployed on Railway." },
-          { k: "Turn on custody", s: "dev", v: "Operator sets COMPANY_WALLET_SECRET_KEY and HELIUS_API_KEY, seeds the credit pool, and switches DEMO_MODE off (or sets CUSTODY_WORKERS=true)." },
+          { k: "Mainnet custody", s: "rolling", v: "NETWORK=mainnet, DEMO_MODE=false, COMPANY_WALLET_SECRET_KEY, HELIUS_API_KEY and ADMIN_TOKEN set, company wallet funded with SOL for fees, credit pool seeded. See the mainnet readiness checklist in Deploy." },
+          { k: "On-chain withdrawal of launched tokens", s: "planned", v: "Today only SOL and USDC withdraw." },
           { k: "Custody hardening", s: "planned", v: "Multisig or MPC for the company wallet, hot/cold split, independent reserve attestations, ledger export." },
-          { k: "Program to devnet", s: "planned", v: "Anchor suite passes locally; next: deploy with deploy-devnet.sh, fix keeper wiring, run the indexer against it." },
+          { k: "Program to devnet, then mainnet", s: "planned", v: "Anchor suite passes locally; next: deploy with deploy-devnet.sh, fix keeper wiring, run the indexer against it." },
           { k: "Onchain mode", s: "planned", v: "Non-custodial execution with the Anchor program as the source of truth." },
           { k: "Private deposits", s: "planned", v: "Phases A (bucketed), B (ring-funded, attested), C (non-custodial ring CPI). See Privacy." },
-          { k: "External audit and mainnet", s: "planned", v: "Not before the above. Nothing on this site claims otherwise." },
+          { k: "External audit", s: "planned", v: "No audit exists for the custodial backend or the program. Nothing on this site claims otherwise." },
         ]}
       />
     </>

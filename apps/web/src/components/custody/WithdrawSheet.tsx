@@ -16,7 +16,8 @@ import { errorMessage } from "@/lib/defi/config";
 import { fmtUsd, shortAddr } from "@/lib/format";
 import { Sheet } from "./Sheet";
 import { CustodyGate } from "./SignInButton";
-import { DisclosureList, StatusChip, assetUsd, cleanAmount, explorerTx } from "./parts";
+import { DisclosureList, PayoutsPausedNotice, StatusChip, assetUsd, cleanAmount, explorerTx, payoutsPausedCopy } from "./parts";
+import { quoteAssetOffered } from "@/lib/quoteAssets";
 import { ArrowUpRight } from "../ui/Icons";
 
 function validAddress(a: string): boolean {
@@ -49,7 +50,7 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
   const network = account.data?.network ?? info?.network;
   const [submitted, setSubmitted] = useState<WithdrawalRecord | null>(null);
   const withdrawals = useWithdrawals(!!submitted && submitted.status !== "sent");
-  const quoteRows = useMemo(() => (account.data?.balances ?? []).filter((b) => isQuoteAssetSymbol(b.asset)), [account.data]);
+  const quoteRows = useMemo(() => (account.data?.balances ?? []).filter((b) => isQuoteAssetSymbol(b.asset) && quoteAssetOffered(b.asset)), [account.data]);
   const [asset, setAsset] = useState<QuoteAssetSymbol>(initialAsset);
   const [amount, setAmount] = useState("");
   const [dest, setDest] = useState(s.wallet ?? "");
@@ -99,7 +100,10 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
           {live.status === "sent" ? (
             <>Sent from the company wallet.</>
           ) : live.status === "pending_approval" ? (
-            <>This withdrawal is waiting for manual approval by Sealed (above the automatic limit, or payouts are paused). The amount stays locked until it&apos;s approved or rejected.</>
+            <>
+              This withdrawal is waiting for manual approval by Sealed
+              {info?.payoutsEnabled === false ? ` (${payoutsPausedCopy(info.payoutsReason).toLowerCase()})` : " (above the automatic limit, or payouts are paused)"}. The amount stays locked until it&apos;s approved or rejected.
+            </>
           ) : live.status === "failed" || live.status === "rejected" ? (
             <span className="text-burn">{live.status === "failed" ? "The payout failed" : "The withdrawal was rejected"}{live.reason ? `: ${live.reason}` : "."} The amount was returned to your balance.</span>
           ) : (
@@ -118,6 +122,7 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
 
   return (
     <div>
+      {info?.payoutsEnabled === false && <PayoutsPausedNotice reason={info.payoutsReason} compact className="mb-4" />}
       {quoteRows.length === 0 && account.data && (
         <p className="mb-4 rounded-field border border-rule bg-paper-deep/60 p-3 text-[12px] text-ink-slate">You have no withdrawable balance yet.</p>
       )}
@@ -178,7 +183,7 @@ function WithdrawBody({ initialAsset, busy, setBusy }: { initialAsset: QuoteAsse
       {(overAuto || info?.payoutsEnabled === false) && n > 0 && (
         <p className="mt-4 rounded-field border border-signal/20 bg-signal-tint/50 p-3 text-[12px] leading-relaxed text-signal-ink">
           {info?.payoutsEnabled === false
-            ? "Automatic payouts are paused, so this withdrawal will wait for manual approval."
+            ? `${payoutsPausedCopy(info.payoutsReason)}, so this withdrawal will wait for manual approval.`
             : "This amount is above the automatic limit and will wait for manual approval."}
         </p>
       )}

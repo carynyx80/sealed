@@ -3,7 +3,7 @@
  * Live data hooks. Data comes from the REST API and is kept fresh via the WebSocket
  * (subscribe to `global` / `launch:<id>`, debounced refetch on events, slow polling as a
  * safety net). When the API is unreachable, hooks re-read the client-side demo world on
- * every 1s simulation tick instead. All time-dependent values are null until mount
+ * every 1s simulation tick instead (devnet/localnet only; on mainnet they retry and never fake data). All time-dependent values are null until mount
  * so server and client markup always match.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -105,6 +105,17 @@ export function useLive<T>(key: string | null, fetcher: () => Promise<T>, opts: 
   useEffect(() => {
     if (key === null || source !== "demo") return;
     return subscribeDemo(load);
+  }, [key, source, load]);
+
+  // Offline (mainnet, API unreachable): no demo world; keep the last good data and retry every few seconds.
+  const wasOffline = useRef(false);
+  useEffect(() => {
+    if (key === null) return;
+    if (source === "api" && wasOffline.current) load(); // back online: refresh right away
+    wasOffline.current = source === "offline";
+    if (source !== "offline") return;
+    const t = setInterval(() => document.visibilityState === "visible" && load(), 5_000);
+    return () => clearInterval(t);
   }, [key, source, load]);
 
   // API mode: websocket + polling.

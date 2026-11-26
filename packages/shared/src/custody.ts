@@ -114,12 +114,16 @@ export interface OffchainSwapResponse { tradeId: string; amountIn: number; amoun
 /** Anti-snipe offchain: buys executed within this many seconds of graduation are flagged (≈ same-slot rule). */
 export const ANTI_SNIPE_WINDOW_SEC = 2;
 
-/** Withdrawal safety rails (USD-equivalent, demo prices from quoteAssets.ts). */
+/**
+ * Withdrawal safety rails (USD-equivalent). Devnet values with demo prices (quoteAssets.ts); mainnet uses a live
+ * price (Jupiter Price API, 60s cache, ≤5 min staleness) and routes to pending_approval when no fresh price exists.
+ */
 export const WITHDRAWAL_LIMITS = { autoApproveMaxUsd: 2_500, dailyPerWalletUsd: 25_000 } as const;
 
 /** Custody REST routes (all except /api/custody/info require `Authorization: Bearer <token>`). */
 export const CUSTODY_ROUTES = {
-  info: "/api/custody/info", // GET → { companyWallet, network, mode, payoutsEnabled, proofOfReserves }
+  info: "/api/custody/info", // GET → { companyWallet, network, mode, payoutsEnabled, payoutsReason, feePayer, proofOfReserves }
+  rpc: "/api/rpc", // POST JSON-RPC proxy to the API's Solana RPC (method allowlist, rate-limited; no key exposed)
   nonce: "/api/auth/nonce", // POST AuthNonceRequest → AuthNonceResponse
   verify: "/api/auth/verify", // POST AuthVerifyRequest → AuthVerifyResponse
   me: "/api/account", // GET → AccountResponse
@@ -139,6 +143,36 @@ export interface CustodyInfoResponse {
   companyWallet: string;
   network: "mainnet" | "devnet" | "localnet";
   mode: ExecutionMode;
-  payoutsEnabled: boolean; // false until COMPANY_WALLET_SECRET_KEY is configured
+  payoutsEnabled: boolean; // false until COMPANY_WALLET_SECRET_KEY is configured AND the company wallet can pay fees
+  /** Why payouts are paused (null when enabled), e.g. "company wallet needs SOL for fees". Additive. */
+  payoutsReason?: string | null;
+  /** Fee payer (company wallet) SOL health; present when an RPC is configured. Additive. */
+  feePayer?: FeePayerHealth;
   proofOfReserves: { asset: QuoteAssetSymbol; onchain: number; liabilities: number; ratio: number; asOfTs: number }[];
 }
+
+/**
+ * Company wallet fee-payer health. The wallet pays network fees (+ rent for recipients' token accounts) from SOL
+ * that is NOT owed to users: surplusSol = onchain SOL − SOL liabilities. Payouts pause when surplusSol < requiredSol.
+ */
+export interface FeePayerHealth {
+  ok: boolean;
+  solBalance: number;
+  solLiabilities: number;
+  surplusSol: number;
+  /** Minimum surplus kept for one payout: fee buffer + token-account rent + rent-exempt reserve. */
+  requiredSol: number;
+  asOfTs: number;
+}
+
+// ---------------- browser RPC proxy (POST /api/rpc) ----------------
+/** JSON-RPC methods the API proxies to its Solana RPC for the web app. Anything else → 403 (-32601). */
+export const RPC_PROXY_METHODS = [
+  "getLatestBlockhash", "getBalance", "getAccountInfo", "getMultipleAccounts", "getTokenAccountsByOwner",
+  "getTokenAccountBalance", "getSignatureStatuses", "getTransaction", "sendTransaction", "simulateTransaction",
+  "getMinimumBalanceForRentExemption", "getFeeForMessage", "getSlot", "getBlockHeight", "getEpochInfo",
+  "getRecentPrioritizationFees", "getHealth", "getVersion", "getGenesisHash",
+] as const;
+export type RpcProxyMethod = (typeof RPC_PROXY_METHODS)[number];
+/** Proxy limits: max JSON-RPC batch size, max body bytes, per-IP requests/min (all methods / sendTransaction). */
+export const RPC_PROXY_LIMITS = { maxBatch: 10, maxBodyBytes: 64 * 1024, perIpPerMin: 120, sendTxPerIpPerMin: 20 } as const;

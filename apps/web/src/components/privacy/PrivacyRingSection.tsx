@@ -3,6 +3,7 @@
 // Helius Solana Privacy Ring closes the last leak (the escrow deposit).
 import { FadeIn } from "@/components/motion/FadeIn";
 import { usePrivacyRing } from "@/lib/privacy/usePrivacyRing";
+import { DEMO_ENABLED } from "@/lib/config";
 import { RingDiagram, RingMark } from "./RingMotif";
 
 const SEALED: Array<{ what: string; how: string; until: string }> = [
@@ -94,7 +95,7 @@ export function PrivacyRingSection() {
             SPL and Token-2022; you decrypt your own with a viewing key.
           </p>
           <p className="font-serif italic sm:col-span-7">
-            ¹ In demo the ring is simulated and holds no real funds. On-chain, private deposits switch on with the shielded-escrow program
+            ¹ {DEMO_ENABLED ? "In demo the ring is simulated and holds no real funds. " : ""}On-chain, private deposits switch on with the shielded-escrow program
             upgrade; until then bids fund the escrow publicly, and the commitment still hides price and size.
           </p>
         </div>

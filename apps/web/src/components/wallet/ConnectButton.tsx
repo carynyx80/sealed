@@ -1,9 +1,14 @@
 "use client";
-// Wallet connect/disconnect pill — "private-bank broadsheet" styling (see /DESIGN.md).
+// Wallet connect pill + account menu (copy, explorer, switch, disconnect) — "private-bank broadsheet" styling.
+// Disconnecting or switching clears that wallet's Sealed session (see WalletSessionSync in SolanaProviders).
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
+import { NETWORK_LABEL, explorerAccountUrl } from "@/lib/config";
+import { useCustodySession } from "@/lib/custody/hooks";
+import { ArrowUpRight } from "../ui/Icons";
 
 const spring = { type: "spring", stiffness: 260, damping: 26 } as const;
 
@@ -14,6 +19,7 @@ function truncate(addr: string): string {
 export function ConnectButton({ className }: { className?: string }) {
   const { publicKey, wallet, connected, connecting, disconnect } = useWallet();
   const { setVisible } = useWalletModal();
+  const custody = useCustodySession();
   // Render a stable label until mounted: autoConnect state differs between server and client.
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
@@ -51,13 +57,14 @@ export function ConnectButton({ className }: { className?: string }) {
         disabled={mounted && connecting}
         aria-haspopup={address ? "menu" : "dialog"}
         aria-expanded={address ? open : undefined}
+        aria-busy={mounted && connecting ? true : undefined}
         onClick={() => (address ? setOpen((o) => !o) : setVisible(true))}
       >
         {address && wallet?.adapter.icon ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={wallet.adapter.icon} alt="" width={16} height={16} className="h-4 w-4 rounded-full" />
         ) : (
-          <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${address ? "bg-gain" : "bg-paper/60"}`} />
+          <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${address ? "bg-gain" : mounted && connecting ? "animate-pulse bg-paper" : "bg-paper/60"}`} />
         )}
         <span className={address ? "num text-[13px] font-normal" : undefined}>
           {label === "Connect wallet" ? (
@@ -78,28 +85,63 @@ export function ConnectButton({ className }: { className?: string }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={spring}
-            className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-card border border-rule bg-sheet p-1.5 text-sm text-ink shadow-lift"
+            className="absolute right-0 z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-card border border-rule bg-sheet p-1.5 text-sm text-ink shadow-lift"
           >
             <div className="mb-1 border-b border-rule px-3 pb-2.5 pt-1.5">
-              <div className="eyebrow">{wallet?.adapter.name ?? "Wallet"}</div>
-              <div className="num mt-1 text-xs text-ink-slate">{truncate(address)}</div>
+              <div className="eyebrow flex items-center justify-between gap-2">
+                <span className="truncate">{wallet?.adapter.name ?? "Wallet"}</span>
+                <span className="shrink-0 text-ink-muted">{NETWORK_LABEL}</span>
+              </div>
+              <div className="num mt-1 break-all text-xs leading-snug text-ink-slate">{address}</div>
             </div>
+            {custody.availability === "available" &&
+              (custody.signedIn ? (
+                <Link
+                  role="menuitem"
+                  href="/account"
+                  onClick={() => setOpen(false)}
+                  className="flex w-full items-center justify-between rounded-field px-3 py-2 text-left text-ink transition-colors hover:bg-paper-deep"
+                >
+                  Sealed account <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-gain">signed in</span>
+                </Link>
+              ) : (
+                <MenuItem onClick={() => void custody.signIn().then(() => setOpen(false)).catch(() => undefined)}>
+                  <span className="flex items-center justify-between gap-2">
+                    {custody.signingIn ? "Check your wallet…" : "Sign in to Sealed"}
+                    <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-muted">free</span>
+                  </span>
+                </MenuItem>
+              ))}
             <MenuItem
               onClick={async () => {
-                await navigator.clipboard?.writeText(address).catch(() => undefined);
+                try {
+                  await navigator.clipboard.writeText(address);
+                } catch {
+                  /* clipboard blocked: the address is visible above */
+                }
                 setCopied(true);
                 setTimeout(() => setCopied(false), 1200);
               }}
             >
               {copied ? "Copied" : "Copy address"}
             </MenuItem>
+            <a
+              role="menuitem"
+              href={explorerAccountUrl(address)}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center justify-between rounded-field px-3 py-2 text-left text-ink transition-colors hover:bg-paper-deep"
+            >
+              View on Solscan <ArrowUpRight width={12} height={12} className="text-ink-muted" />
+            </a>
             <MenuItem
               onClick={() => {
                 setOpen(false);
                 setVisible(true);
               }}
             >
-              Change wallet
+              Switch wallet
             </MenuItem>
             <MenuItem
               danger

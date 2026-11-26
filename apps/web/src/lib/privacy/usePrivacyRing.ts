@@ -6,6 +6,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { QUOTE_ASSETS, type PrivacyStatusResponse, type QuoteAssetSymbol } from "@sealed/shared";
 import { atomsToUi, simulatedViewingKey, uiToAtoms, type EncryptedBalance, type PrivacyRingClient } from "@sealed/defi";
 import { errorMessage } from "../defi/config";
+import { DEMO_ENABLED } from "../config";
 import { cachedPrivacyStatus, fetchPrivacyStatus, privacyOwner, ringFor } from "./ring";
 
 export type PrivacyRingStatus = "unavailable" | "idle" | "proving" | "submitting" | "done" | "error";
@@ -68,7 +69,8 @@ export function usePrivacyRing() {
   }, []);
 
   const ring = s.ring;
-  const simulated = ring ? ring.simulated : true;
+  // Mainnet never simulates (DEMO_ENABLED is false there); ring.ts also normalises a simulated status away.
+  const simulated = DEMO_ENABLED && (ring ? ring.simulated : true);
   const available = ring ? ring.available : false;
   const client: PrivacyRingClient = useMemo(() => ringFor(simulated), [simulated]);
   const caps = client.capabilities();

@@ -56,7 +56,13 @@ export async function adminRoutes(app: FastifyInstance, ctx: AppContext, custody
     if (s && !(STATUSES as readonly string[]).includes(s)) return sendError(reply, 400, `status must be one of ${STATUSES.join(",")}`);
     const statuses: WithdrawalStatus[] = s ? [s as WithdrawalStatus] : ["pending_approval", "queued", "sending"];
     const rows = await custody.repo.listWithdrawalsByStatus(statuses, 200);
-    return { withdrawals: rows.map((w) => ({ ...custody.withdrawals.dto(w), wallet: w.wallet, usdValue: w.usdValue, attempts: w.attempts })), payoutsEnabled: custody.payouts !== null };
+    const status = await custody.payoutStatus();
+    return {
+      withdrawals: rows.map((w) => ({ ...custody.withdrawals.dto(w), wallet: w.wallet, usdValue: w.usdValue, attempts: w.attempts })),
+      payoutsEnabled: status.enabled,
+      payoutsReason: status.reason,
+      ...(status.feePayer ? { feePayer: status.feePayer } : {}),
+    };
   });
 
   app.post("/api/admin/withdrawals", { bodyLimit: SMALL_BODY, preHandler: requireAdmin }, async (req, reply) => {

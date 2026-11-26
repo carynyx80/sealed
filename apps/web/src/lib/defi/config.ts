@@ -1,16 +1,10 @@
 "use client";
 // Owned by defi-integrations-agent. Env + small helpers shared by the defi hooks/components.
-import type { Network } from "@sealed/shared";
+import { API_URL, DEMO_ENABLED, NETWORK, RPC_URL_OVERRIDE } from "../config";
 
-/** NEXT_PUBLIC_* must be read with literal property access so Next.js can inline them. */
-export const API_BASE: string = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
-
-export const NETWORK: Network = ((): Network => {
-  const n = process.env.NEXT_PUBLIC_NETWORK;
-  return n === "mainnet" || n === "localnet" || n === "devnet" ? n : "devnet";
-})();
-
-export const RPC_URL_OVERRIDE: string | undefined = process.env.NEXT_PUBLIC_RPC_URL || undefined;
+/** Network + endpoints come from the single source of truth in lib/config. */
+export { NETWORK, RPC_URL_OVERRIDE };
+export const API_BASE: string = API_URL;
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -43,6 +37,7 @@ export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 /** Pseudo signature for simulated demo actions (clearly prefixed so it is never mistaken for a real tx). */
 export function demoSignature(seed = ""): string {
+  if (!DEMO_ENABLED) throw new Error("Simulated actions are disabled on mainnet");
   const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
   const rnd = crypto.getRandomValues(new Uint8Array(40));
   return `demo${seed.slice(0, 4)}` + Array.from(rnd, (b) => alphabet[b % alphabet.length]).join("");
@@ -50,6 +45,14 @@ export function demoSignature(seed = ""): string {
 
 export function errorMessage(e: unknown): string {
   const m = (e as Error)?.message ?? String(e);
-  if (/User rejected|rejected the request/i.test(m)) return "Request rejected in wallet";
+  if (isUserRejection(e)) return "Request rejected in wallet";
   return m.length > 200 ? `${m.slice(0, 200)}…` : m;
+}
+
+/** Wallet "user rejected" across adapters (Phantom 4001, Solflare/Backpack messages, Wallet Standard errors). */
+export function isUserRejection(e: unknown): boolean {
+  const err = e as { code?: number; message?: string; error?: { code?: number; message?: string }; name?: string };
+  if (err?.code === 4001 || err?.error?.code === 4001) return true;
+  const m = `${err?.message ?? ""} ${err?.error?.message ?? ""}`;
+  return /user rejected|rejected the request|user denied|declined|cancell?ed by user|approval denied|request was rejected/i.test(m);
 }

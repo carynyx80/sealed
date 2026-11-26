@@ -7,11 +7,12 @@ import clsx from "clsx";
 import { ConnectButton } from "../wallet/ConnectButton";
 import { SessionPill } from "../custody/SignInButton";
 import { CustodySheets } from "../custody/CustodySheets";
-import { NETWORK } from "@/lib/config";
+import { IS_MAINNET, NETWORK_LABEL } from "@/lib/config";
 import { useDataSource } from "@/lib/live";
 import { SPRING } from "../motion/spring";
 import { MenuIcon, XIcon } from "../ui/Icons";
 import { Wordmark } from "./Wordmark";
+import { ServiceStatus } from "./ServiceStatus";
 
 export const NAV_LINKS = [
   { href: "/", label: "Lobby", n: "01" },
@@ -23,16 +24,18 @@ export const NAV_LINKS = [
 
 export function NetworkBadge({ className }: { className?: string }) {
   const source = useDataSource();
-  const label = NETWORK === "mainnet" ? "Mainnet" : NETWORK === "localnet" ? "Localnet" : "Devnet";
-  const showSource = source === "demo" || NETWORK !== "mainnet";
+  // Mainnet shows just "Mainnet" (plus "Offline" while the API is unreachable); off mainnet the data source is shown.
+  const suffix = IS_MAINNET
+    ? source === "offline" ? "Offline" : null
+    : source === "api" ? "Live API" : source === "demo" ? "Demo" : source === "offline" ? "Offline" : "…";
   return (
     <span
       className={clsx("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-rule bg-sheet px-2.5 py-[5px] font-mono text-[10.5px] uppercase leading-none tracking-[0.06em] text-ink-slate", className)}
-      title={source === "demo" ? "API unreachable — showing a simulated demo world" : undefined}
+      title={source === "demo" ? "API unreachable — showing a simulated demo world" : source === "offline" ? "Sealed API unreachable — retrying" : undefined}
     >
-      <span className={clsx("h-1.5 w-1.5 rounded-full", NETWORK === "mainnet" ? "bg-gain" : "bg-burn")} />
-      {label}
-      {showSource && <span className="text-ink-muted">/ {source === "api" ? "Live API" : source === "demo" ? "Demo" : "…"}</span>}
+      <span className={clsx("h-1.5 w-1.5 rounded-full", IS_MAINNET && source !== "offline" ? "bg-gain" : "bg-burn")} />
+      {NETWORK_LABEL}
+      {suffix && <span className="text-ink-muted">/ {suffix}</span>}
     </span>
   );
 }
@@ -164,6 +167,7 @@ export function NavBar() {
         )}
       </AnimatePresence>
       <CustodySheets />
+      <ServiceStatus />
     </header>
   );
 }

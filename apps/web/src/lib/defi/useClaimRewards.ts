@@ -8,6 +8,8 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { API_ROUTES, type HolderReward, type LaunchSummary } from "@sealed/shared";
 import { buildTransaction, ensureAtaIx, programErrorName } from "@sealed/defi";
 import { apiFetch, demoSignature, errorMessage, sleep } from "./config";
+import { DEMO_ENABLED } from "../config";
+import { confirmSignature } from "../solana/tx";
 import { getSealedClient, launchKeys } from "./program";
 import { custodyReady, getSession } from "../custody/client";
 import { signInWithSolana } from "../custody/auth";
@@ -59,6 +61,7 @@ export function useClaimRewards(launch: LaunchSummary) {
         void refresh();
         return `ledger:${r.amount ?? 0}`;
       }
+      if (launch.isDemo && !DEMO_ENABLED) throw new Error("Simulated rewards are not available on mainnet");
       if (launch.isDemo) {
         await sleep(900);
         const signature = demoSignature("claim");
@@ -73,9 +76,9 @@ export function useClaimRewards(launch: LaunchSummary) {
         ensureAtaIx(publicKey, publicKey, keys.quoteMint, keys.quoteTokenProgram).ix,
         await client.claimRewardsIx(keys, publicKey),
       ];
-      const { tx, blockhash, lastValidBlockHeight } = await buildTransaction(connection, publicKey, ixs);
+      const { tx, lastValidBlockHeight } = await buildTransaction(connection, publicKey, ixs);
       const signature = await sendTransaction(tx, connection);
-      const conf = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+      const conf = { value: await confirmSignature(connection, signature, { lastValidBlockHeight }) };
       if (conf.value.err) throw new Error(`claim_rewards failed: ${JSON.stringify(conf.value.err)}`);
       await refresh();
       return signature;

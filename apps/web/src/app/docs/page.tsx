@@ -10,6 +10,7 @@ import {
   REPAY_SPLIT,
 } from "@sealed/shared";
 import { CapitalLoop, PhaseTrack } from "@/components/docs/Diagrams";
+import { COMPANY_WALLET_EXPLORER, MAINNET_COMMIT_WINDOW, MainnetRollout, RealFundsDisclosure } from "@/components/docs/Mainnet";
 import { DOC_GROUPS } from "@/components/docs/nav";
 import { A, Accent, C, DocHeader, Figure, H2, Ledger, Note, P, StatusBadge, StatusLegend, UL } from "@/components/docs/Prose";
 
@@ -30,29 +31,33 @@ export default function DocsOverview() {
         }
         lede="Sealed is a Solana token launchpad. Every launch opens with a sealed-bid auction, clears at one uniform price, and graduates into a pool that gets a buyback budget on day one. Trading fees repay that budget, then flow to holders for good."
       >
-        <StatusBadge status="demo" label="Devnet / demo" />
-        <StatusBadge status="offchain-passing" label="Offchain custodial · tests passing" />
-        <StatusBadge status="dev" label="Payouts pending operator key" />
-        <StatusBadge status="planned" label="Not on mainnet · not audited" />
+        <StatusBadge status="rolling" label="Solana mainnet · rolling out" />
+        <StatusBadge status="offchain-passing" label="Custodial · real funds" />
+        <StatusBadge status="planned" label="Not audited" />
       </DocHeader>
+
+      <RealFundsDisclosure />
 
       <Note title="Execution mode" tone="signal">
         <p>
-          Sealed runs <strong>offchain and custodial by default</strong>. A backend on Railway runs auctions, clearing, the graduation pool, buyback
-          drips, fee splits and holder rewards in a Postgres double-entry ledger. You sign in with your wallet, deposit by sending SOL or SPL tokens to
-          the company wallet <C>{COMPANY_WALLET}</C>, trade against your internal balance and withdraw back on-chain. The Anchor program in this repo is
-          the <strong>future non-custodial mode</strong> (&ldquo;Onchain mode — roadmap&rdquo;). Read <A href="/docs/custody">Custody</A> before you deposit.
+          Sealed runs <strong>offchain and custodial on Solana mainnet</strong>. A backend on Railway runs auctions, clearing, the graduation pool,
+          buyback drips, fee splits and holder rewards in a Postgres double-entry ledger. You sign in with your wallet, deposit by sending SOL or USDC to
+          the company wallet <A href={COMPANY_WALLET_EXPLORER}>{COMPANY_WALLET}</A>, trade against your internal balance and withdraw SOL or USDC back
+          on-chain. Launched tokens stay as Sealed ledger balances for now. The Anchor program in this repo is the <strong>future non-custodial mode</strong>{" "}
+          (&ldquo;Onchain mode — roadmap&rdquo;) and is not deployed. Read <A href="/docs/custody">Custody</A> before you deposit.
         </p>
         <p>
-          Today the hosted API runs with <C>DEMO_MODE=true</C>, so the simulated demo launches are listed alongside real offchain ones. Payouts stay off
-          until the operator sets <C>COMPANY_WALLET_SECRET_KEY</C>, and automatic deposit detection needs <C>HELIUS_API_KEY</C> (or <C>SOLANA_RPC_URL</C>) on
-          the API. Until then withdrawals wait in the queue and deposits are not credited.
+          The switch from devnet to mainnet is <strong>rolling out</strong>: demo mode is disabled on mainnet, only SOL and USDC are enabled as quote assets,
+          and mainnet launches need a {MAINNET_COMMIT_WINDOW} commit window. Check <C>network</C> in <C>/api/health</C> and <C>payoutsEnabled</C> in{" "}
+          <C>/api/custody/info</C> before depositing.
         </p>
       </Note>
 
       <Ledger
         items={[
           { k: "Website", v: <A href="https://www.sealedsol.xyz">www.sealedsol.xyz</A> },
+          { k: "Network", v: "Solana mainnet (rolling out)" },
+          { k: "Company wallet", v: <A href={COMPANY_WALLET_EXPLORER}>{COMPANY_WALLET}</A> },
           { k: "API", v: <><A href="https://api-production-01dc1743.up.railway.app/api/health">api-production-01dc1743.up.railway.app</A> · agent guide at <C>/llms.txt</C></> },
         ]}
       />
@@ -76,7 +81,7 @@ export default function DocsOverview() {
             n: "01",
             title: "Launch setup",
             body: "The creator sets name, ticker, quote asset, auction timing, floor, tick, target raise and clearing cap.",
-            facts: [`creator ≤ ${pct(MAX_CREATOR_ALLOCATION_BPS)} of supply`, "SOL · USDC · tokenized stocks"],
+            facts: [`creator ≤ ${pct(MAX_CREATOR_ALLOCATION_BPS)} of supply`, "SOL · USDC (stocks coming soon)"],
           },
           {
             n: "02",
@@ -115,22 +120,28 @@ export default function DocsOverview() {
         ]}
       />
 
-      <H2 id="status" n="0.4">What is live today</H2>
+      <H2 id="status" n="0.4">Status labels</H2>
       <P>Every capability in these docs carries one of these labels. They describe this repository on 2026-11-26.</P>
       <StatusLegend />
+      <H2 id="mainnet" n="0.5">Moving to mainnet</H2>
+      <P>
+        These changes make up the switch from devnet to mainnet. They are labelled rolling out until each one can be checked on the hosted API.
+      </P>
+      <MainnetRollout />
+      <H2 id="components" n="0.6">Components</H2>
       <Ledger
         items={[
-          { k: "Demo world", s: "demo", v: "Ticking auctions, buyback countdowns, repayment bars and a trade tape, served by the API in DEMO_MODE or simulated in the browser if the API is down." },
-          { k: "Offchain ledger engine and SIWS", s: "offchain-passing", sLabel: "Off-chain · tests passing", v: "Double-entry ledger, auction/clearing/pool/drip/fee/reward engine, SIWS sign-in and the trade, account, custody and admin routes in apps/api/src/offchain and apps/api/src/routes. API suite 87/87. Deployed on Railway with Postgres and Redis." },
-          { k: "Deposits and payouts", s: "dev", v: "Deposit watcher, withdrawal queue, payout worker and proof of reserves are built and tested. Deposit detection needs HELIUS_API_KEY (or SOLANA_RPC_URL) and payouts need COMPANY_WALLET_SECRET_KEY; neither is set on the hosted API yet." },
+          { k: "Demo world", s: "demo", v: "Ticking auctions, buyback countdowns, repayment bars and a trade tape for local development and devnet. Disabled on mainnet: no demo launches and no in-browser fallback." },
+          { k: "Offchain ledger engine and SIWS", s: "offchain-passing", sLabel: "Off-chain · tests passing", v: "Double-entry ledger, auction/clearing/pool/drip/fee/reward engine, SIWS sign-in and the trade, account, custody and admin routes in apps/api/src/offchain and apps/api/src/routes. Deployed on Railway with Postgres and Redis; moving to mainnet." },
+          { k: "Deposits and payouts", s: "rolling", v: "Deposit watcher, withdrawal queue, payout worker and proof of reserves are built and tested. On mainnet they need HELIUS_API_KEY and COMPANY_WALLET_SECRET_KEY on the API and a company wallet funded with SOL for fees. Only SOL and USDC withdraw." },
           { k: "Clearing, fee and commitment math", s: "offchain-passing", v: "Shared TypeScript with unit and seeded property tests (shared 7/7, invariants 34 pass + 1 todo)." },
-          { k: "Anchor program", s: "chain-pending", v: "14 instructions. anchor build succeeds; 15/15 Rust unit tests and 18/18 anchor tests (anchor test -- --features test-mode) pass. Not deployed: the program id has no account on devnet." },
+          { k: "Anchor program", s: "chain-pending", v: "14 instructions. anchor build succeeds; 15/15 Rust unit tests and 18/18 anchor tests (anchor test -- --features test-mode) pass. Roadmap: not deployed to devnet or mainnet." },
           { k: "Helius Privacy Rings", s: "simulated", v: "Simulated ring in demo; real status probe and indexer proxy implemented; private escrow funding fails closed on real networks." },
-          { k: "Mainnet, audits", s: "planned", v: "No mainnet deployment and no third-party audit exist." },
+          { k: "Third-party audit", s: "planned", v: "None exists, for the custodial backend or the program." },
         ]}
       />
 
-      <H2 id="index" n="0.5">Read next</H2>
+      <H2 id="index" n="0.7">Read next</H2>
       <div className="mt-6 grid gap-8 sm:grid-cols-3">
         {DOC_GROUPS.map((g) => (
           <div key={g.label} className="min-w-0">

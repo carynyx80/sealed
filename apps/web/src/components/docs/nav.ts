@@ -22,7 +22,7 @@ export const DOC_GROUPS: DocGroup[] = [
     pages: [
       { href: "/docs", n: "00", title: "Overview", summary: "What Sealed is, the four-phase loop, who it is for, and what is live today." },
       { href: "/docs/how-it-works", n: "01", title: "How it works", summary: "A launch end to end: supply split, timing windows, statuses and who calls what." },
-      { href: "/docs/custody", n: "02", title: "Custody", summary: "Offchain custodial mode: sign-in, deposits, withdrawals, limits and proof of reserves." },
+      { href: "/docs/custody", n: "02", title: "Custody", summary: "Custodial mode on mainnet: risk disclosure, sign-in, deposits, withdrawals, limits and proof of reserves." },
       { href: "/docs/sealed-auction", n: "03", title: "Sealed auction", summary: "Commit-reveal, the 80-byte keccak preimage, the tick grid and uniform clearing." },
       { href: "/docs/buyback-vault", n: "04", title: "Buyback vault", summary: "The 10–15% fee-credit line, why the vault cannot be withdrawn, and the drip schedule." },
       { href: "/docs/flywheel", n: "05", title: "Flywheel", summary: "Fee routing: 80/20 while repaying, 50/35/15 forever after, and the anti-snipe rule." },
@@ -41,8 +41,8 @@ export const DOC_GROUPS: DocGroup[] = [
     label: "Operate",
     pages: [
       { href: "/docs/stack", n: "10", title: "What powers Sealed", summary: "Solana, Anchor, Helius, Jupiter, Next.js, Fastify and the rest, with status." },
-      { href: "/docs/deploy", n: "11", title: "Deploy", summary: "Local quickstart, environment variables, Vercel, Railway and devnet." },
-      { href: "/docs/security", n: "12", title: "Security", summary: "Custody disclosure, trust model, tested invariants, limitations, roadmap." },
+      { href: "/docs/deploy", n: "11", title: "Deploy", summary: "Local quickstart, environment variables, the mainnet readiness checklist, Railway and Vercel." },
+      { href: "/docs/security", n: "12", title: "Security", summary: "Real-funds custody disclosure, trust model, tested invariants, limitations, roadmap." },
     ],
   },
 ];

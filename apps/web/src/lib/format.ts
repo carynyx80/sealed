@@ -1,4 +1,5 @@
 import type { Network, QuoteAssetSymbol } from "@sealed/shared";
+import { explorerAccountUrl, explorerTxUrl } from "./config";
 
 const SUBSCRIPT = "₀₁₂₃₄₅₆₇₈₉";
 
@@ -94,16 +95,11 @@ export function fmtTime(ts: number): string {
   return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 }
 
-export function solscanTx(sig: string, network: Network): string {
-  return `https://solscan.io/tx/${sig}${clusterParam(network)}`;
+/** Explorer links: delegated to the single network-aware helper in lib/config (no `?cluster=` on mainnet). */
+export function solscanTx(sig: string, network?: Network | null): string {
+  return explorerTxUrl(sig, network);
 }
 
-export function solscanAccount(addr: string, network: Network): string {
-  return `https://solscan.io/account/${addr}${clusterParam(network)}`;
-}
-
-function clusterParam(network: Network): string {
-  if (network === "mainnet") return "";
-  if (network === "localnet") return "?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899";
-  return "?cluster=devnet";
+export function solscanAccount(addr: string, network?: Network | null): string {
+  return explorerAccountUrl(addr, network);
 }

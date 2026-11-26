@@ -19,7 +19,7 @@ const GROUPS: Array<{ id: string; n: string; title: string; items: Item[] }> = [
     n: "10.1",
     title: "Chain",
     items: [
-      { name: "Solana", role: "Settlement layer. In custodial mode it carries deposits to and withdrawals from the company wallet; in onchain mode it runs the whole launch.", where: "devnet today", status: "dev", statusLabel: "Devnet · deposits pending HELIUS_API_KEY" },
+      { name: "Solana", role: "Settlement layer. In custodial mode it carries deposits to and withdrawals from the company wallet; in onchain mode it runs the whole launch.", where: "mainnet (rolling out)", status: "rolling", statusLabel: "Mainnet · rolling out" },
       { name: "Anchor", version: "0.32", role: "Framework for the sealed_launchpad program: account constraints, PDAs, events, IDL generation, TypeScript client. anchor build passes; anchor test -- --features test-mode runs 18/18.", where: "programs/sealed-launchpad", status: "chain-pending" },
       { name: "SPL Token", role: "Escrow, vault, pool and reward token accounts; minting with a PDA authority; burns from the pool reserve.", where: "program, @solana/spl-token 0.4.9", status: "chain-pending" },
       { name: "@solana/web3.js", version: "1.98", role: "PublicKey, PDA derivation, connections and transactions across shared, defi, API and web.", where: "all packages", status: "offchain-passing" },

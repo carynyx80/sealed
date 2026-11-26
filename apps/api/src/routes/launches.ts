@@ -5,9 +5,13 @@ import {
   CREDIT_TIERS,
   CreateLaunchInputSchema,
   ListLaunchesQuerySchema,
+  MAX_COMMIT_DURATION_SEC,
+  MIN_COMMIT_DURATION_SEC_MAINNET,
   QUOTE_ASSETS,
   demoImage,
+  isQuoteAssetEnabled,
   pdas,
+  quoteAssetDisabledReason,
   programId,
   type ChartResponse,
   type CreateLaunchInput,
@@ -108,6 +112,16 @@ export async function launchRoutes(app: FastifyInstance, ctx: AppContext) {
     const parsed = CreateLaunchBody.safeParse(req.body ?? {});
     if (!parsed.success) return sendError(reply, 400, "invalid launch input", zodDetails(parsed.error));
     const input = parsed.data;
+
+    // MAINNET server-side rules (independent of execution mode): commit window 15–30 min, enabled quote assets only.
+    if (ctx.cfg.network === "mainnet") {
+      if (input.commitDurationSec < MIN_COMMIT_DURATION_SEC_MAINNET || input.commitDurationSec > MAX_COMMIT_DURATION_SEC) {
+        return sendError(reply, 400, `commitDurationSec must be within [${MIN_COMMIT_DURATION_SEC_MAINNET}, ${MAX_COMMIT_DURATION_SEC}] on mainnet`);
+      }
+      if (!isQuoteAssetEnabled(input.quoteAsset, "mainnet")) {
+        return sendError(reply, 400, quoteAssetDisabledReason(input.quoteAsset, "mainnet") ?? `${input.quoteAsset} is not enabled on mainnet`);
+      }
+    }
 
     // OFFCHAIN mode: a signed-in creator creates a real custodial launch (creator = session wallet, ≤2% enforced).
     // Unauthenticated requests keep the demo behaviour in DEMO_MODE.

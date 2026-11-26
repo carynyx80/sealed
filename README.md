@@ -6,19 +6,27 @@
 
 | Component | Status |
 |---|---|
-| Web (`apps/web`) | Live on Vercel at https://www.sealedsol.xyz (Next 15.0.8 / React 19.0.9, patched for CVE-2025-66478) |
-| API (`apps/api`) | Live on Railway with Postgres + Redis, `EXECUTION_MODE=offchain`, `DEMO_MODE=true` (demo launches are merged with real offchain launches; each carries `isDemo`) |
-| Offchain custodial engine (ledger, SIWS auth, trade/account/custody/admin routes) | Built, API suite 87/87 passing, deployed |
-| Deposit detection | Built + tested; needs `HELIUS_API_KEY` (or `SOLANA_RPC_URL`) on Railway — **not set yet** |
-| Payouts | Built + tested; need `COMPANY_WALLET_SECRET_KEY` set by the operator — **not set yet** (`payoutsEnabled=false`, withdrawals wait) |
-| Anchor program | `anchor build` OK, 15/15 Rust unit tests, 18/18 `anchor test -- --features test-mode` — **not deployed** to devnet |
-| Mainnet, audit | Neither exists |
+| Network | **Solana mainnet** with real funds — switch from devnet **rolling out** (confirm `network` in `/api/health`) |
+| Web (`apps/web`) | Live on Vercel at https://www.sealedsol.xyz (Next 15.0.8 / React 19.0.9, patched for CVE-2025-66478); `NEXT_PUBLIC_NETWORK=mainnet` rolling out |
+| API (`apps/api`) | Live on Railway with Postgres + Redis, `EXECUTION_MODE=offchain`; `NETWORK=mainnet`, `DEMO_MODE=false` rolling out (no demo launches, no client fallback on mainnet) |
+| Company wallet (custody) | [`DDhVBh8HSwvYmCmXRowowUdDLcCc5vA9BM3GJMR3hm1j`](https://explorer.solana.com/address/DDhVBh8HSwvYmCmXRowowUdDLcCc5vA9BM3GJMR3hm1j) |
+| Offchain custodial engine (ledger, SIWS auth, trade/account/custody/admin routes) | Built, API suite passing, deployed |
+| Quote assets on mainnet | SOL and USDC. Tokenized stocks coming soon (mainnet mints not verified) |
+| Deposit detection | Built + tested; needs `HELIUS_API_KEY` on Railway — rolling out |
+| Payouts | Built + tested; need `COMPANY_WALLET_SECRET_KEY` and SOL in the company wallet for fees (pause with a reason when low) — rolling out; check `payoutsEnabled` in `/api/custody/info`. Only SOL/USDC withdraw; launched tokens are ledger-only |
+| Withdrawal limits | $2,500 auto-approve / $25,000 per day, valued with live Jupiter Price API prices; no fresh price → manual approval — rolling out |
+| Browser RPC proxy | `POST /api/rpc` (allowlisted methods, rate limited, key never exposed) — rolling out |
+| Admin approvals | Require `ADMIN_TOKEN` — rolling out |
+| Anchor program | `anchor build` OK, 15/15 Rust unit tests, 18/18 `anchor test -- --features test-mode` — **roadmap, not deployed** |
+| Audit | None |
 
-Sealed runs **offchain and custodial by default**: deposits go to the company wallet and balances live in a Postgres double-entry ledger. Read [docs/CUSTODY.md](docs/CUSTODY.md) before depositing. The Anchor program is the future non-custodial mode.
+Sealed runs **offchain and custodial on Solana mainnet**: real deposits go to the company wallet and balances live in a Postgres double-entry ledger. Read [docs/CUSTODY.md](docs/CUSTODY.md) before depositing. The Anchor program is the future non-custodial mode.
+
+> **Real funds · custodial risk disclosure.** The company holds your funds in [`DDhVBh8HSwvYmCmXRowowUdDLcCc5vA9BM3GJMR3hm1j`](https://explorer.solana.com/address/DDhVBh8HSwvYmCmXRowowUdDLcCc5vA9BM3GJMR3hm1j); your balance is a ledger entry. Withdrawals may need manual approval (above $2,500, above $25,000/day, or without a fresh price) and can be paused or refused. Only SOL and USDC can be withdrawn; launched tokens cannot be withdrawn on-chain yet. Proof of reserves (`GET /api/custody/info`) is a snapshot and does not prove the ledger is complete or the key is safe. Nothing is audited; there is no insurance. Sealed is not a bank or licensed custodian and nothing here is investment advice. You are responsible for complying with the laws of your jurisdiction; do not use Sealed where it is prohibited. Deposit only what you can afford to lose.
 
 Fair token launches on Solana in four phases:
 
-1. **Launch setup.** The creator picks name, ticker, quote asset (SOL, USDC or a tokenized stock such as NVDAx, TSLAx or TTWOx), auction length (15–30 min on mainnet, down to 2 min on devnet), target raise, clearing cap and supply (1B by default). The creator allocation is **capped at 2% (200 bps) on-chain**.
+1. **Launch setup.** The creator picks name, ticker, quote asset (SOL or USDC on mainnet; tokenized stocks such as NVDAx, TSLAx or TTWOx are coming soon), auction length (15–30 min on mainnet, down to 2 min on devnet), target raise, clearing cap and supply (1B by default). The creator allocation is **capped at 2% (200 bps) on-chain**.
 2. **Sealed-block auction (commit → reveal).** Bidders escrow collateral and submit `keccak256(bidder ‖ max_price u64le ‖ bid_amount u64le ‖ salt[32])`, an 80-byte preimage. The public sees the bid count, the time left and the escrowed-wallet count. Nobody sees individual prices or sizes. In the reveal window an optional **auto-reveal relayer** submits the reveals users sealed to it during commit. After that the auction clears at **one uniform price**: everyone at or above it pays the same price, the marginal tick is pro-rated, and everything else is refunded (`claim_or_refund`).
 3. **Graduation + Fee-Credit Buyback Vault.** The raise and supply seed Sealed's own constant-product pool (no LP tokens, so liquidity is locked; Raydium is not used). The Protocol Credit Pool advances **10–15% of the raise** (by tier) into a **non-withdrawable buyback vault**. A keeper drips it into buy-and-burns through the launch's own pool every 2–5 minutes; the first drip is due one drip interval after graduation.
 4. **Auto-repay → permanent flywheel.** Pool fees go first **80% to repaying the credit line and 20% to platform burn/ops**. Once the line is 100% repaid (the switch happens at exactly 0 outstanding, and any overflow in the crossover batch goes straight to the flywheel), fees split **50% to holders (in the quote asset), 35% to platform buyback-burn and 15% to treasury** (the 20% and 35% platform shares land as quote in `platform_ops`; buying and burning a platform token with them is not built yet). Wallets that buy in the graduation slot land in the **anti-snipe registry** and earn 0% holder rewards.
@@ -38,8 +46,8 @@ In-app docs: `/docs` on the web app (https://www.sealedsol.xyz/docs). Repo docs 
 | [PROGRAM](docs/PROGRAM.md) | Anchor program (roadmap onchain mode): instructions, accounts, seeds, events, errors |
 | [API](docs/API.md) | REST, custody routes, WebSocket, `/llms.txt` |
 | [STACK](docs/STACK.md) | what powers Sealed, with status |
-| [DEPLOYMENT](docs/DEPLOYMENT.md) | local, env vars, Railway, Vercel, devnet |
-| [SECURITY](docs/SECURITY.md) | custody disclosure, trust model, invariants, limitations, roadmap |
+| [DEPLOYMENT](docs/DEPLOYMENT.md) | local, env vars, **mainnet readiness checklist**, Railway, Vercel, devnet program |
+| [SECURITY](docs/SECURITY.md) | real-funds custody disclosure, trust model, invariants, limitations, roadmap |
 | [PRIVACY](docs/PRIVACY.md) | Helius Privacy Rings integration |
 
 ## Architecture
@@ -59,7 +67,7 @@ tests                      @sealed/e2e: invariant/property tests + black-box API
 scripts                    deploy-devnet.sh · deploy-api.sh · deploy-web.sh · verify.sh
 ```
 
-REST is mounted under `/api`: `/health`, `/stats`, `/launches` (`?status=auctions|vaults|graduated|<status>&quote=SOL|USDC|stocks|<symbol>`), `/launches/:idOrMint`, `/auctions/:id`, `/vaults/:mint`, `/revenue`, `/rewards/:mint/:wallet`, `/relayer/*` and `/privacy/*`. Custodial routes (`CUSTODY_ROUTES` in `packages/shared/src/custody.ts`): `/auth/{nonce,verify,session,logout}`, `/account`, `/account/deposit/:asset`, `/account/deposits`, `/account/withdrawals`, `/trade/{commit,reveal,swap,stake}`, `/trade/claim/:launchId`, `/trade/rewards/:launchId`, `/custody/info`, and the operator routes `/admin/withdrawals` and `/admin/credit-pool/seed` (header `x-admin-token`). See [docs/API.md](docs/API.md). The server also serves `GET /llms.txt` (a guide for AI trading agents) and `WS /ws`, where clients send `{op:"subscribe",channels:["global","launch:<id>"]}`. Full contract: `packages/shared/src/api.ts` and `ws.ts`.
+REST is mounted under `/api`: `/health`, `/stats`, `/launches` (`?status=auctions|vaults|graduated|<status>&quote=SOL|USDC|stocks|<symbol>`), `/launches/:idOrMint`, `/auctions/:id`, `/vaults/:mint`, `/revenue`, `/rewards/:mint/:wallet`, `/relayer/*`, `/privacy/*` and the browser RPC proxy `POST /rpc` (rolling out). Custodial routes (`CUSTODY_ROUTES` in `packages/shared/src/custody.ts`): `/auth/{nonce,verify,session,logout}`, `/account`, `/account/deposit/:asset`, `/account/deposits`, `/account/withdrawals`, `/trade/{commit,reveal,swap,stake}`, `/trade/claim/:launchId`, `/trade/rewards/:launchId`, `/custody/info`, and the operator routes `/admin/withdrawals` and `/admin/credit-pool/seed` (header `x-admin-token`). See [docs/API.md](docs/API.md). The server also serves `GET /llms.txt` (a guide for AI trading agents) and `WS /ws`, where clients send `{op:"subscribe",channels:["global","launch:<id>"]}`. Full contract: `packages/shared/src/api.ts` and `ws.ts`.
 
 ## Quickstart (demo mode, no keys and no infrastructure)
 
@@ -70,7 +78,7 @@ pnpm dev                   # builds @sealed/shared, then runs API :4000 + web :3
 open http://localhost:3000
 ```
 
-With no env set, the API runs in **DEMO_MODE** with an in-memory store. It seeds a deterministic demo world on boot: live sealed auctions, buyback countdowns that tick, repayment bars and a trade tape. The UI labels this mode **Devnet / Demo**. `pnpm seed` only does something when `DATABASE_URL` is set (see below).
+With no env set, the API runs in **DEMO_MODE** with an in-memory store. It seeds a deterministic demo world on boot: live sealed auctions, buyback countdowns that tick, repayment bars and a trade tape. The UI labels this mode **Devnet / Demo**. Demo mode is for local development and devnet only; it is disabled on mainnet. `pnpm seed` only does something when `DATABASE_URL` is set (see below).
 
 Useful commands:
 
@@ -106,7 +114,7 @@ DATABASE_URL=postgresql://… pnpm seed           # upserts the demo world; add 
 
 All three scripts ask before doing anything (skip the prompt with `--yes`) and support `--dry-run`.
 
-### 1. Program → Solana devnet
+### 1. Program → Solana devnet (roadmap onchain mode, optional; not deployed)
 
 ```bash
 solana-keygen new -o ~/.config/solana/id.json   # if needed, then fund it with ~5 devnet SOL
@@ -119,7 +127,7 @@ The script runs `anchor build` and `anchor deploy` to devnet using `programs/sea
 
 1. Create a Railway project and add the **Postgres** and **Redis** plugins.
 2. Add a service from this repo. Railway builds with `apps/api/railway.json`, which points at the `apps/api/Dockerfile` builder (build context is the repo root) and health-checks `/api/health`.
-3. Set the variables from `apps/api/.env.example`: `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `REDIS_URL=${{Redis.REDIS_URL}}`, `SOLANA_RPC_URL` or `HELIUS_API_KEY`, `PROGRAM_ID`, `RELAYER_*`, `KEEPER_SECRET_KEY`, and `CORS_ORIGIN=https://<your-vercel-domain>`. For custody also `ADMIN_TOKEN`, `COMPANY_WALLET_SECRET_KEY` (operator-only) and `DEMO_MODE=false` (or `CUSTODY_WORKERS=true`).
+3. Set the variables from `apps/api/.env.example`: `DATABASE_URL=${{Postgres.DATABASE_URL}}` (enable backups), `REDIS_URL=${{Redis.REDIS_URL}}`, `HELIUS_API_KEY` (or `SOLANA_RPC_URL`), and `CORS_ORIGIN=https://www.sealedsol.xyz`. For mainnet custody: `NETWORK=mainnet`, `DEMO_MODE=false`, `CUSTODY_WORKERS=true`, `ADMIN_TOKEN`, `COMPANY_WALLET_SECRET_KEY` (operator-only) and `SIWS_DOMAIN=www.sealedsol.xyz`. Work through the [mainnet readiness checklist](docs/DEPLOYMENT.md#mainnet-readiness-checklist), including funding the company wallet with SOL for fees.
 4. Run `scripts/deploy-api.sh`, which wraps `railway up`. On boot the container runs `prisma db push` when `DATABASE_URL` is set.
 5. Seed the offchain credit pool from company funds: `POST /api/admin/credit-pool/seed {asset, amount, reference}` with header `x-admin-token`. Graduations draw their buyback credit from it and get none while it is empty.
 
@@ -128,7 +136,7 @@ Local image: `docker build -f apps/api/Dockerfile -t sealed-api . && docker run 
 ### 3. Web → Vercel
 
 1. Import the repo and set **Root Directory = `apps/web`**. `apps/web/vercel.json` installs from the monorepo root, then builds `@sealed/shared`, then `@sealed/defi`, then `@sealed/web`.
-2. Set `NEXT_PUBLIC_API_URL=https://<railway-domain>`, `NEXT_PUBLIC_WS_URL=wss://<railway-domain>/ws`, `NEXT_PUBLIC_NETWORK=devnet`, `NEXT_PUBLIC_RPC_URL` and `NEXT_PUBLIC_PROGRAM_ID`.
+2. Set `NEXT_PUBLIC_API_URL=https://<railway-domain>`, `NEXT_PUBLIC_WS_URL=wss://<railway-domain>/ws` and `NEXT_PUBLIC_NETWORK=mainnet` (production). `NEXT_PUBLIC_RPC_URL` is optional (the browser uses `POST /api/rpc`; never put a provider key in a `NEXT_PUBLIC_*` variable); `NEXT_PUBLIC_PROGRAM_ID` only matters for the roadmap onchain mode.
 3. Run `scripts/deploy-web.sh` (production) or `scripts/deploy-web.sh --preview`.
 
 ## Testing
@@ -154,5 +162,5 @@ Local image: `docker build -f apps/api/Dockerfile -t sealed-api . && docker run 
 - **The buyback vault cannot be withdrawn.** The vault is a PDA-owned token account. The program exposes only swap-to-burn (`execute_buyback_drip`) and paired-asset holder drips. There is no instruction that transfers vault funds to a creator, admin or arbitrary wallet. Drips are permissionless cranks with bounded size and interval, so a malicious keeper can at most run them early within the schedule or skip them.
 - **Config validation.** `clearingCap` must be ≥ `floorPrice × tokensForSale`. If it isn't, the clamp to the floor price lets the raise exceed the cap (see the invariant test `KNOWN EDGE`). The program and API should reject such launches.
 - **Anti-snipe** is keyed on the graduation slot. Wallets that buy in that slot are recorded on-chain and get 0% holder rewards. This does not stop the buy itself.
-- **Custodial by default.** In offchain mode the company wallet holds every deposit and the operator can delay or refuse withdrawals; a compromised `COMPANY_WALLET_SECRET_KEY` could lose funds. No insurance, no audit. See [docs/CUSTODY.md](docs/CUSTODY.md) and [docs/SECURITY.md](docs/SECURITY.md) (known limitations: internal pool instead of Raydium, platform-token burn not built, first drip one interval after graduation, credit capped by the seeded credit pool).
-- **Demo mode is not secure mode.** `POST /api/auctions/:id/demo-bid` and unauthenticated in-memory launch creation exist only when `DEMO_MODE=true`. Never run a public mainnet deployment in demo mode (the hosted devnet API runs in demo today).
+- **Custodial on mainnet, real funds.** In offchain mode the company wallet holds every deposit and the operator can delay or refuse withdrawals; a compromised `COMPANY_WALLET_SECRET_KEY` could lose funds. Only SOL and USDC withdraw. No insurance, no audit. See [docs/CUSTODY.md](docs/CUSTODY.md) and [docs/SECURITY.md](docs/SECURITY.md) (known limitations: internal pool instead of Raydium, platform-token burn not built, first drip one interval after graduation, credit capped by the seeded credit pool).
+- **Demo mode is not secure mode.** `POST /api/auctions/:id/demo-bid` and unauthenticated in-memory launch creation exist only when `DEMO_MODE=true`. Never run a public mainnet deployment in demo mode; mainnet disables it.

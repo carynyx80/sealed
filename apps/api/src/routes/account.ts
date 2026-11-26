@@ -5,6 +5,7 @@ import {
   QUOTE_ASSETS,
   WithdrawRequestSchema,
   isQuoteAssetSymbol,
+  quoteAssetDisabledReason,
   type AccountResponse,
   type BalanceRow,
 } from "@sealed/shared";
@@ -51,7 +52,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext, custo
     if (!isQuoteAssetSymbol(asset)) return sendError(reply, 400, `unknown asset ${asset}`);
     const user = await custody.repo.ensureUser(req.wallet!);
     const ins = custody.deposits.instructions(asset, user.depositRef);
-    if (!ins) return sendError(reply, 400, `${asset} deposits are not supported on ${custody.config.network} (no mint configured)`);
+    if (!ins) return sendError(reply, 400, `${asset} deposits are not supported on ${custody.config.network}: ${quoteAssetDisabledReason(asset, custody.config.network) ?? "not configured for custody"}`);
     return ins;
   });
 

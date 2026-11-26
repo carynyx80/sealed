@@ -6,6 +6,7 @@ import type { DepositStatus, Network, QuoteAssetSymbol, WithdrawalStatus } from 
 import { QUOTE_ASSETS } from "@sealed/shared";
 import { CheckIcon } from "../ui/Icons";
 import { encodeQr } from "./qr";
+import { explorerAccountUrl, explorerTxUrl } from "@/lib/config";
 
 /* ------------------------------------------------------------------------------------ disclosure */
 
@@ -154,16 +155,37 @@ export function assetUsd(asset: QuoteAssetSymbol, amount: number): number {
 }
 
 export function explorerTx(sig: string, network: Network | undefined): string {
-  const c = network === "mainnet" || !network ? "" : network === "localnet" ? "?cluster=custom" : "?cluster=devnet";
-  return `https://solscan.io/tx/${sig}${c}`;
+  return explorerTxUrl(sig, network);
 }
 export function explorerAccount(addr: string, network: Network | undefined): string {
-  const c = network === "mainnet" || !network ? "" : network === "localnet" ? "?cluster=custom" : "?cluster=devnet";
-  return `https://solscan.io/account/${addr}${c}`;
+  return explorerAccountUrl(addr, network);
 }
 
 /** Plain amount input sanitiser (digits + one dot). */
 export function cleanAmount(v: string): string | null {
   const s = v.replace(",", ".");
   return /^\d*\.?\d*$/.test(s) ? s : null;
+}
+
+/* ------------------------------------------------------------------------------------ payouts */
+
+/** Human copy for why automatic payouts are paused (API `payoutsReason`, e.g. "company wallet needs SOL for fees"). */
+export function payoutsPausedCopy(reason: string | null | undefined): string {
+  const r = (reason ?? "").trim().replace(/\.$/, "");
+  return r ? r.charAt(0).toUpperCase() + r.slice(1) : "Automatic payouts are not configured on this deployment";
+}
+
+/** Shown in the withdraw sheet and on /account whenever the API reports payoutsEnabled === false. */
+export function PayoutsPausedNotice({ reason, className, compact = false }: { reason: string | null | undefined; className?: string; compact?: boolean }) {
+  return (
+    <div role="status" className={clsx("rounded-field border border-signal/25 bg-signal-tint/50 text-signal-ink", compact ? "p-3" : "p-4", className)}>
+      <p className="flex items-center gap-2 text-[13px] font-semibold">
+        <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-signal" /> Automatic payouts paused
+      </p>
+      <p className="mt-1 text-[12px] leading-relaxed">
+        {payoutsPausedCopy(reason)}. Withdrawals you request now wait for manual approval by Sealed; the amount stays locked in your account
+        until it is sent or returned. Deposits, bids and trades are unaffected.
+      </p>
+    </div>
+  );
 }

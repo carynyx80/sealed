@@ -4,7 +4,7 @@ import clsx from "clsx";
 import type { ReactNode } from "react";
 import type { Network, ProtocolStats } from "@sealed/shared";
 import { useNow, useRevenue } from "@/lib/live";
-import { NETWORK } from "@/lib/config";
+import { IS_MAINNET, NETWORK } from "@/lib/config";
 import { fmtAgo, fmtInt, fmtUsd } from "@/lib/format";
 import { RollingNumber } from "../motion/RollingNumber";
 import { FadeIn } from "../motion/FadeIn";
@@ -16,7 +16,7 @@ import { BuybackTable, CreditLedgerTable, utcStamp } from "./Ledgers";
 export function RevenueDashboard() {
   const { data } = useRevenue();
   const now = useNow();
-  const network: Network = data?.stats.network ?? NETWORK;
+  const network: Network = IS_MAINNET ? "mainnet" : data?.stats.network ?? NETWORK;
   const s = data?.stats;
 
   return (

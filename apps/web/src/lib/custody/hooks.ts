@@ -15,6 +15,7 @@ import {
   type WithdrawalRecord,
 } from "@sealed/shared";
 import { liveSocket } from "../ws";
+import { isUserRejection } from "../defi/config";
 import { signInWithSolana } from "./auth";
 import {
   CustodyError,
@@ -54,6 +55,8 @@ export interface CustodySessionApi {
   availability: CustodyAvailability;
   canSign: boolean;
   signingIn: boolean;
+  /** Domain named in the sign-in message currently (or last) being signed, shown next to the wallet prompt. */
+  messageDomain: string | null;
   error: string | null;
   signIn: () => Promise<CustodySession>;
   signOut: () => void;
@@ -67,8 +70,12 @@ export function useCustodySession(): CustodySessionApi {
   const session = useSyncExternalStore(subscribeSessions, getSnap, () => null);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [messageDomain, setMessageDomain] = useState<string | null>(null);
 
-  useEffect(() => setError(null), [wallet]);
+  useEffect(() => {
+    setError(null);
+    setMessageDomain(null);
+  }, [wallet]);
 
   const signIn = useCallback(async () => {
     if (!wallet) throw new CustodyError("Connect a wallet first", 0, "no_wallet");
@@ -76,10 +83,10 @@ export function useCustodySession(): CustodySessionApi {
     setSigningIn(true);
     setError(null);
     try {
-      return await signInWithSolana(wallet, signMessage);
+      return await signInWithSolana(wallet, signMessage, { onMessage: ({ domain }) => setMessageDomain(domain) });
     } catch (e) {
       const m = (e as Error)?.message ?? String(e);
-      setError(/reject/i.test(m) ? "Sign-in request rejected in wallet" : m);
+      setError(isUserRejection(e) || /reject/i.test(m) ? "Sign-in request rejected in wallet" : m);
       throw e;
     } finally {
       setSigningIn(false);
@@ -90,7 +97,7 @@ export function useCustodySession(): CustodySessionApi {
     if (wallet) clearSession(wallet);
   }, [wallet]);
 
-  return { wallet, session, signedIn: !!session, availability, canSign: !!signMessage, signingIn, error, signIn, signOut };
+  return { wallet, session, signedIn: !!session, availability, canSign: !!signMessage, signingIn, messageDomain, error, signIn, signOut };
 }
 
 /* ------------------------------------------------------------------------------- shared resources */

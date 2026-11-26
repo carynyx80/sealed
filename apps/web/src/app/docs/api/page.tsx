@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { API_ROUTES, CUSTODY_ROUTES, PROGRAM_ID } from "@sealed/shared";
+import { API_ROUTES, CUSTODY_ROUTES, PROGRAM_ID, WITHDRAWAL_LIMITS } from "@sealed/shared";
+import { MAINNET_COMMIT_WINDOW } from "@/components/docs/Mainnet";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { A, Accent, C, DocHeader, H2, H3, Note, P, StatusBadge, Table, UL } from "@/components/docs/Prose";
 
@@ -12,9 +13,9 @@ const PUBLIC: Array<[string, string, string]> = [
   ["GET", API_ROUTES.launch(":idOrMint"), "LaunchSummary, 404 if unknown."],
   ["GET", `${API_ROUTES.trades(":idOrMint")}?limit=`, "{ trades: Trade[] }"],
   ["GET", `${API_ROUTES.chart(":idOrMint")}?interval=1m|5m|1h`, "{ points: PricePoint[] }"],
-  ["POST", API_ROUTES.launches, "Offchain mode with a bearer token (required when not in demo): creates a real launch with creator = session wallet. Demo without a token: in-memory demo launch. Onchain mode, not demo: 501 \"sign client-side\" with create_launch args in atoms. 400 on invalid input (e.g. > 200 bps)."],
+  ["POST", API_ROUTES.launches, `Offchain mode with a bearer token (required when not in demo): creates a real launch with creator = session wallet. On mainnet the commit window must be ${MAINNET_COMMIT_WINDOW} and the quote asset SOL or USDC (rolling out). Demo without a token: in-memory demo launch. Onchain mode, not demo: 501 \"sign client-side\" with create_launch args in atoms. 400 on invalid input (e.g. > 200 bps).`],
   ["GET", API_ROUTES.auction(":idOrMint"), "{ launch, serverTimeTs } — public aggregates only."],
-  ["POST", API_ROUTES.demoBid(":idOrMint"), "Demo only (403 otherwise). { commitment, deposit, wallet? }; 409 if the commit window is closed."],
+  ["POST", API_ROUTES.demoBid(":idOrMint"), "Demo only (403 otherwise; disabled on mainnet). { commitment, deposit, wallet? }; 409 if the commit window is closed."],
   ["GET", API_ROUTES.vault(":mint"), "{ launch, recentBuybacks (30), serverTimeTs }"],
   ["GET", API_ROUTES.rewards(":mint", ":wallet"), "HolderReward — staked, claimable, claimed, eligible (false for snipers)."],
   ["GET", API_ROUTES.revenue, "{ stats, recentBuybacks, ledger, daily (14 days) }"],
@@ -22,6 +23,7 @@ const PUBLIC: Array<[string, string, string]> = [
   ["POST", API_ROUTES.relayerReveals, "SealedRevealEnvelope → { accepted, id }. 400 malformed / wrong key / bad payload, 401 bad signature, 404, 409 window closed."],
   ["GET", API_ROUTES.privacyStatus, "PrivacyStatusResponse — available, simulated, ringId, escrowFunding, reason."],
   ["POST", API_ROUTES.privacyRpc, "{ method, params } → raw Helius JSON-RPC (8 whitelisted methods, 120/min/IP)."],
+  ["POST", "/api/rpc", "Browser RPC proxy (rolling out). JSON-RPC 2.0 body { jsonrpc, id, method, params } for an allowlisted set of Solana methods; others are rejected. Rate-limited per client (429). The RPC provider key stays on the server."],
   ["GET", API_ROUTES.llms, "text/plain agent guide, generated from live config and shared constants."],
 ];
 
@@ -36,14 +38,14 @@ const CUSTODY: Array<[string, string, string, string]> = [
   ["GET", CUSTODY_ROUTES.deposits, "→ { deposits: DepositRecord[] } (latest 100)", "bearer"],
   ["POST", CUSTODY_ROUTES.deposits, "{ signature } nudges detection → 200 DepositRecord; 202 not yet finalized or not found (picked up automatically later); 404 the transaction holds no deposit for your memo; 400 failed tx; 503 no RPC configured", "bearer"],
   ["GET", CUSTODY_ROUTES.withdrawals, "→ { withdrawals: WithdrawalRecord[] } (latest 100)", "bearer"],
-  ["POST", CUSTODY_ROUTES.withdrawals, "{ asset, amount, destination } → 201 WithdrawalRecord (queued or pending_approval); 4xx on insufficient funds / bad destination / unsupported asset", "bearer"],
+  ["POST", CUSTODY_ROUTES.withdrawals, `{ asset, amount, destination } → 201 WithdrawalRecord: queued at or under $${WITHDRAWAL_LIMITS.autoApproveMaxUsd.toLocaleString("en-US")} and within $${WITHDRAWAL_LIMITS.dailyPerWalletUsd.toLocaleString("en-US")}/day at a fresh live price, otherwise pending_approval. On mainnet only SOL and USDC withdraw; launched tokens are refused (rolling out). 4xx on insufficient funds / bad destination / unsupported asset`, "bearer"],
   ["POST", CUSTODY_ROUTES.commitBid, "{ launchId, commitment, deposit, sealedReveal? } → { bidId, bidCount }. 409 window closed or second bid", "bearer"],
   ["POST", CUSTODY_ROUTES.reveal, "{ launchId, maxPrice, bidAmount, salt } (atoms as decimal strings, salt 64 hex) → { revealed: true }", "bearer"],
   ["POST", CUSTODY_ROUTES.swap, "{ launchId, side, amountIn, minAmountOut } → { tradeId, amountIn, amountOut, fee, price, isSniper }. Optional Idempotency-Key header", "bearer"],
   ["POST", CUSTODY_ROUTES.claim(":launchId"), "after clearing → { tokens, refund }", "bearer"],
   ["POST", CUSTODY_ROUTES.stake, "{ launchId, amount } — negative amount unstakes → { staked, eligible }. Optional Idempotency-Key", "bearer"],
   ["POST", CUSTODY_ROUTES.claimRewards(":launchId"), "→ { amount }", "bearer"],
-  ["GET", `${CUSTODY_ROUTES.adminWithdrawals}?status=`, "operator queue (default pending_approval, queued, sending) → { withdrawals, payoutsEnabled }", "x-admin-token"],
+  ["GET", `${CUSTODY_ROUTES.adminWithdrawals}?status=`, "operator queue (default pending_approval, queued, sending) → { withdrawals, payoutsEnabled }. Requires ADMIN_TOKEN", "x-admin-token"],
   ["POST", CUSTODY_ROUTES.adminWithdrawals, "{ id, action: approve | reject, reason? } → WithdrawalRecord. Approve moves pending_approval → queued; reject unlocks funds", "x-admin-token"],
   ["POST", "/api/admin/credit-pool/seed", "{ asset, amount, reference } → { ok, asset, amount, txId, replayed }. Records company funds as credit_pool; idempotent on reference (409 on conflicting replay)", "x-admin-token"],
 ];
@@ -65,12 +67,15 @@ export default function ApiReference() {
       >
         <StatusBadge status="offchain-passing" label="Public REST + WS · tests passing" />
         <StatusBadge status="offchain-passing" label="Custody + trade routes · tests passing" />
-        <StatusBadge status="dev" label="Payouts pending operator key" />
+        <StatusBadge status="rolling" label="Mainnet · rolling out" />
       </DocHeader>
 
       <H2 id="conventions" n="9.1">Conventions</H2>
       <UL>
-        <li>Base URL: your API host (local <C>http://localhost:4000</C>). REST under <C>/api</C>.</li>
+        <li>
+          Base URL: <C>https://api-production-01dc1743.up.railway.app</C> (Solana mainnet, real funds, rolling out) or your own host (local{" "}
+          <C>http://localhost:4000</C>). REST under <C>/api</C>. Check <C>network</C> and <C>isDemo</C> in <C>/api/health</C> first.
+        </li>
         <li>Amounts are UI units (JS numbers already divided by decimals); on-chain code uses bigint atoms. Prices are quote per whole token; tokens have 6 decimals.</li>
         <li>Timestamps are unix seconds. Use <C>serverTimeTs</C> to correct your clock before computing countdowns.</li>
         <li>
@@ -89,14 +94,14 @@ export default function ApiReference() {
       <H3 id="ex-health">Example: health</H3>
       <CodeBlock
         lang="json"
-        title="GET /api/health (demo)"
+        title="GET /api/health (mainnet)"
         code={`{
   "ok": true,
-  "network": "devnet",
-  "isDemo": true,
-  "db": "memory",
-  "cache": "memory",
-  "rpc": "https://devnet.helius-rpc.com/?api-key=***",
+  "network": "mainnet",
+  "isDemo": false,
+  "db": "postgres",
+  "cache": "redis",
+  "rpc": "https://mainnet.helius-rpc.com/?api-key=***",
   "programId": "${PROGRAM_ID}",
   "uptimeSec": 221,
   "version": "0.1.0"
@@ -105,7 +110,7 @@ export default function ApiReference() {
       <H3 id="ex-launch">Example: a launch in reveal</H3>
       <CodeBlock
         lang="json"
-        title="GET /api/launches?status=auctions&limit=1 (demo, trimmed)"
+        title="GET /api/launches?status=auctions&limit=1 (devnet demo, trimmed)"
         code={`{
   "launches": [{
     "id": "Ccrm8zMN6fJFrHGnm9dHHKAquAPTJdJsX2xj7LgGKZXw",
@@ -129,7 +134,13 @@ export default function ApiReference() {
         After graduation <C>market</C>, <C>vault</C> (creditLine, balance, dripAmount, nextDripTs, dripsExecuted, tokensBurned…) and <C>credit</C> (repaid,
         repaidPct, phase, feesCollected, holderPayouts…) are populated. No per-bid field is ever exposed before clearing.
       </P>
-      <H3 id="ex-create">Example: create a launch (demo)</H3>
+      <Note title="Mainnet" tone="warn">
+        <p>
+          On mainnet the API is custodial with real funds: deposits go to the company wallet, only SOL and USDC are enabled, withdrawals may need manual
+          approval, and launched tokens cannot be withdrawn on-chain yet. Demo endpoints are disabled. Read <A href="/docs/custody">Custody</A> first.
+        </p>
+      </Note>
+      <H3 id="ex-create">Example: create a launch (local demo)</H3>
       <CodeBlock
         lang="bash"
         title="curl"
@@ -146,7 +157,8 @@ export default function ApiReference() {
         Defined in <C>CUSTODY_ROUTES</C> and implemented in <C>apps/api/src/routes/</C> (<C>auth.ts</C>, <C>account.ts</C>, <C>trade.ts</C>,{" "}
         <C>custody.ts</C>, <C>admin.ts</C>). Everything except <C>/api/custody/info</C>, nonce and verify requires{" "}
         <C>Authorization: Bearer &lt;token&gt;</C> from <A href="/docs/custody">SIWS sign-in</A>; the acting wallet is always the session wallet, never a
-        body field. Admin routes take the header <C>x-admin-token: &lt;ADMIN_TOKEN&gt;</C> and answer 503 when <C>ADMIN_TOKEN</C> is unset. Trade routes
+        body field. Admin routes take the header <C>x-admin-token: &lt;ADMIN_TOKEN&gt;</C> and answer 503 when <C>ADMIN_TOKEN</C> is unset; on mainnet
+        every approval requires it. Trade routes
         answer 503 when the offchain ledger is unavailable or <C>EXECUTION_MODE=onchain</C>. Account and withdrawal writes are rate-limited (429).
       </P>
       <Table
@@ -228,7 +240,8 @@ const account = await fetch(\`\${api}/api/account\`, { headers: { authorization:
 
       <H2 id="llms" n="9.5">/llms.txt for AI agents</H2>
       <P>
-        <C>GET /llms.txt</C> returns a plain-text guide rendered from the running config: mode (demo or live), network, program id, REST and WS URLs, the
+        <C>GET /llms.txt</C> returns a plain-text guide rendered from the running config: mode (demo or live), network (mainnet on the hosted API), the
+        real-funds custody disclosure, program id, REST and WS URLs, the
         mechanics with numbers pulled from shared constants, every endpoint with example JSON, the WS protocol, a step-by-step &ldquo;how an agent
         participates&rdquo; recipe (discover → bid → auto-reveal → settle → trade and earn) and the Privacy Ring status. Point an agent at it first.
       </P>

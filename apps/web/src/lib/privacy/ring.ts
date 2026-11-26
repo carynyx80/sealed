@@ -9,6 +9,7 @@ import {
 } from "@sealed/defi";
 import type { PrivacyStatusResponse } from "@sealed/shared";
 import { API_BASE, NETWORK } from "../defi/config";
+import { DEMO_ENABLED } from "../config";
 
 export const PRIVACY_STATUS_PATH = "/api/privacy/status";
 const SIM_KEY = "sealed-privacy-ring-sim:v1";
@@ -35,6 +36,7 @@ let helius: HeliusPrivacyRingClient | null = null;
 
 /** Demo / unsupported networks: simulated ring persisted per device. Never touches funds. */
 export function simulatedRing(): SimulatedPrivacyRingClient {
+  if (!DEMO_ENABLED) throw new Error("The simulated Privacy Ring is disabled on mainnet");
   sim ??= new SimulatedPrivacyRingClient({ network: NETWORK, storage: localRingStorage(), latencyMs: 650 });
   return sim;
 }
@@ -46,7 +48,7 @@ export function heliusRing(): HeliusPrivacyRingClient {
 }
 
 export function ringFor(simulated: boolean): PrivacyRingClient {
-  return simulated ? simulatedRing() : heliusRing();
+  return simulated && DEMO_ENABLED ? simulatedRing() : heliusRing();
 }
 
 /** Owner key for the ring: the connected wallet, or a device-local demo identity. */
@@ -56,14 +58,19 @@ export function privacyOwner(wallet: string | null | undefined): string {
 
 /* ------------------------------------------------------------------------------- status (cached) */
 
-/** Used when the API predates /api/privacy/status: behave as the simulated (demo) ring. */
-export const FALLBACK_STATUS: PrivacyStatusResponse = {
-  available: true,
-  network: NETWORK,
-  simulated: true,
-  escrowFunding: true,
-  reason: "Privacy status endpoint unreachable — using the simulated ring",
-};
+/**
+ * Used when /api/privacy/status is unreachable. Devnet: behave as the simulated (demo) ring.
+ * Mainnet: the ring is simply unavailable (never simulated, never real funds through a fake path).
+ */
+export const FALLBACK_STATUS: PrivacyStatusResponse = DEMO_ENABLED
+  ? { available: true, network: NETWORK, simulated: true, escrowFunding: true, reason: "Privacy status endpoint unreachable — using the simulated ring" }
+  : { available: false, network: NETWORK, simulated: false, escrowFunding: false, reason: "Privacy Ring status is unavailable right now" };
+
+/** Mainnet never runs a simulated ring, even if a misconfigured API reports one. */
+function normalizeStatus(s: PrivacyStatusResponse): PrivacyStatusResponse {
+  if (DEMO_ENABLED || !s.simulated) return s;
+  return { ...s, available: false, simulated: false, escrowFunding: false, reason: "Privacy Ring is not live on mainnet yet" };
+}
 
 let statusPromise: Promise<PrivacyStatusResponse> | null = null;
 let statusValue: PrivacyStatusResponse | null = null;
@@ -80,7 +87,7 @@ export function fetchPrivacyStatus(): Promise<PrivacyStatusResponse> {
       const res = await fetch(`${API_BASE}${PRIVACY_STATUS_PATH}`, { signal: ctrl.signal, headers: { accept: "application/json" } }).finally(() => clearTimeout(t));
       const body = (await res.json()) as PrivacyStatusResponse;
       if (!res.ok || typeof body?.available !== "boolean") throw new Error("bad status");
-      statusValue = body;
+      statusValue = normalizeStatus(body);
     } catch {
       statusValue = FALLBACK_STATUS;
       statusPromise = null; // retry on next mount

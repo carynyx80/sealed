@@ -62,6 +62,8 @@ export class MemoryStore implements Store {
 
   constructor(private opts: MemoryStoreOptions) {
     const now = nowSec();
+    // MAINNET GUARD: the simulated demo world / ticker must never exist next to real funds.
+    if (opts.isDemo && opts.network === "mainnet") throw new Error("demo store refused on NETWORK=mainnet");
     this.world = opts.isDemo
       ? createDemoWorld(now)
       : { launches: [], trades: {}, charts: {}, buybacks: [], ledger: [], rngState: 1, lastTickTs: now };

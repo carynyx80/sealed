@@ -7,7 +7,18 @@ import { CustodyError, custodyFetch, getSession, setSession, type CustodySession
 
 const inflight = new Map<string, Promise<CustodySession>>();
 
-export async function signInWithSolana(wallet: string, signMessage: (m: Uint8Array) => Promise<Uint8Array>): Promise<CustodySession> {
+/** The domain a SIWS message is issued for (first line: "<domain> wants you to sign in with your Solana account:"). */
+export function siwsDomain(message: string): string | null {
+  const first = /^\s*([^\s]+) wants you to sign in with your Solana account:/m.exec(message)?.[1];
+  const field = /^Domain:\s*(\S+)\s*$/m.exec(message)?.[1];
+  return first ?? field ?? null;
+}
+
+export async function signInWithSolana(
+  wallet: string,
+  signMessage: (m: Uint8Array) => Promise<Uint8Array>,
+  opts: { onMessage?: (info: { domain: string | null; message: string }) => void } = {},
+): Promise<CustodySession> {
   const existing = getSession(wallet);
   if (existing) return existing;
   let p = inflight.get(wallet);
@@ -18,6 +29,7 @@ export async function signInWithSolana(wallet: string, signMessage: (m: Uint8Arr
       if (!n.message.includes(wallet) || !n.message.includes(n.nonce)) {
         throw new CustodyError("Unexpected sign-in message from the server", 0, "bad_message");
       }
+      opts.onMessage?.({ domain: siwsDomain(n.message), message: n.message });
       const sig = await signMessage(new TextEncoder().encode(n.message));
       const v = await custodyFetch<AuthVerifyResponse>(CUSTODY_ROUTES.verify, {
         method: "POST",

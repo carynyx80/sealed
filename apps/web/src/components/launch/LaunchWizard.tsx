@@ -161,7 +161,15 @@ export function LaunchWizard() {
       const { launch } = await api.createLaunch(parsed.data);
       router.push(`/token/${launch.mint}`);
     } catch (e) {
-      setDeployErr(e instanceof ApiError ? `The API rejected this launch: ${e.message}` : e instanceof Error ? e.message : String(e));
+      setDeployErr(
+        e instanceof ApiError && e.status >= 500
+          ? e.message
+          : e instanceof ApiError
+            ? `The API rejected this launch: ${e.message}`
+            : e instanceof Error
+              ? e.message
+              : String(e),
+      );
       setDeploying(false);
     }
   };

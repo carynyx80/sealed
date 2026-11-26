@@ -3,6 +3,8 @@
  * Client-side demo world. Used whenever the API is unreachable so the UI stays alive with
  * ticking auctions, buyback drips and repayment bars. Built on the shared deterministic
  * simulator (createDemoWorld / tickDemoWorld / demoStats).
+ * NEVER on mainnet: every entry point is guarded by DEMO_ENABLED (lib/config) so a mainnet build cannot
+ * construct, tick or display a demo world, even if a caller forgets to check.
  */
 import {
   createDemoWorld,
@@ -14,7 +16,7 @@ import {
   type LaunchSummary,
   type RevenueResponse,
 } from "@sealed/shared";
-import { NETWORK } from "./config";
+import { DEMO_ENABLED, NETWORK } from "./config";
 
 const LOCAL_KEY = "sealed:local-launches:v1";
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -54,7 +56,15 @@ function saveLocal() {
   }
 }
 
+export class DemoDisabledError extends Error {
+  constructor() {
+    super("Demo data is disabled on mainnet");
+    this.name = "DemoDisabledError";
+  }
+}
+
 export function getDemoWorld(): DemoWorld {
+  if (!DEMO_ENABLED) throw new DemoDisabledError();
   if (!world) {
     world = createDemoWorld(nowSec());
     const local = loadLocal();
@@ -79,6 +89,7 @@ function emit() {
 }
 
 export function subscribeDemo(fn: () => void): () => void {
+  if (!DEMO_ENABLED) return () => undefined;
   listeners.add(fn);
   getDemoWorld();
   if (!timer) {
@@ -102,6 +113,7 @@ export function demoVersion() {
 }
 
 export function findDemoLaunch(idOrMint: string): LaunchSummary | undefined {
+  if (!DEMO_ENABLED) return undefined;
   return getDemoWorld().launches.find((l) => l.id === idOrMint || l.mint === idOrMint);
 }
 
@@ -177,6 +189,7 @@ export function createDemoLaunch(input: CreateLaunchInput): LaunchSummary {
 
 /** Reflect a locally committed bid in the demo world's public counters (amounts stay hidden). */
 export function noteDemoBid(idOrMint: string, deposit: number) {
+  if (!DEMO_ENABLED) return;
   const L = world?.launches.find((l) => l.id === idOrMint || l.mint === idOrMint);
   if (!L || L.status !== "commit") return;
   L.auction.bidCount += 1;

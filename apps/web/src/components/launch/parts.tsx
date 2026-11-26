@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import clsx from "clsx";
 import type { KeyboardEvent, ReactNode } from "react";
 import { QUOTE_ASSET_LIST, type QuoteAsset, type QuoteAssetSymbol } from "@sealed/shared";
+import { IS_MAINNET } from "@/lib/config";
+import { quoteAssetOffered } from "@/lib/quoteAssets";
 import { SPRING } from "../motion/spring";
 import { CheckIcon } from "../ui/Icons";
 
@@ -83,10 +85,11 @@ export function StepRail({ steps, step, onGo }: { steps: readonly string[]; step
 const KIND_LABEL: Record<QuoteAsset["kind"], string> = { native: "Native", stable: "Stablecoin", stock: "Tokenized equity" };
 
 export function QuoteAssetList({ value, onChange }: { value: QuoteAssetSymbol; onChange: (s: QuoteAssetSymbol) => void }) {
+  const offered = QUOTE_ASSET_LIST.filter((q) => quoteAssetOffered(q.symbol));
   const groups: { title: string; items: QuoteAsset[] }[] = [
-    { title: "Currencies", items: QUOTE_ASSET_LIST.filter((q) => q.kind !== "stock") },
-    { title: "Tokenized equities", items: QUOTE_ASSET_LIST.filter((q) => q.kind === "stock") },
-  ];
+    { title: "Currencies", items: offered.filter((q) => q.kind !== "stock") },
+    { title: "Tokenized equities", items: offered.filter((q) => q.kind === "stock") },
+  ].filter((g) => g.items.length > 0);
   const flat = groups.flatMap((g) => g.items);
   const onKey = (e: KeyboardEvent, sym: QuoteAssetSymbol) => {
     const i = flat.findIndex((q) => q.symbol === sym);
@@ -125,14 +128,17 @@ export function QuoteAssetList({ value, onChange }: { value: QuoteAssetSymbol; o
                 <span className={clsx("num text-sm", on ? "text-ink" : "text-ink-soft")}>{q.symbol}</span>
                 <span className="min-w-0 truncate text-sm text-ink-slate">{q.name.replace(" (tokenized)", "")}</span>
                 <span className="hidden text-[11px] text-ink-muted sm:block">{KIND_LABEL[q.kind]}</span>
-                <span className="num text-right text-xs text-ink-muted">${q.demoUsdPrice.toFixed(2)}</span>
+                <span className="num text-right text-xs text-ink-muted">{IS_MAINNET ? "" : `$${q.demoUsdPrice.toFixed(2)}`}</span>
               </button>
             );
           })}
         </div>
       ))}
       <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
-        Reference prices are indicative. Bidders escrow, and holders are later paid, in the asset chosen here.
+        {IS_MAINNET
+          ? "Mainnet launches quote in SOL or USDC. Tokenized equities switch on once custody supports their token program. "
+          : "Reference prices are indicative. "}
+        Bidders escrow, and holders are later paid, in the asset chosen here.
       </p>
     </div>
   );

@@ -28,10 +28,12 @@ import { accountRoutes } from "./routes/account.js";
 import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
 import { custodyRoutes } from "./routes/custody.js";
+import { rpcProxyRoutes, type RpcProxyOptions } from "./routes/rpc.js";
 import { buildCustody, type CustodyDeps, type CustodyRuntime } from "./offchain/custody/index.js";
 import { CompositeStore } from "./offchain/readModel.js";
 import { createOffchainRuntime, startOffchainScheduler } from "./offchain/runtime.js";
 import { MemoryStore } from "./store/index.js";
+import type { OffchainRepo } from "./offchain/repo/types.js";
 
 export interface BuildOptions {
   config?: AppConfig;
@@ -43,6 +45,10 @@ export interface BuildOptions {
   workers?: boolean;
   /** Custody overrides (tests: mock RPC / repo / keys). */
   custody?: CustodyDeps;
+  /** Inject the offchain ledger repo (tests: in-memory ledger, also on NETWORK=mainnet). */
+  offchainRepo?: OffchainRepo;
+  /** RPC proxy overrides (tests: mocked upstream). */
+  rpcProxy?: RpcProxyOptions;
 }
 
 export type App = FastifyInstance & { ctx: AppContext; hub: WsHub; custody: CustodyRuntime };
@@ -54,13 +60,15 @@ export async function buildServer(opts: BuildOptions = {}): Promise<App> {
     opts.logger ?? (pretty ? { level: cfg.logLevel, transport: { target: "pino-pretty", options: { colorize: true, translateTime: "HH:MM:ss" } } } : { level: cfg.logLevel });
   const app = Fastify({ logger, trustProxy: true, bodyLimit: 256 * 1024 });
 
+  for (const msg of cfg.startupErrors ?? []) app.log.error(`CONFIG ERROR: ${msg}`);
+  if (cfg.network === "mainnet") app.log.warn({ demo: cfg.isDemo, mode: cfg.executionMode }, "MAINNET: real funds — demo world disabled, test hooks disabled, live prices for withdrawal limits");
   const bus = new EventBus();
   const baseStore = opts.store ?? (await createStore(cfg, bus, app.log));
   const cache = opts.cache ?? (await createCache(cfg.redisUrl, app.log));
   const relayer = loadRelayerKeys(cfg);
   // Offchain custodial engine + composite read model (demo world ∪ primary store ∪ offchain launches).
-  const offchain = cfg.executionMode === "offchain" ? await createOffchainRuntime({ cfg, bus, cache, relayer, log: app.log }) : null;
-  const demoStore = cfg.isDemo && baseStore.kind !== "memory" ? new MemoryStore({ isDemo: true, network: cfg.network, bus, tickMs: cfg.demoTickMs }) : null;
+  const offchain = cfg.executionMode === "offchain" ? await createOffchainRuntime({ cfg, bus, cache, relayer, log: app.log, repo: opts.offchainRepo }) : null;
+  const demoStore = cfg.isDemo && cfg.network !== "mainnet" && baseStore.kind !== "memory" ? new MemoryStore({ isDemo: true, network: cfg.network, bus, tickMs: cfg.demoTickMs }) : null;
   const store: Store = offchain || demoStore ? new CompositeStore(baseStore, demoStore, offchain?.engine ?? null) : baseStore;
   if (store !== baseStore) await store.init();
   if (relayer.ephemeral && !cfg.isDemo) app.log.warn("relayer: RELAYER_BOX_SEED / RELAYER_SECRET_KEY not set — using ephemeral keys (reveals will not survive restarts)");
@@ -94,6 +102,7 @@ export async function buildServer(opts: BuildOptions = {}): Promise<App> {
   await custodyRoutes(app, ctx, custody);
   await adminRoutes(app, ctx, custody);
   await tradeRoutes(app, ctx);
+  await rpcProxyRoutes(app, ctx, opts.rpcProxy);
   await registerWs(app, hub);
 
   hub.start();

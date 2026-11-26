@@ -14,6 +14,7 @@ import {
   TOKEN_UNIT,
   dripAmount,
   demoImage,
+  isQuoteAssetEnabled,
   pdas,
   programId,
   type BuybackEvent,
@@ -37,6 +38,7 @@ export async function createLaunch(d: EngineDeps, input: CreateLaunchInput, crea
   if (input.commitDurationSec < d.minCommitSec || input.commitDurationSec > MAX_COMMIT_DURATION_SEC) {
     throw new EngineError(400, `commitDurationSec must be within [${d.minCommitSec}, ${MAX_COMMIT_DURATION_SEC}]`);
   }
+  if (d.network === "mainnet" && !isQuoteAssetEnabled(input.quoteAsset, "mainnet")) throw new EngineError(400, `${input.quoteAsset} is not enabled on mainnet`);
   const qa = QUOTE_ASSETS[input.quoteAsset];
   const floorPrice = toAtoms(input.floorPrice, qa.decimals);
   const tickSize = toAtoms(input.tickSize, qa.decimals);

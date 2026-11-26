@@ -8,6 +8,7 @@ import type { LaunchSummary } from "@sealed/shared";
 import { SPR_READY_ASSETS } from "@sealed/defi";
 import { SPRING } from "@/components/motion/spring";
 import { usePrivacyRing } from "@/lib/privacy/usePrivacyRing";
+import { DEMO_ENABLED } from "@/lib/config";
 import { RingMark } from "./RingMotif";
 
 const STEP: Record<string, string> = {
@@ -22,7 +23,7 @@ export function PrivateDepositToggle({ launch, enabled, onChange }: { launch: La
 
   const reason: string | null = ring.loading
     ? "Checking Privacy Ring…"
-    : launch.isDemo
+    : launch.isDemo && DEMO_ENABLED
       ? null // demo launches always use the simulated ring
       : !ring.available
         ? ring.reason ?? `Helius Privacy Ring is unavailable on ${launch.network}`
@@ -52,7 +53,7 @@ export function PrivateDepositToggle({ launch, enabled, onChange }: { launch: La
             Private deposit
           </label>
           <span className="rounded-full border border-signal/30 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-[0.08em] text-signal">beta</span>
-          {launch.isDemo && <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted">simulated</span>}
+          {launch.isDemo && DEMO_ENABLED && <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted">simulated</span>}
         </div>
         <p className="mt-0.5 text-[12.5px] leading-snug text-ink-slate">
           Fund the escrow from your Helius Privacy Ring balance, so the deposit size stays encrypted.

@@ -38,8 +38,28 @@ export function SignInButton({ className, label = "Sign in to Sealed", block = f
       >
         {s.signingIn ? "Check your wallet…" : !s.canSign ? "Wallet can't sign messages" : label}
       </button>
+      <SiwsDomainNote domain={s.messageDomain} signing={s.signingIn} />
       {s.error && <p className="mt-2 text-[12px] text-burn">{s.error}</p>}
     </div>
+  );
+}
+
+/**
+ * Fine print under the sign-in button: which domain the SIWS message is for. Before the nonce arrives we show the
+ * current host; once the server message is in hand we show the domain it actually names, and flag a mismatch.
+ */
+function SiwsDomainNote({ domain, signing }: { domain: string | null; signing: boolean }) {
+  const [host, setHost] = useState<string | null>(null);
+  useEffect(() => setHost(window.location.host), []);
+  const shown = domain ?? host;
+  if (!shown) return null;
+  const mismatch = !!domain && !!host && domain !== host;
+  return (
+    <p className="fine mt-2" aria-live="polite">
+      {signing ? "Message to sign is for " : "Free signature for "}
+      <span className="num text-ink-slate">{shown}</span>
+      {mismatch ? <> (this page is <span className="num">{host}</span>)</> : null} · no transaction, no fee.
+    </p>
   );
 }
 
@@ -110,7 +130,7 @@ export function SessionPill({ className, onNavigate, menuAlign = "right" }: { cl
         className={clsx(pill, "border-rule bg-sheet text-ink hover:border-rule-strong", className)}
         disabled={s.signingIn || !s.canSign}
         onClick={() => void s.signIn().catch(() => undefined)}
-        title={s.error ?? "Sign a message to open your Sealed account"}
+        title={s.error ?? (s.messageDomain ? `Sign a message for ${s.messageDomain} to open your Sealed account` : "Sign a message to open your Sealed account")}
       >
         <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-ink-muted" />
         {s.signingIn ? "Signing…" : "Sign in"}

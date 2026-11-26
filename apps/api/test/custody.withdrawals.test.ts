@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
-import { COMPANY_WALLET } from "@sealed/shared";
+import { COMPANY_WALLET, QUOTE_ASSETS } from "@sealed/shared";
+import { ata } from "../src/offchain/custody/chain.js";
+
+const USDC_DEVNET = QUOTE_ASSETS.USDC.mints.devnet!;
 import { loadCompanySigner, MAX_PAYOUT_ATTEMPTS, EXPIRY_MARGIN_BLOCKS } from "../src/offchain/custody/payout.js";
 import type { App } from "../src/server.js";
 import { MockRpc, makeCustodyApp, signIn } from "./custodyHelpers.js";
@@ -138,6 +141,9 @@ describe("PayoutWorker (idempotent sends)", () => {
   let rpc: MockRpc;
   before(async () => {
     rpc = new MockRpc();
+    // Company wallet funded: 1000 SOL (fees come from the surplus over SOL liabilities) + USDC in its ATA.
+    rpc.balances.set(company.publicKey.toBase58(), 1_000_000_000_000n);
+    rpc.balances.set(ata(company.publicKey, USDC_DEVNET).toBase58(), 1_000_000_000_000n);
     app = await makeCustodyApp({ adminToken: ADMIN, companyWallet: company.publicKey.toBase58(), companySecretKey: bs58.encode(company.secretKey) }, rpc);
   });
   after(async () => {

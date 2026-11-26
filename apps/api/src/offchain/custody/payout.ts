@@ -1,6 +1,7 @@
 import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import bs58 from "bs58";
 import type { FastifyBaseLogger } from "fastify";
+import type { FeePayerHealth } from "@sealed/shared";
 import { keypairFromSecret } from "../../services/solana.js";
 import { ata, createAtaIdempotentIx, memoIx, transferCheckedIx, type CustodyAsset } from "./chain.js";
 import type { CustodyLedger } from "./ledgerPort.js";
@@ -9,6 +10,16 @@ import { redact, type SolanaRpc } from "./rpc.js";
 import type { WithdrawalService } from "./withdrawals.js";
 
 export const MAX_PAYOUT_ATTEMPTS = 3;
+
+/** Network fee headroom per payout (1 signature = 5,000 lamports base; ×4 for safety). */
+export const PAYOUT_FEE_BUFFER_LAMPORTS = 20_000n;
+/** Rent for a recipient's associated token account (165 bytes) when the payout must create it. */
+export const TOKEN_ACCOUNT_RENT_LAMPORTS = 2_039_280n;
+/** Kept in the company wallet so it always stays rent-exempt (0-byte system account). */
+export const FEE_PAYER_RESERVE_LAMPORTS = 890_880n;
+export const FEE_PAYER_REASON = "company wallet needs SOL for fees";
+export const FEE_HEALTH_TTL_MS = 30_000;
+const LAMPORTS = 1_000_000_000;
 /** Extra finalized blocks past lastValidBlockHeight before we treat an unlanded tx as dead (RPC-node skew). */
 export const EXPIRY_MARGIN_BLOCKS = 32;
 
@@ -67,6 +78,10 @@ export class PayoutWorker {
   private running = false;
   private timer: NodeJS.Timeout | null = null;
   private stopped = false;
+  /** Lamports committed to fees/rent by sends earlier in the current tick (balance reads may lag broadcasts). */
+  private tickSpend = 0n;
+  private healthCache: { at: number; h: FeePayerHealth } | null = null;
+  private healthInflight: Promise<FeePayerHealth | null> | null = null;
 
   constructor(
     private readonly repo: CustodyRepo,
@@ -76,7 +91,66 @@ export class PayoutWorker {
     private readonly assets: CustodyAsset[],
     private readonly withdrawals: WithdrawalService,
     private readonly log: FastifyBaseLogger,
+    private readonly now: () => number = Date.now,
   ) {}
+
+  /**
+   * SOL that is NOT owed to users (onchain SOL − SOL liabilities) must cover the payout's fee (+ recipient ATA rent
+   * when it has to be created) while keeping the wallet rent-exempt; fees are never paid out of user funds.
+   * Token payouts also need the company ATA to hold the amount. Returns a hold reason, or null to proceed.
+   * Throws on RPC/ledger failure (the caller retries later; nothing is sent).
+   */
+  async payoutHold(w: WithdrawalRec, asset: CustodyAsset): Promise<{ reason: string | null; costLamports: bigint }> {
+    const company = this.signer.publicKey.toBase58();
+    let cost = PAYOUT_FEE_BUFFER_LAMPORTS;
+    if (asset.mint !== null) {
+      const destAta = ata(w.destination, asset.mint).toBase58();
+      if (!(await this.rpc.getAccountExists(destAta, "confirmed"))) cost += TOKEN_ACCOUNT_RENT_LAMPORTS;
+      const held = (await this.rpc.getTokenAccountBalance(ata(company, asset.mint).toBase58(), "confirmed")) ?? 0n;
+      if (held < w.amountAtoms) return { reason: `company wallet ${asset.symbol} balance below payout amount`, costLamports: cost };
+    }
+    const [balance, solLiab] = await Promise.all([this.rpc.getBalance(company, "confirmed"), this.ledger.liabilities("SOL")]);
+    const surplus = balance - solLiab;
+    const required = cost + FEE_PAYER_RESERVE_LAMPORTS + this.tickSpend;
+    if (surplus < required) {
+      this.log.error(
+        { withdrawalId: w.id, surplusSol: Number(surplus) / LAMPORTS, requiredSol: Number(required) / LAMPORTS },
+        "custody: company wallet needs SOL for fees — payout held (fund the company wallet with SOL that is not owed to users)",
+      );
+      return { reason: FEE_PAYER_REASON, costLamports: cost };
+    }
+    return { reason: null, costLamports: cost };
+  }
+
+  /** Fee-payer health for /api/custody/info (cached 30s; last known value on RPC failure, null if never known). */
+  async health(): Promise<FeePayerHealth | null> {
+    if (this.healthCache && this.now() - this.healthCache.at < FEE_HEALTH_TTL_MS) return this.healthCache.h;
+    if (!this.healthInflight) {
+      this.healthInflight = (async () => {
+        try {
+          const [balance, solLiab] = await Promise.all([this.rpc.getBalance(this.signer.publicKey.toBase58(), "confirmed"), this.ledger.liabilities("SOL")]);
+          const required = PAYOUT_FEE_BUFFER_LAMPORTS + TOKEN_ACCOUNT_RENT_LAMPORTS + FEE_PAYER_RESERVE_LAMPORTS;
+          const surplus = balance - solLiab;
+          const h: FeePayerHealth = {
+            ok: surplus >= required,
+            solBalance: Number(balance) / LAMPORTS,
+            solLiabilities: Number(solLiab) / LAMPORTS,
+            surplusSol: Number(surplus) / LAMPORTS,
+            requiredSol: Number(required) / LAMPORTS,
+            asOfTs: Math.floor(this.now() / 1000),
+          };
+          this.healthCache = { at: this.now(), h };
+          return h;
+        } catch (err) {
+          this.log.warn({ err: redact((err as Error).message) }, "custody: fee-payer health check failed");
+          return this.healthCache?.h ?? null;
+        } finally {
+          this.healthInflight = null;
+        }
+      })();
+    }
+    return this.healthInflight;
+  }
 
   start(pollMs: number): () => void {
     let failures = 0;
@@ -96,6 +170,7 @@ export class PayoutWorker {
   async tick(): Promise<boolean> {
     if (this.running) return true;
     this.running = true;
+    this.tickSpend = 0n;
     let ok = true;
     try {
       for (const w of await this.repo.listWithdrawalsByStatus(["sending"], 50)) ok = (await this.safe(() => this.reconcile(w), w)) && ok;
@@ -126,6 +201,12 @@ export class PayoutWorker {
       if (f) await this.withdrawals.release(f, "asset not configured");
       return;
     }
+    // Fee-payer / balance health BEFORE signing anything: hold (stay queued, with a reason) instead of failing.
+    const hold = await this.payoutHold(w, asset);
+    if (hold.reason) {
+      if (w.reason !== hold.reason) await this.repo.transitionWithdrawal(w.id, ["queued"], { reason: hold.reason });
+      return;
+    }
     const { blockhash, lastValidBlockHeight } = await this.rpc.getLatestBlockhash("confirmed");
     const tx = buildPayoutTx(w, asset, this.signer, blockhash, lastValidBlockHeight);
     const signature = bs58.encode(tx.signature!);
@@ -134,6 +215,7 @@ export class PayoutWorker {
       status: "sending", signature, rawTx, blockhash, lastValidBlockHeight, attempts: w.attempts + 1, reason: null,
     });
     if (!claimed) return; // rejected by admin / taken by another worker meanwhile
+    this.tickSpend += hold.costLamports;
     this.log.info({ withdrawalId: w.id, signature, attempt: claimed.attempts }, "custody: payout broadcasting");
     try {
       await this.rpc.sendRawTransaction(rawTx);

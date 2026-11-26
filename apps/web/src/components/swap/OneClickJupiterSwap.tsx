@@ -30,6 +30,8 @@ import {
   type PoolReserves,
 } from "@sealed/defi";
 import { demoSignature, errorMessage, sleep } from "@/lib/defi/config";
+import { DEMO_ENABLED, explorerTxUrl } from "@/lib/config";
+import { confirmSignature } from "@/lib/solana/tx";
 import { getSealedClient, launchKeys } from "@/lib/defi/program";
 import { custodyTrade, openDeposit, tokenAssetId, useCustodyBalance, useCustodySession } from "@/lib/custody";
 
@@ -188,6 +190,11 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
       }
       return;
     }
+    if (launch.isDemo && !DEMO_ENABLED) {
+      setMessage("Simulated swaps are not available on mainnet");
+      setPhase("error");
+      return;
+    }
     if (launch.isDemo) {
       setPhase("pending");
       await sleep(900);
@@ -208,11 +215,8 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
         const jup = new JupiterClient({ network: launch.network });
         const built = await jup.buildSwapTx({ quote: jupQuote, userPublicKey: publicKey });
         const sig1 = await sendTransaction(built.transaction, connection);
-        const c1 = await connection.confirmTransaction(
-          { signature: sig1, blockhash: built.transaction.message.recentBlockhash, lastValidBlockHeight: built.lastValidBlockHeight },
-          "confirmed",
-        );
-        if (c1.value.err) throw new Error("Jupiter conversion failed");
+        const c1 = await confirmSignature(connection, sig1, { lastValidBlockHeight: built.lastValidBlockHeight });
+        if (c1.err) throw new Error("Jupiter conversion failed");
       }
       // Leg 2: internal pool swap.
       const keys = launchKeys(launch);
@@ -226,10 +230,10 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
       if (wsol && side === "buy" && !convert) ixs.push(...wrapSolIxs(publicKey, poolQuote.amountIn).slice(1));
       ixs.push(await client.swapIx(keys, publicKey, poolQuote.amountIn, minOutWithSlippage(poolQuote.amountOut, SLIPPAGE_BPS), side === "buy"));
       if (wsol && side === "sell") ixs.push(unwrapSolIx(publicKey));
-      const { tx, blockhash, lastValidBlockHeight } = await buildTransaction(connection, publicKey, ixs);
+      const { tx, lastValidBlockHeight } = await buildTransaction(connection, publicKey, ixs);
       const sig = await sendTransaction(tx, connection);
-      const conf = await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
-      if (conf.value.err) throw new Error(`swap failed: ${JSON.stringify(conf.value.err)}`);
+      const conf = await confirmSignature(connection, sig, { lastValidBlockHeight });
+      if (conf.err) throw new Error(`swap failed: ${JSON.stringify(conf.err)}`);
       setLastSig(sig);
       setMessage(`Filled: ~${fmt(outUi)} ${outSymbol}`);
       setPhase("filled");
@@ -441,7 +445,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
                     className="underline underline-offset-2"
                     target="_blank"
                     rel="noreferrer"
-                    href={`https://solscan.io/tx/${lastSig}${isMainnet ? "" : `?cluster=${launch.network === "localnet" ? "custom" : "devnet"}`}`}
+                    href={explorerTxUrl(lastSig, launch.network)}
                   >
                     {lastSig.slice(0, 20)}…
                   </a>

@@ -1,12 +1,12 @@
 # Security
 
-No audit. No mainnet deployment.
+No audit. **Custodial on Solana mainnet with real funds (rolling out).** Company wallet: [`DDhVBh8HSwvYmCmXRowowUdDLcCc5vA9BM3GJMR3hm1j`](https://explorer.solana.com/address/DDhVBh8HSwvYmCmXRowowUdDLcCc5vA9BM3GJMR3hm1j).
 
 ## Custody disclosure
-Default mode is **custodial**: deposits sit in `DDhVBh8HSwvYmCmXRowowUdDLcCc5vA9BM3GJMR3hm1j`; balances are ledger entries. The operator can see submitted bids, delay or refuse withdrawals, and a key compromise could lose funds. No insurance or licence. See CUSTODY.md.
+Default mode is **custodial on mainnet**: real deposits sit in `DDhVBh8HSwvYmCmXRowowUdDLcCc5vA9BM3GJMR3hm1j`; balances are ledger entries. The company holds the funds. The operator can see submitted bids, delay or refuse withdrawals (manual approval above $2,500 / $25,000 per day or without a fresh price; payouts pause when the wallet lacks SOL for fees), and a key compromise could lose funds. Only SOL and USDC withdraw; launched tokens are ledger-only. Proof of reserves is a snapshot. No audit, insurance or licence. Users are responsible for complying with the laws of their jurisdiction. See [CUSTODY.md](CUSTODY.md).
 
 ## Trust model
-**Offchain:** operator key holder can move reserves and gate withdrawals; admin-token holder (`x-admin-token`) approves or rejects withdrawals held over $2,500 or the $25,000 daily cap and can seed the credit pool ledger account; chain observers see deposits/withdrawals to the company wallet but not bids or trades; the API never returns bids before reveal.
+**Offchain:** operator key holder can move reserves and gate withdrawals; admin-token holder (`x-admin-token`, requires `ADMIN_TOKEN`) approves or rejects withdrawals held over $2,500, over the $25,000 daily cap or without a fresh price, and can seed the credit pool ledger account; the browser RPC proxy (`POST /api/rpc`) exposes only allowlisted methods, rate limited, never the provider key; chain observers see deposits/withdrawals to the company wallet but not bids or trades; the API never returns bids before reveal.
 **Onchain (roadmap):** admin initializes once and cannot withdraw vault/escrow/pool; relayer can learn or withhold a reveal but cannot change it or move funds; crankers can only run due drips/distributions; creator gets ≤ 2% and cannot mint more (PDA mint authority).
 
 ## Invariants tested
@@ -19,7 +19,10 @@ Default mode is **custodial**: deposits sit in `DDhVBh8HSwvYmCmXRowowUdDLcCc5vA9
 - Custody (tests passing): SIWS nonce replay/expiry/revocation; deposit parser fixtures + exactly-once crediting; withdrawal limits; payouts disabled without key; idempotent payout worker; admin auth.
 
 ## Known limitations
-- Hosted API runs `DEMO_MODE=true`: demo launches are merged with real offchain ones (`isDemo` per launch); custody workers stay off unless `CUSTODY_WORKERS=true`. `COMPANY_WALLET_SECRET_KEY` and `HELIUS_API_KEY` are not set, so no deposit is detected and no withdrawal is sent.
+- Real funds sit in one hot company wallet controlled by one key (Railway secret). No multisig/MPC or hot/cold split yet.
+- Launched tokens are custodial ledger balances and cannot be withdrawn on-chain yet; only SOL and USDC withdraw.
+- Tokenized stocks are coming soon on mainnet (mints not verified); only SOL and USDC are enabled.
+- Payouts depend on SOL in the company wallet for fees; when low they pause with a reason.
 - Graduation seeds Sealed's own constant-product pool (program pool / ledger pool), not Raydium; the Raydium adapter in `packages/defi` is optional and unused.
 - First buyback drip is due one interval after graduation (`graduated_ts + drip_interval`), not at graduation.
 - Offchain credit lines are capped by the `credit_pool` ledger balance; until the operator seeds it (`POST /api/admin/credit-pool/seed`) graduations get no vault and go straight to the flywheel split.
@@ -31,10 +34,10 @@ Default mode is **custodial**: deposits sit in `DDhVBh8HSwvYmCmXRowowUdDLcCc5vA9
 - Holder rewards require staking; with nothing staked the holder share goes to treasury.
 - Platform-token buyback-burn (35%) and ops (20%) land as quote in `platform_ops`; the burn is not built.
 - Anti-snipe binds wallets, not tokens. Offchain uses a 2 s window rather than a slot.
-- API schema allows 2-minute commits on any network; only the program enforces 15 min on mainnet.
+- On mainnet the API requires a 15–30 min commit window (rolling out); devnet/localnet still accept 2 min.
 - With `EXECUTION_MODE=onchain` and no demo, `POST /api/launches` returns 501 and omits drip args (offchain mode creates a real launch for a signed-in creator).
-- Withdrawal USD limits use demo reference prices.
-- `DEMO_MODE` endpoints are unauthenticated — never public.
+- Withdrawal USD limits use live Jupiter Price API prices (rolling out); without a fresh price withdrawals fail safe to manual approval, which can delay them.
+- `DEMO_MODE` endpoints are unauthenticated — never public; demo is disabled on mainnet.
 
 ## Roadmap
-Custodial backend (built, tests passing) → operator sets `COMPANY_WALLET_SECRET_KEY` + `HELIUS_API_KEY`, seeds the credit pool, leaves demo → custody hardening (multisig/MPC, hot/cold, attestations) → program to devnet (tests pass locally; deploy, fix keeper) → onchain non-custodial mode → private deposits phases A/B/C (PRIVACY.md) → external audit, then mainnet.
+Custodial backend (built, tests passing) → **mainnet custody (rolling out):** `NETWORK=mainnet`, `DEMO_MODE=false`, `COMPANY_WALLET_SECRET_KEY` + `HELIUS_API_KEY` + `ADMIN_TOKEN`, company wallet funded with SOL for fees, credit pool seeded (see the checklist in DEPLOYMENT.md) → custody hardening (multisig/MPC, hot/cold, attestations) → on-chain withdrawal of launched tokens → program to devnet, then mainnet (tests pass locally; deploy, fix keeper) → onchain non-custodial mode → private deposits phases A/B/C (PRIVACY.md) → external audit.

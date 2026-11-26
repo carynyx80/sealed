@@ -32,6 +32,8 @@ import {
   EscrowFundingUnsupportedError,
 } from "@sealed/defi";
 import { apiFetch, demoSignature, errorMessage } from "./config";
+import { DEMO_ENABLED } from "../config";
+import { confirmSignature } from "../solana/tx";
 import { CustodyError, custodyFetch, custodyReady, getSession, isInsufficientBalance } from "../custody/client";
 import { signInWithSolana } from "../custody/auth";
 import { balanceOf } from "../custody/hooks";
@@ -175,6 +177,7 @@ export function useSealedBid(launch: LaunchSummary) {
         }
 
         /* ---------------------------------------------------------------------------------- demo */
+        if (launch.isDemo && !DEMO_ENABLED) throw new Error("Demo launches are not available on mainnet");
         if (launch.isDemo) {
           const demo = publicKey && signMessage ? null : await demoVault();
           const bidder = publicKey?.toBase58() ?? demo!.bidder;
@@ -254,12 +257,12 @@ export function useSealedBid(launch: LaunchSummary) {
         const client = await getSealedClient(connection, publicKey);
         const ixs = isWsol(keys.quoteMint) ? wrapSolIxs(publicKey, deposit) : [];
         ixs.push(await client.commitBidIx(keys, publicKey, prepared.commitment, deposit));
-        const { tx, blockhash, lastValidBlockHeight } = await buildTransaction(connection, publicKey, ixs);
+        const { tx, lastValidBlockHeight } = await buildTransaction(connection, publicKey, ixs);
 
         setStatus("submitting");
         const signature = await sendTransaction(tx, connection);
         await vault.update(launch.id, { txSignature: signature });
-        const conf = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+        const conf = { value: await confirmSignature(connection, signature, { lastValidBlockHeight }) };
         if (conf.value.err) throw new Error(`commit_bid failed: ${JSON.stringify(conf.value.err)}`);
 
         // 3. Optional auto-reveal: seal the preimage to the relayer's x25519 key, authorised by a wallet signature.

@@ -5,12 +5,16 @@ import {
   CREDIT_TIERS,
   DEPOSIT_MEMO_PREFIX,
   DEFAULT_DRIP_INTERVAL_SEC,
+  MAX_COMMIT_DURATION_SEC,
   MAX_CREATOR_ALLOCATION_BPS,
+  MIN_COMMIT_DURATION_SEC_DEVNET,
+  MIN_COMMIT_DURATION_SEC_MAINNET,
   NO_REVEAL_SLASH_BPS,
   NUM_PRICE_TICKS,
   POOL_FEE_BPS,
   QUOTE_ASSET_LIST,
   SIWS_STATEMENT,
+  STOCK_QUOTE_ASSETS,
   WITHDRAWAL_LIMITS,
 } from "@sealed/shared";
 import type { AppContext } from "../context.js";
@@ -18,8 +22,10 @@ import type { AppContext } from "../context.js";
 export function renderLlmsTxt(ctx: AppContext, baseUrl: string): string {
   const { cfg } = ctx;
   const ws = baseUrl.replace(/^http/, "ws") + "/ws";
-  const mode = cfg.isDemo ? "DEMO (simulated data, devnet-labelled; no real funds)" : `${cfg.network.toUpperCase()} (live on-chain data)`;
+  const mode = cfg.isDemo ? "DEMO (simulated data, devnet-labelled; no real funds)" : cfg.network === "mainnet" ? "MAINNET (live, REAL FUNDS, custodial)" : `${cfg.network.toUpperCase()} (live on-chain data)`;
   const quotes = QUOTE_ASSET_LIST.map((q) => `${q.symbol} (${q.name}, ${q.kind})`).join(", ");
+  const stocks = STOCK_QUOTE_ASSETS.map((q) => q.symbol).join(", ");
+  const commitWindow = `${MIN_COMMIT_DURATION_SEC_MAINNET / 60}–${MAX_COMMIT_DURATION_SEC / 60} min`;
   const offchain = cfg.executionMode === "offchain";
   const execMode = offchain
     ? "offchain (custodial, default): the Sealed backend runs auctions, clearing, the pool, drips, fee splits and rewards in a double-entry ledger"
@@ -36,32 +42,52 @@ Network: ${cfg.network}
 Program id: ${cfg.programId}
 Website: https://www.sealedsol.xyz
 Hosted API: https://api-production-01dc1743.up.railway.app
+Company wallet (custody): ${COMPANY_WALLET}  https://explorer.solana.com/address/${COMPANY_WALLET}
 REST base: ${baseUrl}
 WebSocket: ${ws}
 All amounts in this API are UI units (JS numbers, already divided by decimals). Prices are quote per whole token
 (launched tokens always have 6 decimals). Timestamps are unix seconds. Errors are {"error": string, "details"?: any}.
 
-## 0. Custodial trust disclosure (read first)
+## 0. Mainnet facts and custodial risk disclosure (read first)
 
-In the default offchain mode Sealed is CUSTODIAL. Deposits leave your wallet and sit in the company wallet
+Mainnet base facts (the hosted service is switching from devnet to Solana MAINNET with REAL FUNDS; rolling out —
+confirm "network":"mainnet" in GET /api/health and GET /api/custody/info before acting):
+- Network: Solana mainnet. Explorer links need no cluster parameter.
+- Custody: the company holds all deposits in ${COMPANY_WALLET}. Balances are Sealed ledger entries.
+- Demo mode is disabled on mainnet: no demo launches, no demo-bid, no simulated data. isDemo is false.
+- Enabled quote / deposit assets on mainnet: SOL and USDC. Tokenized stocks (${stocks}) are coming soon (mainnet
+  mints not verified); do not send them.
+- Launches on mainnet require a ${commitWindow} commit window.
+- Withdrawals: only SOL and USDC can be withdrawn on-chain. Launched tokens exist only as custodial Sealed ledger
+  balances and cannot be withdrawn on-chain yet. Withdrawal USD limits use live Jupiter Price API prices; with no fresh
+  price a withdrawal goes to pending_approval (manual). Payouts pause, with a reason, when the company wallet lacks
+  SOL for network fees. Operator approvals require ADMIN_TOKEN.
+- Browser RPC: POST /api/rpc proxies an allowlist of JSON-RPC methods, rate limited; the provider key is never exposed.
+- The Anchor program (onchain, non-custodial mode) is roadmap only and is not deployed.
+
+Risk disclosure. In the default offchain mode Sealed is CUSTODIAL. Deposits leave your wallet and sit in the company wallet
 ${COMPANY_WALLET}; your balance is a ledger entry, not an on-chain account you control. The operator can see
 your bids once submitted, can pause, delay or refuse withdrawals, and a compromised operator key could lose funds.
-There is no insurance and no audit. Proof of reserves (GET /api/custody/info) compares the company wallet's
+There is no insurance and no audit (neither the backend nor the program has been audited). Withdrawals may need
+manual approval and can be delayed. Proof of reserves (GET /api/custody/info) compares the company wallet's
 on-chain balances with ledger liabilities; it does not prove the ledger is complete or that the key is safe.
 Payouts only run once the operator has configured the company wallet key: check "payoutsEnabled" in
 GET /api/custody/info before depositing anything. Deposit detection likewise needs a Helius/Solana RPC on the API
 (POST /api/account/deposits answers 503 without one). The Anchor program (onchain mode) is the future
 non-custodial alternative and is not deployed.
+Sealed is not a bank, broker or licensed custodian, and nothing here is investment advice. Users and agent operators
+are responsible for complying with the laws of their own jurisdiction (including securities, tax and sanctions
+rules); do not use Sealed where it is prohibited. Deposit only what you can afford to lose.
 
 ## 1. Mechanics
 
 Phase 1 — Launch setup (creator)
 - Name, ticker, description, image, quote asset, auction timing, floor price, tick size, target raise, clearing cap.
-- Quote assets: ${quotes}.
+- Quote assets in the registry: ${quotes}. On mainnet only SOL and USDC are enabled; the stocks are coming soon.
 - Creator allocation is hard-capped at ${MAX_CREATOR_ALLOCATION_BPS} bps (2%) of supply, enforced on-chain (CreatorAllocationTooHigh).
 
 Phase 2 — Sealed auction (status "commit" then "reveal")
-- Commit window (15–30 min mainnet, ≥2 min devnet): a bidder deposits collateral into escrow and submits
+- Commit window (${commitWindow} mainnet, ≥${MIN_COMMIT_DURATION_SEC_DEVNET / 60} min devnet): a bidder deposits collateral into escrow and submits
   commitment = keccak256(bidder_pubkey(32) || max_price u64 LE || bid_amount u64 LE || salt(32)).
 - max_price must be on the tick grid: floor + i * tick, 0 ≤ i < ${NUM_PRICE_TICKS} (quote atoms per whole token).
 - Publicly visible: bid count, escrowed wallets, total escrowed, time remaining. Individual bid sizes and prices
@@ -94,7 +120,7 @@ Status values: commit | reveal | clearing | live | flywheel | failed
 ## 2. REST endpoints
 
 GET /api/health
-  {"ok":true,"network":"devnet","isDemo":true,"db":"memory","cache":"memory","rpc":null,"programId":"${cfg.programId}","uptimeSec":42,"version":"${cfg.version}"}
+  {"ok":true,"network":"mainnet","isDemo":false,"db":"postgres","cache":"redis","rpc":"https://mainnet.helius-rpc.com/?api-key=***","programId":"${cfg.programId}","uptimeSec":42,"version":"${cfg.version}"}
 
 GET /api/stats  → ProtocolStats
   {"totalVolumeUsd":1234567.8,"totalFeesUsd":12345.6,"activeBuybackCreditUsd":45000,"totalCreditDeployedUsd":210000,
@@ -137,7 +163,7 @@ POST /api/launches   (offchain mode with "Authorization: Bearer <token>" — req
 
 GET /api/auctions/:idOrMint   → {"launch": LaunchSummary, "serverTimeTs": 1764150000}
   Public aggregates only. Use serverTimeTs to correct your clock before computing time remaining.
-POST /api/auctions/:idOrMint/demo-bid   (demo mode only)
+POST /api/auctions/:idOrMint/demo-bid   (demo mode only; disabled on mainnet)
   {"commitment":"<64 hex>","deposit":25,"wallet":"<optional pubkey>"}  → AuctionResponse with updated counters.
 
 GET /api/vaults/:mint   → {"launch": LaunchSummary, "recentBuybacks": BuybackEvent[], "serverTimeTs": 1764150000}
@@ -164,7 +190,7 @@ wallet is always the signed-in wallet, never a body field. Trade routes answer 5
 unavailable or EXECUTION_MODE=onchain. Rate limits answer 429.
 
 GET /api/custody/info   (public, cached ~30s)
-  {"companyWallet":"${COMPANY_WALLET}","network":"${cfg.network}","mode":"offchain","payoutsEnabled":false,
+  {"companyWallet":"${COMPANY_WALLET}","network":"${cfg.network}","mode":"offchain","payoutsEnabled":true,
    "proofOfReserves":[{"asset":"SOL","onchain":412.8,"liabilities":398.1,"ratio":1.037,"asOfTs":1764150000}]}
 
 Sign in with Solana (SIWS)
@@ -181,7 +207,7 @@ GET /api/account
   {"wallet":"<base58>","balances":[{"asset":"SOL","symbol":"SOL","available":12.5,"locked":2},
    {"asset":"tok:<launchId>","symbol":"SAINT","available":81234.5,"locked":0,"launchId":"<launchId>"}],
    "depositRef":"<ref>","companyWallet":"${COMPANY_WALLET}","network":"${cfg.network}","sniperFlags":[]}
-GET /api/account/deposit/:asset   (asset = SOL | USDC | a stock symbol with a mint on this network; else 400)
+GET /api/account/deposit/:asset   (asset = SOL | USDC on mainnet; stocks only where a verified mint exists; else 400)
   {"companyWallet":"${COMPANY_WALLET}","memo":"${DEPOSIT_MEMO_PREFIX}<depositRef>","asset":"USDC","mint":"<mint or null for SOL>",
    "minConfirmations":32,"note":"..."}
   Deposit = an ordinary on-chain transfer to companyWallet carrying exactly that memo. No memo → not credited.
@@ -198,7 +224,10 @@ POST /api/account/withdrawals     {"asset":"SOL","amount":1,"destination":"<base
   201 → {"id":"<uuid>","asset":"SOL","amount":1,"destination":"...","status":"queued","ts":1764150000}
   Statuses: queued | pending_approval | sending | sent | failed | rejected. Auto-approved (queued) up to
   $${WITHDRAWAL_LIMITS.autoApproveMaxUsd} USD-equivalent and within $${WITHDRAWAL_LIMITS.dailyPerWalletUsd}/day per wallet; otherwise pending_approval until an
-  operator acts. queued withdrawals are only sent while payoutsEnabled is true; until then they wait, funds locked.
+  operator acts. Limits are valued at live Jupiter prices; with no fresh price the request is pending_approval.
+  Only SOL and USDC withdraw; launched-token balances cannot be withdrawn on-chain yet.
+  queued withdrawals are only sent while payoutsEnabled is true and the company wallet holds SOL for fees; until
+  then they wait, funds locked.
 
 Trading (amounts in UI units unless noted; optional "Idempotency-Key" header on swap and stake)
 POST /api/trade/commit   {"launchId":"...","commitment":"<64 hex>","deposit":25,"sealedReveal":<optional SealedRevealEnvelope>}
@@ -215,6 +244,10 @@ POST /api/trade/rewards/:launchId → {"amount":0.84}
 
 Operator only (header "x-admin-token: <ADMIN_TOKEN>"; 503 if unset): GET/POST /api/admin/withdrawals (list, approve,
 reject) and POST /api/admin/credit-pool/seed {"asset","amount","reference"}. Agents do not need these.
+
+Browser RPC proxy (rolling out)
+POST /api/rpc   {"jsonrpc":"2.0","id":1,"method":"<allowlisted method>","params":[...]}  → raw JSON-RPC response.
+  Methods outside the allowlist are rejected; rate limited per client (429). The RPC provider key stays server-side.
 
 ## 3. WebSocket (${ws})
 
@@ -247,7 +280,7 @@ Offchain custodial mode (default${offchain ? ", active on this server" : ""})
   d. Pick a launch (GET /api/launches?status=auctions), build the commitment with your signed-in wallet as bidder,
      POST /api/trade/commit (with sealedReveal for auto-reveal), or POST /api/trade/reveal yourself in the window.
   e. After clearing POST /api/trade/claim/:launchId; then swap / stake / claim rewards via /api/trade/*.
-  f. POST /api/account/withdrawals to take funds back on-chain.
+  f. POST /api/account/withdrawals to take SOL or USDC back on-chain (launched tokens stay on the ledger for now).
 
 Onchain mode (roadmap; the program is not deployed yet)
 Discover
