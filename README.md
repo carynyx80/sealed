@@ -1,13 +1,27 @@
 # Sealed — Sealed-Block Launchpad with a Fee-Credit Buyback Vault (Solana)
 
-**Live:** website https://www.sealedsol.xyz · API https://api-production-01dc1743.up.railway.app (`/api/health`, `/llms.txt`, `wss://…/ws`)
+**Live:** website https://www.sealedsol.xyz · API https://api-production-01dc1743.up.railway.app (`/api/health`, `/llms.txt`, `wss://api-production-01dc1743.up.railway.app/ws`)
+
+## Deployment status (2026-11-26)
+
+| Component | Status |
+|---|---|
+| Web (`apps/web`) | Live on Vercel at https://www.sealedsol.xyz (Next 15.0.8 / React 19.0.9, patched for CVE-2025-66478) |
+| API (`apps/api`) | Live on Railway with Postgres + Redis, `EXECUTION_MODE=offchain`, `DEMO_MODE=true` (demo launches are merged with real offchain launches; each carries `isDemo`) |
+| Offchain custodial engine (ledger, SIWS auth, trade/account/custody/admin routes) | Built, API suite 87/87 passing, deployed |
+| Deposit detection | Built + tested; needs `HELIUS_API_KEY` (or `SOLANA_RPC_URL`) on Railway — **not set yet** |
+| Payouts | Built + tested; need `COMPANY_WALLET_SECRET_KEY` set by the operator — **not set yet** (`payoutsEnabled=false`, withdrawals wait) |
+| Anchor program | `anchor build` OK, 15/15 Rust unit tests, 18/18 `anchor test -- --features test-mode` — **not deployed** to devnet |
+| Mainnet, audit | Neither exists |
+
+Sealed runs **offchain and custodial by default**: deposits go to the company wallet and balances live in a Postgres double-entry ledger. Read [docs/CUSTODY.md](docs/CUSTODY.md) before depositing. The Anchor program is the future non-custodial mode.
 
 Fair token launches on Solana in four phases:
 
 1. **Launch setup.** The creator picks name, ticker, quote asset (SOL, USDC or a tokenized stock such as NVDAx, TSLAx or TTWOx), auction length (15–30 min on mainnet, down to 2 min on devnet), target raise, clearing cap and supply (1B by default). The creator allocation is **capped at 2% (200 bps) on-chain**.
 2. **Sealed-block auction (commit → reveal).** Bidders escrow collateral and submit `keccak256(bidder ‖ max_price u64le ‖ bid_amount u64le ‖ salt[32])`, an 80-byte preimage. The public sees the bid count, the time left and the escrowed-wallet count. Nobody sees individual prices or sizes. In the reveal window an optional **auto-reveal relayer** submits the reveals users sealed to it during commit. After that the auction clears at **one uniform price**: everyone at or above it pays the same price, the marginal tick is pro-rated, and everything else is refunded (`claim_or_refund`).
-3. **Graduation + instant Fee-Credit Buyback Vault.** The raise and supply seed the pool (LP locked). The Protocol Credit Pool advances **10–15% of the raise** (by tier) into a **non-withdrawable buyback vault**. A keeper drips it into open-market buy-and-burns every 2–5 minutes, starting at minute one.
-4. **Auto-repay → permanent flywheel.** Pool fees go first **80% to repaying the credit line and 20% to platform burn/ops**. Once the line is 100% repaid (the switch happens at exactly 0 outstanding, and any overflow in the crossover batch goes straight to the flywheel), fees split **50% to holders (in the quote asset), 35% to platform buyback-burn and 15% to treasury**. Wallets that buy in the graduation slot land in the **anti-snipe registry** and earn 0% holder rewards.
+3. **Graduation + Fee-Credit Buyback Vault.** The raise and supply seed Sealed's own constant-product pool (no LP tokens, so liquidity is locked; Raydium is not used). The Protocol Credit Pool advances **10–15% of the raise** (by tier) into a **non-withdrawable buyback vault**. A keeper drips it into buy-and-burns through the launch's own pool every 2–5 minutes; the first drip is due one drip interval after graduation.
+4. **Auto-repay → permanent flywheel.** Pool fees go first **80% to repaying the credit line and 20% to platform burn/ops**. Once the line is 100% repaid (the switch happens at exactly 0 outstanding, and any overflow in the crossover batch goes straight to the flywheel), fees split **50% to holders (in the quote asset), 35% to platform buyback-burn and 15% to treasury** (the 20% and 35% platform shares land as quote in `platform_ops`; buying and burning a platform token with them is not built yet). Wallets that buy in the graduation slot land in the **anti-snipe registry** and earn 0% holder rewards.
 
 The canonical math is in `packages/shared`: `computeClearing` / `settleBid` (clearing.ts), `splitFees` (fees.ts) and `computeCommitment` (commitment.ts). The Rust program mirrors it integer-for-integer.
 
@@ -32,17 +46,20 @@ In-app docs: `/docs` on the web app (https://www.sealedsol.xyz/docs). Repo docs 
 
 ```
 packages/shared            @sealed/shared: types, Zod schemas, PDAs, clearing/fee/commitment math, demo world, REST + WS contract
-packages/defi              @sealed/defi: wallet, Jupiter v6, Raydium graduation adapter, quote-asset registry, salt sealing
-programs/sealed-launchpad  Anchor program (commit_bid, reveal_bid, clear_auction, claim_or_refund, graduate_and_open_credit,
-                           execute_buyback_drip, repay_credit, distribute_rewards) + anchor tests + devnet init script
-apps/api                   @sealed/api: Fastify REST + /ws, Prisma/Postgres (optional), Redis (optional), indexer,
-                           auto-reveal relayer, buyback keeper, /llms.txt. Railway: Dockerfile + railway.json
-apps/web                   @sealed/web: Next.js 15 App Router, Tailwind + Framer Motion, cream-and-white editorial UI. Vercel: vercel.json
+packages/defi              @sealed/defi: wallet, Jupiter v6, optional Raydium adapter (not called by the protocol), quote-asset registry, salt sealing
+programs/sealed-launchpad  Anchor program, 14 instructions (initialize_protocol, fund_credit_pool, create_launch, commit_bid,
+                           reveal_bid, clear_auction, claim_or_refund, graduate_and_open_credit, swap, execute_buyback_drip,
+                           distribute_fees, stake, unstake, claim_rewards) + anchor tests + devnet init script
+apps/api                   @sealed/api: Fastify REST + /ws, Prisma/Postgres (optional in demo), Redis (optional), offchain custodial
+                           engine (src/offchain: ledger, engine, SIWS auth, custody: deposit watcher, withdrawals, payouts,
+                           reserves), indexer, auto-reveal relayer, buyback keeper, /llms.txt. Railway: Dockerfile + railway.json
+apps/web                   @sealed/web: Next.js 15.0.8 / React 19 App Router, Tailwind + Framer Motion, the "private-bank broadsheet"
+                           design system in DESIGN.md (paper, ink, ultramarine signal, hairline rules). Vercel: vercel.json
 tests                      @sealed/e2e: invariant/property tests + black-box API e2e + web smoke
 scripts                    deploy-devnet.sh · deploy-api.sh · deploy-web.sh · verify.sh
 ```
 
-REST is mounted under `/api`: `/health`, `/stats`, `/launches` (`?status=auctions|vaults|graduated|<status>&quote=SOL|USDC|stocks|<symbol>`), `/launches/:idOrMint`, `/auctions/:id`, `/vaults/:mint`, `/revenue`, `/rewards/:mint/:wallet` and `/relayer/*`. The server also serves `GET /llms.txt` (a guide for AI trading agents) and `WS /ws`, where clients send `{op:"subscribe",channels:["global","launch:<id>"]}`. Full contract: `packages/shared/src/api.ts` and `ws.ts`.
+REST is mounted under `/api`: `/health`, `/stats`, `/launches` (`?status=auctions|vaults|graduated|<status>&quote=SOL|USDC|stocks|<symbol>`), `/launches/:idOrMint`, `/auctions/:id`, `/vaults/:mint`, `/revenue`, `/rewards/:mint/:wallet`, `/relayer/*` and `/privacy/*`. Custodial routes (`CUSTODY_ROUTES` in `packages/shared/src/custody.ts`): `/auth/{nonce,verify,session,logout}`, `/account`, `/account/deposit/:asset`, `/account/deposits`, `/account/withdrawals`, `/trade/{commit,reveal,swap,stake}`, `/trade/claim/:launchId`, `/trade/rewards/:launchId`, `/custody/info`, and the operator routes `/admin/withdrawals` and `/admin/credit-pool/seed` (header `x-admin-token`). See [docs/API.md](docs/API.md). The server also serves `GET /llms.txt` (a guide for AI trading agents) and `WS /ws`, where clients send `{op:"subscribe",channels:["global","launch:<id>"]}`. Full contract: `packages/shared/src/api.ts` and `ws.ts`.
 
 ## Quickstart (demo mode, no keys and no infrastructure)
 
@@ -63,17 +80,19 @@ Useful commands:
 | `pnpm --filter @sealed/e2e test:invariants` | property tests on clearing, fees, commitment, schema and the demo world |
 | `pnpm --filter @sealed/e2e test:e2e` | boots the built API (and the built web, if present) and checks them black-box |
 | `scripts/verify.sh` | the full definition of done, with a PASS/FAIL table |
-| `pnpm anchor:build` / `pnpm anchor:test` | Solana program |
+| `cd apps/api && node --import tsx --test test/*.test.ts` | API suite (87 tests: REST, WS, offchain ledger/engine, SIWS, deposits, withdrawals, payouts) |
+| `pnpm anchor:build` | builds the Solana program |
+| `cd programs/sealed-launchpad && anchor test -- --features test-mode` | anchor suite (18 tests). The `test-mode` feature is required; the root `pnpm anchor:test` script does not pass it. `cargo test -p sealed_launchpad --lib` runs the 15 Rust unit tests |
 
 ## Environment
 
 All variables are optional for local demo use. Templates:
 
-- `apps/api/.env.example`: `PORT`, `DEMO_MODE`, `DATABASE_URL`, `REDIS_URL`, `SOLANA_RPC_URL`, `HELIUS_API_KEY`, `NETWORK`, `PROGRAM_ID`, `RELAYER_SECRET_KEY` (base58 fee payer), `RELAYER_BOX_SEED` (32-byte hex x25519 seed), `KEEPER_SECRET_KEY`, `CORS_ORIGIN`, …
+- `apps/api/.env.example`: `PORT`, `DEMO_MODE`, `DATABASE_URL`, `REDIS_URL`, `SOLANA_RPC_URL`, `HELIUS_API_KEY`, `NETWORK`, `PROGRAM_ID`, `RELAYER_SECRET_KEY` (base58 fee payer), `RELAYER_BOX_SEED` (32-byte hex x25519 seed), `KEEPER_SECRET_KEY`, `CORS_ORIGIN`, and the custody block: `EXECUTION_MODE`, `COMPANY_WALLET`, `COMPANY_WALLET_SECRET_KEY` (operator-only; unset → payouts disabled), `ADMIN_TOKEN`, `DEPOSIT_CONFIRMATIONS`, `CUSTODY_WORKERS`, …
 - `apps/web/.env.example`: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_NETWORK`, `NEXT_PUBLIC_RPC_URL`, `NEXT_PUBLIC_PROGRAM_ID`
 - `.env.example` (root): inputs for the deploy scripts (Solana wallet, Railway/Vercel tokens)
 
-Setting `SOLANA_RPC_URL` (or `HELIUS_API_KEY`) turns demo mode off by default. Force it either way with `DEMO_MODE=true|false`.
+Demo mode is `isDemo = DEMO_MODE ?? !SOLANA_RPC_URL`: setting `SOLANA_RPC_URL` turns it off by default, but `HELIUS_API_KEY` alone does **not** (it only builds the RPC URL). Force it either way with `DEMO_MODE=true|false`. With `DEMO_MODE=true` the deposit watcher and payout worker stay off unless `CUSTODY_WORKERS=true`.
 
 ### Postgres seed
 
@@ -100,8 +119,9 @@ The script runs `anchor build` and `anchor deploy` to devnet using `programs/sea
 
 1. Create a Railway project and add the **Postgres** and **Redis** plugins.
 2. Add a service from this repo. Railway builds with `apps/api/railway.json`, which points at the `apps/api/Dockerfile` builder (build context is the repo root) and health-checks `/api/health`.
-3. Set the variables from `apps/api/.env.example`: `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `REDIS_URL=${{Redis.REDIS_URL}}`, `SOLANA_RPC_URL`, `PROGRAM_ID`, `RELAYER_*`, `KEEPER_SECRET_KEY`, and `CORS_ORIGIN=https://<your-vercel-domain>`.
+3. Set the variables from `apps/api/.env.example`: `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `REDIS_URL=${{Redis.REDIS_URL}}`, `SOLANA_RPC_URL` or `HELIUS_API_KEY`, `PROGRAM_ID`, `RELAYER_*`, `KEEPER_SECRET_KEY`, and `CORS_ORIGIN=https://<your-vercel-domain>`. For custody also `ADMIN_TOKEN`, `COMPANY_WALLET_SECRET_KEY` (operator-only) and `DEMO_MODE=false` (or `CUSTODY_WORKERS=true`).
 4. Run `scripts/deploy-api.sh`, which wraps `railway up`. On boot the container runs `prisma db push` when `DATABASE_URL` is set.
+5. Seed the offchain credit pool from company funds: `POST /api/admin/credit-pool/seed {asset, amount, reference}` with header `x-admin-token`. Graduations draw their buyback credit from it and get none while it is empty.
 
 Local image: `docker build -f apps/api/Dockerfile -t sealed-api . && docker run -p 4000:4000 sealed-api`
 
@@ -123,14 +143,16 @@ Local image: `docker build -f apps/api/Dockerfile -t sealed-api . && docker run 
   - `api.e2e.test.ts` starts `apps/api/dist/server.js` on :4200 with no env. It checks health, stats, the launch tab and quote filters, that auctions expose no per-bid fields, vaults, revenue and `/llms.txt`, that `POST /api/launches` returns 200 for valid input and 400 for 250 bps, that a demo bid increments `bidCount`, and that a WS `global` subscription receives events.
   - `web.smoke.test.ts` runs `next start -p 3200` against that API and checks that `/`, `/launch`, `/revenue` and `/token/<mint>` render with the expected copy.
   - Both suites **skip with a message** if their build output is missing.
-- **Program:** `anchor test` covers commit-reveal, uniform clearing, refunds, rejection of creator allocations above 2%, the vault withdrawal guard, the switch from repayment to flywheel, and same-slot sniper exclusion.
+- **API** (`apps/api/test`, 87 tests): REST and WS contract, offchain ledger invariants (Σ postings = 0 per tx under random-op fuzz), the full offchain lifecycle, execution modes, SIWS auth, deposit parsing and exactly-once crediting, withdrawal limits and the idempotent payout worker.
+- **Program:** `anchor test -- --features test-mode` (18/18) covers commit-reveal, uniform clearing, refunds, rejection of creator allocations above 2%, the vault withdrawal guard, the switch from repayment to flywheel, and same-slot sniper exclusion.
 
 ## Security notes
 
 - **Sealed bids hide price and size, but not deposit size.** The commitment hides `max_price` and `bid_amount`. The collateral transfer into escrow is a public SPL transfer, though, so an observer learns an upper bound on each bidder's size. **Pad your deposit.** Escrow more than you intend to bid (unused collateral is refunded in full by `claim_or_refund`), or split bids across round-number deposits. The UI should nudge users toward padded, round deposits.
 - **Salts are the secret.** Anyone who has the preimage can reveal, which is how the relayer works. Anyone who has your salt plus your price and amount can brute-force-confirm your bid. Salts are 32 random bytes and stay client-side (IndexedDB) unless you opt into auto-reveal. If you lose the salt and miss the reveal window, the commitment cannot be revealed and `NO_REVEAL_SLASH_BPS` (1%) of the deposit is forfeited.
-- **Relayer trust model.** Auto-reveal payloads are sealed to the relayer's x25519 key (`nacl.box`), and the bidder signs them over `sealed-reveal:v1:<launch>:<commitment>`. The API stores only ciphertext and decrypts it once the reveal window opens. The relayer **can** learn your bid early, because it holds the key. It **can** withhold your reveal, and you then fall back to revealing manually. It **cannot** change your bid, because the on-chain keccak check binds it, and it **cannot** move your funds, because it only pays fees. Treat it as a liveness service, not a custodian. Opting out keeps your bid fully private until you reveal it yourself.
+- **Relayer trust model.** Auto-reveal payloads are sealed to the relayer's x25519 key (`nacl.box`), and the bidder signs them over `sealed-reveal:v1:<launch>:<commitment>`. The API decrypts the envelope once on submission to check it opens to the committed bid (and discards the plaintext), stores only ciphertext, and decrypts it again when the reveal window opens. The relayer **can** learn your bid early, because it holds the key. It **can** withhold your reveal, and you then fall back to revealing manually. It **cannot** change your bid, because the on-chain keccak check binds it, and it **cannot** move your funds, because it only pays fees. Treat it as a liveness service, not a custodian. Opting out keeps your bid fully private until you reveal it yourself.
 - **The buyback vault cannot be withdrawn.** The vault is a PDA-owned token account. The program exposes only swap-to-burn (`execute_buyback_drip`) and paired-asset holder drips. There is no instruction that transfers vault funds to a creator, admin or arbitrary wallet. Drips are permissionless cranks with bounded size and interval, so a malicious keeper can at most run them early within the schedule or skip them.
 - **Config validation.** `clearingCap` must be ≥ `floorPrice × tokensForSale`. If it isn't, the clamp to the floor price lets the raise exceed the cap (see the invariant test `KNOWN EDGE`). The program and API should reject such launches.
 - **Anti-snipe** is keyed on the graduation slot. Wallets that buy in that slot are recorded on-chain and get 0% holder rewards. This does not stop the buy itself.
-- **Demo mode is not secure mode.** `POST /api/auctions/:id/demo-bid` and in-memory launch creation exist only when `DEMO_MODE=true`. Never run a public mainnet deployment in demo mode.
+- **Custodial by default.** In offchain mode the company wallet holds every deposit and the operator can delay or refuse withdrawals; a compromised `COMPANY_WALLET_SECRET_KEY` could lose funds. No insurance, no audit. See [docs/CUSTODY.md](docs/CUSTODY.md) and [docs/SECURITY.md](docs/SECURITY.md) (known limitations: internal pool instead of Raydium, platform-token burn not built, first drip one interval after graduation, credit capped by the seeded credit pool).
+- **Demo mode is not secure mode.** `POST /api/auctions/:id/demo-bid` and unauthenticated in-memory launch creation exist only when `DEMO_MODE=true`. Never run a public mainnet deployment in demo mode (the hosted devnet API runs in demo today).

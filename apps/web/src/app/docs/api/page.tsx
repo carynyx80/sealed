@@ -12,7 +12,7 @@ const PUBLIC: Array<[string, string, string]> = [
   ["GET", API_ROUTES.launch(":idOrMint"), "LaunchSummary, 404 if unknown."],
   ["GET", `${API_ROUTES.trades(":idOrMint")}?limit=`, "{ trades: Trade[] }"],
   ["GET", `${API_ROUTES.chart(":idOrMint")}?interval=1m|5m|1h`, "{ points: PricePoint[] }"],
-  ["POST", API_ROUTES.launches, "Demo: creates an in-memory launch (200). Non-demo: 501 \"sign client-side\" with create_launch args in atoms. 400 on invalid input (e.g. > 200 bps)."],
+  ["POST", API_ROUTES.launches, "Offchain mode with a bearer token (required when not in demo): creates a real launch with creator = session wallet. Demo without a token: in-memory demo launch. Onchain mode, not demo: 501 \"sign client-side\" with create_launch args in atoms. 400 on invalid input (e.g. > 200 bps)."],
   ["GET", API_ROUTES.auction(":idOrMint"), "{ launch, serverTimeTs } — public aggregates only."],
   ["POST", API_ROUTES.demoBid(":idOrMint"), "Demo only (403 otherwise). { commitment, deposit, wallet? }; 409 if the commit window is closed."],
   ["GET", API_ROUTES.vault(":mint"), "{ launch, recentBuybacks (30), serverTimeTs }"],
@@ -25,21 +25,27 @@ const PUBLIC: Array<[string, string, string]> = [
   ["GET", API_ROUTES.llms, "text/plain agent guide, generated from live config and shared constants."],
 ];
 
-const CUSTODY: Array<[string, string, string, boolean]> = [
-  ["GET", CUSTODY_ROUTES.info, "CustodyInfoResponse — companyWallet, network, mode, payoutsEnabled, proofOfReserves[]", false],
-  ["POST", CUSTODY_ROUTES.nonce, "{ wallet } → { nonce, message, expiresTs }", false],
-  ["POST", CUSTODY_ROUTES.verify, "{ wallet, nonce, signature (base58) } → { token, wallet, expiresTs }", false],
-  ["GET", CUSTODY_ROUTES.me, "AccountResponse — balances (available / locked), depositRef, companyWallet, sniperFlags", true],
-  ["GET", CUSTODY_ROUTES.depositInstructions(":asset" as never), "DepositInstructions — companyWallet, memo, mint, minConfirmations, note", true],
-  ["GET · POST", CUSTODY_ROUTES.deposits, "GET → { deposits }; POST { signature } nudges detection → DepositRecord", true],
-  ["GET · POST", CUSTODY_ROUTES.withdrawals, "GET → { withdrawals }; POST { asset, amount, destination } → WithdrawalRecord", true],
-  ["POST", CUSTODY_ROUTES.commitBid, "{ launchId, commitment, deposit, sealedReveal? } → { bidId, bidCount }", true],
-  ["POST", CUSTODY_ROUTES.reveal, "{ launchId, maxPrice, bidAmount, salt } → { revealed: true }", true],
-  ["POST", CUSTODY_ROUTES.swap, "{ launchId, side, amountIn, minAmountOut } → { tradeId, amountIn, amountOut, fee, price, isSniper }", true],
-  ["POST", CUSTODY_ROUTES.claim(":launchId"), "after clearing → { tokens, refund }", true],
-  ["POST", CUSTODY_ROUTES.stake, "{ launchId, amount } — negative amount unstakes", true],
-  ["POST", CUSTODY_ROUTES.claimRewards(":launchId"), "→ { amount }", true],
-  ["GET · POST", CUSTODY_ROUTES.adminWithdrawals, "operator queue: list, approve, reject — requires the ADMIN_TOKEN header", true],
+const CUSTODY: Array<[string, string, string, string]> = [
+  ["GET", CUSTODY_ROUTES.info, "CustodyInfoResponse — companyWallet, network, mode, payoutsEnabled, proofOfReserves[] (cached ~30 s)", "—"],
+  ["POST", CUSTODY_ROUTES.nonce, "{ wallet } → { nonce, message, expiresTs } (nonce valid 5 min; 429 when rate-limited)", "—"],
+  ["POST", CUSTODY_ROUTES.verify, "{ wallet, nonce, signature (base58) } → { token, wallet, expiresTs } (7-day session; 401 bad/expired/replayed nonce)", "—"],
+  ["GET", "/api/auth/session", "→ { wallet } for a live token, else 401", "bearer"],
+  ["POST", "/api/auth/logout", "revokes the presented token → { ok: true }", "bearer"],
+  ["GET", CUSTODY_ROUTES.me, "AccountResponse — wallet, balances (available / locked), depositRef, companyWallet, network, sniperFlags", "bearer"],
+  ["GET", CUSTODY_ROUTES.depositInstructions(":asset" as never), "DepositInstructions — companyWallet, memo, asset, mint, minConfirmations, note. 400 for an unknown asset or one with no mint on this network", "bearer"],
+  ["GET", CUSTODY_ROUTES.deposits, "→ { deposits: DepositRecord[] } (latest 100)", "bearer"],
+  ["POST", CUSTODY_ROUTES.deposits, "{ signature } nudges detection → 200 DepositRecord; 202 not yet finalized or not found (picked up automatically later); 404 the transaction holds no deposit for your memo; 400 failed tx; 503 no RPC configured", "bearer"],
+  ["GET", CUSTODY_ROUTES.withdrawals, "→ { withdrawals: WithdrawalRecord[] } (latest 100)", "bearer"],
+  ["POST", CUSTODY_ROUTES.withdrawals, "{ asset, amount, destination } → 201 WithdrawalRecord (queued or pending_approval); 4xx on insufficient funds / bad destination / unsupported asset", "bearer"],
+  ["POST", CUSTODY_ROUTES.commitBid, "{ launchId, commitment, deposit, sealedReveal? } → { bidId, bidCount }. 409 window closed or second bid", "bearer"],
+  ["POST", CUSTODY_ROUTES.reveal, "{ launchId, maxPrice, bidAmount, salt } (atoms as decimal strings, salt 64 hex) → { revealed: true }", "bearer"],
+  ["POST", CUSTODY_ROUTES.swap, "{ launchId, side, amountIn, minAmountOut } → { tradeId, amountIn, amountOut, fee, price, isSniper }. Optional Idempotency-Key header", "bearer"],
+  ["POST", CUSTODY_ROUTES.claim(":launchId"), "after clearing → { tokens, refund }", "bearer"],
+  ["POST", CUSTODY_ROUTES.stake, "{ launchId, amount } — negative amount unstakes → { staked, eligible }. Optional Idempotency-Key", "bearer"],
+  ["POST", CUSTODY_ROUTES.claimRewards(":launchId"), "→ { amount }", "bearer"],
+  ["GET", `${CUSTODY_ROUTES.adminWithdrawals}?status=`, "operator queue (default pending_approval, queued, sending) → { withdrawals, payoutsEnabled }", "x-admin-token"],
+  ["POST", CUSTODY_ROUTES.adminWithdrawals, "{ id, action: approve | reject, reason? } → WithdrawalRecord. Approve moves pending_approval → queued; reject unlocks funds", "x-admin-token"],
+  ["POST", "/api/admin/credit-pool/seed", "{ asset, amount, reference } → { ok, asset, amount, txId, replayed }. Records company funds as credit_pool; idempotent on reference (409 on conflicting replay)", "x-admin-token"],
 ];
 
 const Method = ({ m }: { m: string }) => <span className="num whitespace-nowrap text-[11px] font-semibold text-ink">{m}</span>;
@@ -58,7 +64,8 @@ export default function ApiReference() {
         lede="The Fastify API is the single backend for the web app and for agents. The contract is typed in packages/shared/src/api.ts, ws.ts and custody.ts."
       >
         <StatusBadge status="offchain-passing" label="Public REST + WS · tests passing" />
-        <StatusBadge status="dev" label="Custody routes" />
+        <StatusBadge status="offchain-passing" label="Custody + trade routes · tests passing" />
+        <StatusBadge status="dev" label="Payouts pending operator key" />
       </DocHeader>
 
       <H2 id="conventions" n="9.1">Conventions</H2>
@@ -136,15 +143,30 @@ export default function ApiReference() {
 
       <H2 id="custody" n="9.3">Custody and trading endpoints</H2>
       <P>
-        Defined in <C>CUSTODY_ROUTES</C>. Everything except <C>/api/custody/info</C> and the two auth calls requires{" "}
-        <C>Authorization: Bearer &lt;token&gt;</C> from <A href="/docs/custody">SIWS sign-in</A>. The server implementation is in development; shapes are
-        fixed by the shared contract.
+        Defined in <C>CUSTODY_ROUTES</C> and implemented in <C>apps/api/src/routes/</C> (<C>auth.ts</C>, <C>account.ts</C>, <C>trade.ts</C>,{" "}
+        <C>custody.ts</C>, <C>admin.ts</C>). Everything except <C>/api/custody/info</C>, nonce and verify requires{" "}
+        <C>Authorization: Bearer &lt;token&gt;</C> from <A href="/docs/custody">SIWS sign-in</A>; the acting wallet is always the session wallet, never a
+        body field. Admin routes take the header <C>x-admin-token: &lt;ADMIN_TOKEN&gt;</C> and answer 503 when <C>ADMIN_TOKEN</C> is unset. Trade routes
+        answer 503 when the offchain ledger is unavailable or <C>EXECUTION_MODE=onchain</C>. Account and withdrawal writes are rate-limited (429).
       </P>
       <Table
         dense
         head={["Method", "Path", "Body → response", "Auth"]}
         colClass={["", "min-w-[13rem]", "min-w-[16rem]", ""]}
-        rows={CUSTODY.map(([m, p, d, auth]) => [<Method key="m" m={m} />, <C key="p">{p}</C>, d, auth ? "bearer" : "—"])}
+        rows={CUSTODY.map(([m, p, d, auth]) => [<Method key="m" m={m} />, <C key="p">{p}</C>, d, auth])}
+      />
+      <CodeBlock
+        lang="json"
+        title="POST /api/account/deposits — 202 while the transaction is not final yet"
+        code={`{ "id": "<signature>", "signature": "<signature>", "asset": "SOL", "amount": 0, "status": "detected",
+  "ts": 1795692450, "reason": "not yet finalized (or not found); it will be picked up automatically" }`}
+      />
+      <CodeBlock
+        lang="bash"
+        title="operator: seed the credit pool"
+        code={`curl -s -X POST "$API/api/admin/credit-pool/seed" \\
+  -H "x-admin-token: $ADMIN_TOKEN" -H 'content-type: application/json' \\
+  -d '{"asset":"SOL","amount":50,"reference":"<funding tx signature>"}'`}
       />
       <CodeBlock
         lang="ts"

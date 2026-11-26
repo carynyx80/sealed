@@ -1,12 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import {
+  ANTI_SNIPE_WINDOW_SEC,
+  COMPANY_WALLET,
   CREDIT_TIERS,
+  DEPOSIT_MEMO_PREFIX,
   DEFAULT_DRIP_INTERVAL_SEC,
   MAX_CREATOR_ALLOCATION_BPS,
   NO_REVEAL_SLASH_BPS,
   NUM_PRICE_TICKS,
   POOL_FEE_BPS,
   QUOTE_ASSET_LIST,
+  SIWS_STATEMENT,
+  WITHDRAWAL_LIMITS,
 } from "@sealed/shared";
 import type { AppContext } from "../context.js";
 
@@ -15,13 +20,18 @@ export function renderLlmsTxt(ctx: AppContext, baseUrl: string): string {
   const ws = baseUrl.replace(/^http/, "ws") + "/ws";
   const mode = cfg.isDemo ? "DEMO (simulated data, devnet-labelled; no real funds)" : `${cfg.network.toUpperCase()} (live on-chain data)`;
   const quotes = QUOTE_ASSET_LIST.map((q) => `${q.symbol} (${q.name}, ${q.kind})`).join(", ");
+  const offchain = cfg.executionMode === "offchain";
+  const execMode = offchain
+    ? "offchain (custodial, default): the Sealed backend runs auctions, clearing, the pool, drips, fee splits and rewards in a double-entry ledger"
+    : "onchain: the sealed_launchpad Anchor program is the source of truth; agents sign program transactions";
   return `# Sealed-Block Launchpad — agent guide
 
 > A Solana token launchpad where every launch starts with a sealed-bid (commit-reveal) uniform-price auction,
-> graduates into a locked pool, and immediately receives a protocol fee-credit line that funds programmatic
-> buy-and-burn drips from minute one. Trading fees repay the credit, then flow to holders forever.
+> graduates into a locked pool, and receives a protocol fee-credit line that funds programmatic buy-and-burn
+> drips (the first one interval after graduation). Trading fees repay the credit, then flow to holders forever.
 
 Mode: ${mode}
+Execution mode: ${execMode}
 Network: ${cfg.network}
 Program id: ${cfg.programId}
 Website: https://www.sealedsol.xyz
@@ -30,6 +40,18 @@ REST base: ${baseUrl}
 WebSocket: ${ws}
 All amounts in this API are UI units (JS numbers, already divided by decimals). Prices are quote per whole token
 (launched tokens always have 6 decimals). Timestamps are unix seconds. Errors are {"error": string, "details"?: any}.
+
+## 0. Custodial trust disclosure (read first)
+
+In the default offchain mode Sealed is CUSTODIAL. Deposits leave your wallet and sit in the company wallet
+${COMPANY_WALLET}; your balance is a ledger entry, not an on-chain account you control. The operator can see
+your bids once submitted, can pause, delay or refuse withdrawals, and a compromised operator key could lose funds.
+There is no insurance and no audit. Proof of reserves (GET /api/custody/info) compares the company wallet's
+on-chain balances with ledger liabilities; it does not prove the ledger is complete or that the key is safe.
+Payouts only run once the operator has configured the company wallet key: check "payoutsEnabled" in
+GET /api/custody/info before depositing anything. Deposit detection likewise needs a Helius/Solana RPC on the API
+(POST /api/account/deposits answers 503 without one). The Anchor program (onchain mode) is the future
+non-custodial alternative and is not deployed.
 
 ## 1. Mechanics
 
@@ -50,17 +72,22 @@ Phase 2 — Sealed auction (status "commit" then "reveal")
   Losing / unfilled amounts are refunded via claim_or_refund.
 
 Phase 3 — Graduation (status "live")
-- Raised quote + pool token allocation seed a program-owned constant-product pool. No LP tokens exist, so
-  liquidity is permanently locked. Every swap pays a ${POOL_FEE_BPS / 100}% fee to the launch's Fee Collector PDA.
+- Raised quote + pool token allocation seed Sealed's own constant-product pool (a ledger pool offchain, a
+  program-owned pool onchain; not Raydium). No LP tokens exist, so liquidity is permanently locked. Every swap
+  pays a ${POOL_FEE_BPS / 100}% fee to the launch's fee collector.
 - The protocol credit pool advances a fee-credit line of ${CREDIT_TIERS.standard / 100}–${CREDIT_TIERS.premier / 100}% of the raise
   (tiers: standard ${CREDIT_TIERS.standard / 100}%, plus ${CREDIT_TIERS.plus / 100}%, premier ${CREDIT_TIERS.premier / 100}%) into a
-  NON-WITHDRAWABLE buyback vault. Every ~${DEFAULT_DRIP_INTERVAL_SEC / 60} minutes a permissionless execute_buyback_drip swaps one drip
-  through the pool and burns the tokens bought. vault.nextDripTs is the public countdown.
+  NON-WITHDRAWABLE buyback vault. Every ~${DEFAULT_DRIP_INTERVAL_SEC / 60} minutes (first drip one interval after graduation) a drip
+  (offchain: the backend scheduler; onchain: permissionless execute_buyback_drip) swaps through the pool and burns the
+  tokens bought. vault.nextDripTs is the public countdown. Offchain, the credit line is capped by the protocol
+  credit pool balance; if the operator has not funded it, a launch graduates straight to the flywheel split.
 
 Phase 4 — Repay then flywheel (status "live" → "flywheel")
 - While credit is outstanding: 80% of fees repay the credit pool, 20% platform burn/ops.
 - After 100% repayment: 50% to stakers/holders in the quote asset, 35% platform buyback-and-burn, 15% treasury.
-- Anti-snipe: wallets that buy in the same slot as graduation are recorded and earn 0% holder rewards (eligible=false).
+  (The platform shares accrue as quote; buying and burning a platform token with them is not built yet.)
+- Anti-snipe: wallets that buy in the same slot as graduation (offchain: within ${ANTI_SNIPE_WINDOW_SEC}s) are recorded and earn 0%
+  holder rewards (eligible=false).
 
 Status values: commit | reveal | clearing | live | flywheel | failed
 
@@ -100,8 +127,9 @@ GET /api/launches/:idOrMint/trades?limit=50
 GET /api/launches/:idOrMint/chart?interval=1m|5m|1h
   {"points":[{"ts":1764146400,"price":0.0000251,"volume":12.4}]}
 
-POST /api/launches   (demo mode: creates an in-memory commit-phase launch; live networks: 501 "sign client-side"
-                      with the create_launch args in atoms — the creator's wallet must sign)
+POST /api/launches   (offchain mode with "Authorization: Bearer <token>" — required outside demo: creates a real
+                      launch with creator = the signed-in wallet; demo mode without a token: an in-memory demo
+                      launch; onchain mode outside demo: 501 "sign client-side" with the create_launch args in atoms)
   {"name":"Quiet Money","ticker":"QUIET","description":"Sealed bids only","quoteAsset":"USDC","creditTier":"standard",
    "totalSupply":1000000000,"creatorAllocationBps":150,"auctionSupplyBps":4000,"commitDurationSec":1200,
    "revealDurationSec":120,"floorPrice":0.0001,"tickSize":0.000005,"targetRaise":50000,"clearingCap":75000}
@@ -129,6 +157,65 @@ POST /api/relayer/reveals → {"accepted":true,"id":"..."}   (body: SealedReveal
   400 malformed / wrong relayer key / payload does not match commitment, 401 bad signature, 404 unknown launch,
   409 window closed.
 
+## 2b. Custody and trade endpoints (offchain custodial mode)
+
+All except /api/custody/info, /api/auth/nonce and /api/auth/verify need "Authorization: Bearer <token>". The acting
+wallet is always the signed-in wallet, never a body field. Trade routes answer 503 if the offchain ledger is
+unavailable or EXECUTION_MODE=onchain. Rate limits answer 429.
+
+GET /api/custody/info   (public, cached ~30s)
+  {"companyWallet":"${COMPANY_WALLET}","network":"${cfg.network}","mode":"offchain","payoutsEnabled":false,
+   "proofOfReserves":[{"asset":"SOL","onchain":412.8,"liabilities":398.1,"ratio":1.037,"asOfTs":1764150000}]}
+
+Sign in with Solana (SIWS)
+POST /api/auth/nonce    {"wallet":"<base58>"}
+  → {"nonce":"<nonce>","message":"<exact text to sign>","expiresTs":1764150300}   (nonce valid 5 min, single use)
+  The message contains the statement "${SIWS_STATEMENT}"
+POST /api/auth/verify   {"wallet":"<base58>","nonce":"<nonce>","signature":"<base58 ed25519 sig over utf8(message)>"}
+  → {"token":"<session token>","wallet":"<base58>","expiresTs":1764755100}          (7-day session; 401 on bad sig)
+GET  /api/auth/session  → {"wallet":"<base58>"}   (401 if missing / expired / revoked)
+POST /api/auth/logout   → {"ok":true}             (revokes the presented token)
+
+Account
+GET /api/account
+  {"wallet":"<base58>","balances":[{"asset":"SOL","symbol":"SOL","available":12.5,"locked":2},
+   {"asset":"tok:<launchId>","symbol":"SAINT","available":81234.5,"locked":0,"launchId":"<launchId>"}],
+   "depositRef":"<ref>","companyWallet":"${COMPANY_WALLET}","network":"${cfg.network}","sniperFlags":[]}
+GET /api/account/deposit/:asset   (asset = SOL | USDC | a stock symbol with a mint on this network; else 400)
+  {"companyWallet":"${COMPANY_WALLET}","memo":"${DEPOSIT_MEMO_PREFIX}<depositRef>","asset":"USDC","mint":"<mint or null for SOL>",
+   "minConfirmations":32,"note":"..."}
+  Deposit = an ordinary on-chain transfer to companyWallet carrying exactly that memo. No memo → not credited.
+GET  /api/account/deposits        → {"deposits":[{"id":"...","signature":"...","asset":"SOL","amount":1.5,
+                                      "status":"detected|confirmed|credited|rejected","ts":1764150000,"reason"?:"..."}]}
+POST /api/account/deposits        {"signature":"<base58 tx signature>"}   nudge detection right after sending
+  200 → DepositRecord
+  202 → {"id":"<sig>","signature":"<sig>","asset":"SOL","amount":0,"status":"detected","ts":...,
+         "reason":"not yet finalized (or not found); it will be picked up automatically"}
+  404 → no deposit for your account in this transaction (check the memo);  400 → transaction failed on-chain;
+  503 → no RPC configured / RPC unavailable
+GET  /api/account/withdrawals     → {"withdrawals":[WithdrawalRecord]}
+POST /api/account/withdrawals     {"asset":"SOL","amount":1,"destination":"<base58, usually your wallet>"}
+  201 → {"id":"<uuid>","asset":"SOL","amount":1,"destination":"...","status":"queued","ts":1764150000}
+  Statuses: queued | pending_approval | sending | sent | failed | rejected. Auto-approved (queued) up to
+  $${WITHDRAWAL_LIMITS.autoApproveMaxUsd} USD-equivalent and within $${WITHDRAWAL_LIMITS.dailyPerWalletUsd}/day per wallet; otherwise pending_approval until an
+  operator acts. queued withdrawals are only sent while payoutsEnabled is true; until then they wait, funds locked.
+
+Trading (amounts in UI units unless noted; optional "Idempotency-Key" header on swap and stake)
+POST /api/trade/commit   {"launchId":"...","commitment":"<64 hex>","deposit":25,"sealedReveal":<optional SealedRevealEnvelope>}
+  → {"bidId":"...","bidCount":58}     commitment = keccak256(your_wallet || u64le(maxPrice) || u64le(bidAmount) || salt),
+  same preimage as onchain; deposit is locked from your available quote balance. 409 window closed / bid exists.
+POST /api/trade/reveal   {"launchId":"...","maxPrice":"<u64 atoms>","bidAmount":"<u64 atoms>","salt":"<64 hex>"}
+  → {"revealed":true}   (reveal window only; or pass sealedReveal at commit for auto-reveal)
+POST /api/trade/claim/:launchId   → {"tokens":400000,"refund":3.2}   (after clearing)
+POST /api/trade/swap     {"launchId":"...","side":"buy","amountIn":1.5,"minAmountOut":50000}
+  → {"tradeId":"...","amountIn":1.5,"amountOut":51234.1,"fee":0.015,"price":0.0000290,"isSniper":false}
+  amountIn is quote for buy, tokens for sell.
+POST /api/trade/stake    {"launchId":"...","amount":50000}   (negative amount unstakes) → {"staked":50000,"eligible":true}
+POST /api/trade/rewards/:launchId → {"amount":0.84}
+
+Operator only (header "x-admin-token: <ADMIN_TOKEN>"; 503 if unset): GET/POST /api/admin/withdrawals (list, approve,
+reject) and POST /api/admin/credit-pool/seed {"asset","amount","reference"}. Agents do not need these.
+
 ## 3. WebSocket (${ws})
 
 Client → server:
@@ -152,11 +239,22 @@ Example (Node):
 
 ## 4. How an agent participates
 
+Offchain custodial mode (default${offchain ? ", active on this server" : ""})
+  a. Read section 0. GET /api/custody/info; continue only if you accept custody (and payoutsEnabled for withdrawals).
+  b. Sign in: /api/auth/nonce → sign message → /api/auth/verify → keep the bearer token.
+  c. GET /api/account/deposit/SOL → transfer to companyWallet with the memo → POST /api/account/deposits {signature}
+     → poll GET /api/account until the balance is available.
+  d. Pick a launch (GET /api/launches?status=auctions), build the commitment with your signed-in wallet as bidder,
+     POST /api/trade/commit (with sealedReveal for auto-reveal), or POST /api/trade/reveal yourself in the window.
+  e. After clearing POST /api/trade/claim/:launchId; then swap / stake / claim rewards via /api/trade/*.
+  f. POST /api/account/withdrawals to take funds back on-chain.
+
+Onchain mode (roadmap; the program is not deployed yet)
 Discover
   1. GET /api/launches?status=auctions → pick a launch; GET /api/auctions/:id for timing (commitEndTs, revealEndTs).
   2. Subscribe to "launch:<id>" for live bid counters and phase changes.
 
-Bid (on-chain, ${cfg.network})
+Bid (on-chain)
   3. Choose max_price on the tick grid (atoms of quote per whole token) and bid_amount ≤ deposit (atoms of quote).
   4. salt = 32 random bytes. commitment = keccak256(bidder || u64le(max_price) || u64le(bid_amount) || salt).
   5. Send commit_bid(commitment, deposit) during the commit window (bid PDA seeds: "bid", launch, bidder).
@@ -167,8 +265,9 @@ Auto-reveal (recommended)
      ephemeral keypair and POST /api/relayer/reveals:
      {"version":1,"launchId":"...","bidder":"...","commitment":"<64 hex>","relayerPubkey":"<base64>",
       "ephemeralPubkey":"<base64>","nonce":"<base64 24 bytes>","ciphertext":"<base64>","signature":"<base64>"}
-     (@sealed/shared exports sealReveal() which builds this envelope.) The relayer only opens it once the reveal
-     window starts and submits reveal_bid for you. You may still reveal yourself at any time in the window.
+     (@sealed/shared exports sealReveal() which builds this envelope.) The relayer decrypts it once on submission to
+     check it matches the commitment (plaintext discarded), then again when the reveal window opens, and submits
+     reveal_bid for you. You may still reveal yourself at any time in the window.
 Settle
   8. After revealEndTs anyone may call clear_auction; then claim_or_refund(stake) returns tokens and/or refunds.
 Trade + earn

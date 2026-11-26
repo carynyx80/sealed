@@ -12,7 +12,7 @@ Sealed runs **offchain and custodial by default**. The Railway backend runs auct
 
 1. **Launch setup.** Name, ticker, quote asset (SOL, USDC or a tokenized stock), auction timing, floor, tick, target raise, clearing cap. Creator allocation ≤ 2% (`MAX_CREATOR_ALLOCATION_BPS = 200`).
 2. **Sealed auction.** Commit `keccak256(bidder ‖ max_price u64le ‖ bid_amount u64le ‖ salt[32])` plus collateral; reveal later; clear at one uniform price over a 64-tick grid. Unrevealed bids lose 1%.
-3. **Graduate + buyback vault.** The raise and pool supply seed a locked constant-product pool. The Credit Pool advances 10/12.5/15% of the raise (standard/plus/premier) into a vault that can only buy-and-burn, in 48 drips every 120–300 s (default 180 s).
+3. **Graduate + buyback vault.** The raise and pool supply seed a locked constant-product pool. The Credit Pool advances 10/12.5/15% of the raise (standard/plus/premier) into a vault that can only buy-and-burn, in 48 drips every 120–300 s (default 180 s); the first drip is due one interval after graduation.
 4. **Repay → flywheel.** The 1% pool fee splits 80% credit repayment / 20% platform ops until outstanding credit is exactly 0, then 50% holders / 35% platform buyback-burn / 15% treasury. Buyers in the graduation slot (offchain: within 2 s) earn 0% holder rewards.
 
 The math lives once in `@sealed/shared` (`computeClearing`, `settleBid`, `splitFees`, `computeCommitment`) and is mirrored in Rust.
@@ -22,9 +22,12 @@ The math lives once in `@sealed/shared` (`computeClearing`, `settleBid`, `splitF
 | Capability | Status |
 |---|---|
 | Demo world (API `DEMO_MODE` or in-browser fallback) | Live in demo |
-| Offchain custodial backend (ledger, SIWS, deposits, payouts, proof of reserves) | In development (`apps/api/src/offchain`, contract `packages/shared/src/custody.ts`) |
+| Offchain ledger engine, SIWS auth, trade/account/custody/admin routes | Off-chain, tests passing (API 87/87); live on Railway with Postgres + Redis (`apps/api/src/offchain`, `apps/api/src/routes`) |
+| Deposit detection | Built + tested; needs `HELIUS_API_KEY` (or `SOLANA_RPC_URL`) on Railway — not set yet |
+| Payouts | Built + tested; live — payouts pending operator key (`COMPANY_WALLET_SECRET_KEY` not set) |
+| Hosted API mode | `DEMO_MODE=true`: demo launches merged with real offchain launches (`isDemo` per launch) |
 | Clearing / fee / commitment math | Off-chain, tests passing (shared 7/7, invariants 34 + 1 todo) |
-| Anchor program | Implemented on-chain, tests pending — not built here, **not deployed** (program id has no devnet account) |
+| Anchor program | On-chain, tests passing (anchor build OK, 15/15 Rust, 18/18 `anchor test -- --features test-mode`) — **not deployed** (program id has no devnet account) |
 | Helius Privacy Rings | Simulated in demo; status probe + RPC proxy real; private escrow planned |
 | Mainnet, audit | Planned — neither exists |
 

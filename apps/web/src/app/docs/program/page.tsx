@@ -67,7 +67,7 @@ export default function ProgramReference() {
             <Accent>sealed_launchpad</Accent>, the non-custodial mode.
           </>
         }
-        lede="The Anchor program is the roadmap execution mode: every rule on these pages enforced by Solana instead of by Sealed's backend. It is implemented with a full lifecycle test suite, but it is not built or deployed anywhere yet."
+        lede="The Anchor program is the roadmap execution mode: every rule on these pages enforced by Solana instead of by Sealed's backend. It builds, and its unit and lifecycle tests pass locally, but it is not deployed anywhere yet."
       >
         <StatusBadge status="chain-pending" />
         <StatusBadge status="planned" label="Onchain mode — roadmap" />
@@ -75,8 +75,8 @@ export default function ProgramReference() {
 
       <Note title="Deployment status" tone="warn">
         <p>
-          Program id <C>{PROGRAM_ID}</C> (keypair in <C>target/deploy</C>) has <strong>no account on devnet</strong> as of 2026-11-26, and no{" "}
-          <C>.so</C> has been built in this workspace. Anchor 0.32, Solana 2.2. The IDL is committed at <C>programs/sealed-launchpad/idl/sealed_launchpad.json</C>.
+          Program id <C>{PROGRAM_ID}</C> (keypair in <C>target/deploy</C>) has <strong>no account on devnet</strong> as of 2026-11-26. <C>anchor build</C>{" "}
+          succeeds locally, but nothing has been deployed. Anchor 0.32, Solana 2.2. The IDL is committed at <C>programs/sealed-launchpad/idl/sealed_launchpad.json</C>.
         </p>
       </Note>
 
@@ -176,7 +176,10 @@ export default function ProgramReference() {
         escrow, early and mismatched reveals, uniform clearing against shared <C>computeClearing</C>, winner/loser/non-revealer settlement, a graduation +
         same-slot buy in one transaction (sniper recorded), drip timing and burn, sniper staking rejection, forged-authority vault withdrawal, 80/20
         repayment flipping to Flywheel at zero, staker rewards with zero accrual for the sniper, unstake, and a failed auction with full refunds.{" "}
-        <C>math.rs</C> has 14 Rust unit tests. None has been run in this workspace yet: run <C>pnpm anchor:test</C>.
+        <C>math.rs</C> has 14 Rust unit tests. Results on 2026-11-26: <C>cargo test -p sealed_launchpad --lib</C> 15/15 (the 14 plus Anchor&apos;s
+        generated program-id test) and <C>anchor test -- --features test-mode</C> 18/18 on a local validator. The <C>test-mode</C> feature is required
+        (it shortens the on-chain timing minimums so the suite can run); the root <C>pnpm anchor:test</C> script omits it, so run the command from{" "}
+        <C>programs/sealed-launchpad</C> or use its <C>pnpm test</C>.
       </P>
     </>
   );

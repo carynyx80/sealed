@@ -28,7 +28,7 @@ export default function Flywheel() {
       >
         <StatusBadge status="offchain-passing" label="splitFees · tests passing" />
         <StatusBadge status="demo" />
-        <StatusBadge status="dev" label="Offchain ledger" />
+        <StatusBadge status="offchain-passing" label="Offchain ledger · tests passing" />
         <StatusBadge status="chain-pending" />
       </DocHeader>
 

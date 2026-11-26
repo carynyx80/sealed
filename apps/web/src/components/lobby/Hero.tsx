@@ -7,10 +7,11 @@ import { useReducedMotion } from "@/components/motion/reduced";
 import { SPRING } from "../motion/spring";
 import { ArrowRight } from "../ui/Icons";
 import { SealedBook } from "./SealedBook";
+import "./hero.css";
 
 const RAILS = [
   { k: "Uniform clearing", v: "Every winner pays one price", n: "2" },
-  { k: "Creator cap", v: "≤ 2% of supply, on-chain", n: "" },
+  { k: "Creator cap", v: "≤ 2% of supply, enforced at launch", n: "" },
   { k: "Day-one credit", v: "10–15% of raise buys & burns", n: "3" },
 ];
 
@@ -29,37 +30,40 @@ export function Hero() {
     return xs[0] ?? null;
   }, [data]);
 
+  // Above the fold (dateline, headline, lede, CTAs): visible in the SSR HTML, transform-only CSS entrance (hero.css).
+  const lift = (ms: number) => ({ style: { ["--hero-delay" as string]: `${ms}ms` } });
+  // Below the fold on phones (rails, sealed book): keep the subtle framer-motion reveal.
   const rise = (d: number) => ({ initial: reduce ? false : { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 }, transition: { ...SPRING, delay: d } });
 
   return (
     <section className="relative overflow-x-clip pb-16 pt-6 sm:pb-24 sm:pt-8">
       {/* dateline */}
-      <motion.div {...rise(0)} className="flex items-center justify-between gap-4 border-b border-ink pb-2.5 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-slate">
+      <div {...lift(0)} className="hero-rise flex items-center justify-between gap-4 border-b border-ink pb-2.5 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-slate">
         <span>§ 00 — Sealed-block launchpad</span>
         <span className="hidden sm:inline">Solana · Commit → Reveal → Clear → Buy back</span>
         <span className="sm:hidden">Solana</span>
-      </motion.div>
+      </div>
 
       <div className="mt-10 grid gap-14 sm:mt-14 lg:grid-cols-12 lg:gap-8">
         <div className="lg:col-span-7">
-          <motion.h1 {...rise(0.05)} className="font-display text-[clamp(3rem,7.4vw,6.75rem)] font-bold leading-[0.9] tracking-[-0.05em] text-ink">
+          <h1 {...lift(50)} className="hero-rise font-display text-[clamp(3rem,7.4vw,6.75rem)] font-bold leading-[0.9] tracking-[-0.05em] text-ink">
             Bids stay sealed.
             <br />
             Buybacks start at minute <span className="accent tracking-[-0.03em]">one.</span>
-          </motion.h1>
+          </h1>
 
-          <motion.p {...rise(0.12)} className="mt-8 max-w-[34rem] text-[17px] leading-relaxed text-ink-slate">
+          <p {...lift(110)} className="hero-rise mt-8 max-w-[34rem] text-[17px] leading-relaxed text-ink-slate">
             Every token opens with a private commit–reveal auction that clears at a single price — no block-zero snipers, no whale copy-trading. At graduation a locked fee-credit vault starts buying and burning, repays itself from fees, then turns into a flywheel holders keep.
-          </motion.p>
+          </p>
 
-          <motion.div {...rise(0.18)} className="mt-9 flex flex-wrap items-center gap-x-7 gap-y-4">
+          <div {...lift(170)} className="hero-rise mt-9 flex flex-wrap items-center gap-x-7 gap-y-4">
             <a href="#lobby" className="btn-primary h-12 px-6">
               Enter the lobby <ArrowRight width={15} height={15} />
             </a>
             <Link href="/launch" className="btn-link">
               Open a sealed auction
             </Link>
-          </motion.div>
+          </div>
 
           <motion.dl {...rise(0.24)} className="mt-14 grid max-w-2xl grid-cols-1 border-t border-rule sm:grid-cols-3">
             {RAILS.map((r, i) => (

@@ -40,7 +40,7 @@ export default function SealedAuction() {
       >
         <StatusBadge status="offchain-passing" label="Clearing math · tests passing" />
         <StatusBadge status="demo" />
-        <StatusBadge status="dev" label="Offchain ledger" />
+        <StatusBadge status="offchain-passing" label="Offchain ledger · tests passing" />
         <StatusBadge status="chain-pending" />
       </DocHeader>
 

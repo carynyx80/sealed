@@ -34,7 +34,8 @@ packages/defi              @sealed/defi — Anchor client, Jupiter v6, Raydium a
                            internal-CPMM quotes, encrypted bid vault, Privacy Ring clients
 programs/sealed-launchpad  Anchor program sealed_launchpad (onchain mode, roadmap) + tests + devnet init
 apps/api                   @sealed/api — Fastify REST + /ws, Prisma/Postgres, Redis, workers, /llms.txt
-  src/offchain/            custodial ledger engine, SIWS, deposits, withdrawals (in development)
+  src/offchain/            custodial ledger, engine, SIWS auth, custody (deposit watcher, withdrawals,
+                           payouts, reserves); routes in src/routes/{trade,auth,account,custody,admin}.ts
 apps/web                   @sealed/web — Next.js 15 App Router, Tailwind, framer-motion, these docs
 tests                      @sealed/e2e — invariant/property tests, black-box API e2e, web smoke
 scripts                    deploy-devnet.sh · deploy-api.sh · deploy-web.sh · verify.sh`}
@@ -53,10 +54,10 @@ sealed_launchpad (Rust) mirrors constants.ts and clearing/fees/commitment intege
       <H3 id="flow-offchain">Offchain custodial (default)</H3>
       <OL>
         <li>The browser signs a SIWS message; the API issues a bearer token.</li>
-        <li>The user transfers SOL/SPL to the company wallet with memo <C>sealed:&lt;depositRef&gt;</C>; the deposit watcher sees it through Helius RPC and credits the ledger after finality.</li>
+        <li>The user transfers SOL/SPL to the company wallet with memo <C>sealed:&lt;depositRef&gt;</C>; the deposit watcher sees it through Helius RPC and credits the ledger after finality. (Needs <C>HELIUS_API_KEY</C> or <C>SOLANA_RPC_URL</C>; not set on the hosted API yet.)</li>
         <li>Commits, reveals, swaps, claims and stakes are API calls that post double-entry ledger transactions.</li>
         <li>Schedulers clear auctions, graduate, run drips and split fees on the ledger; events stream over <C>/ws</C>.</li>
-        <li>Withdrawals are paid from the company wallet by the payout worker, or queued for manual approval.</li>
+        <li>Withdrawals are paid from the company wallet by the payout worker, or queued for manual approval. (The payout worker needs <C>COMPANY_WALLET_SECRET_KEY</C>; not set yet, so withdrawals wait.)</li>
       </OL>
       <H3 id="flow-onchain">Onchain (roadmap)</H3>
       <OL>
@@ -73,7 +74,9 @@ sealed_launchpad (Rust) mirrors constants.ts and clearing/fees/commitment intege
           ["Auto-reveal relayer", <C key="f">workers/revealRelayer.ts</C>, "2 s", "always; demo marks bids revealed", <StatusBadge key="s" status="demo" />],
           ["Buyback keeper", <C key="f">workers/buybackKeeper.ts</C>, "10 s", "not demo, KEEPER_SECRET_KEY set", <StatusBadge key="s" status="partial" label="Account wiring gap" />],
           ["Demo world ticker", <C key="f">@sealed/shared demo.ts</C>, "DEMO_TICK_MS (1 s)", "DEMO_MODE", <StatusBadge key="s" status="demo" />],
-          ["Ledger engine, deposit watcher, payouts", <C key="f">src/offchain/**</C>, "—", "EXECUTION_MODE=offchain", <StatusBadge key="s" status="dev" />],
+          ["Offchain scheduler (clear, graduate, drips, fees, auto-reveal)", <C key="f">src/offchain/runtime.ts</C>, "OFFCHAIN_TICK_MS (2 s)", "EXECUTION_MODE=offchain", <StatusBadge key="s" status="offchain-passing" />],
+          ["Deposit watcher", <C key="f">src/offchain/custody</C>, "DEPOSIT_POLL_MS (15 s)", "RPC configured and custody workers on (default: WORKERS_ENABLED and not demo; force with CUSTODY_WORKERS)", <StatusBadge key="s" status="dev" label="Needs HELIUS_API_KEY" />],
+          ["Payout worker", <C key="f">src/offchain/custody/payout.ts</C>, "PAYOUT_POLL_MS (10 s)", "as above, plus COMPANY_WALLET_SECRET_KEY", <StatusBadge key="s" status="dev" label="Needs operator key" />],
         ]}
       />
       <P>
@@ -84,7 +87,7 @@ sealed_launchpad (Rust) mirrors constants.ts and clearing/fees/commitment intege
       <H2 id="storage" n="7.5">Storage and cache</H2>
       <Ledger
         items={[
-          { k: "Postgres (Prisma)", v: <>Models: Launch, Bid, RevealPayload, Trade, BuybackEvent, CreditLedger, HolderReward, ProtocolStats (<C>apps/api/prisma/schema.prisma</C>). The custodial ledger tables are added by the offchain workstream. <C>prisma db push</C> runs on container boot when <C>DATABASE_URL</C> is set.</> },
+          { k: "Postgres (Prisma)", v: <>Models: Launch, Bid, RevealPayload, Trade, BuybackEvent, CreditLedger, HolderReward, ProtocolStats (<C>apps/api/prisma/schema.prisma</C>). Custodial tables: User, AuthNonce, Session, Deposit, Withdrawal, LedgerAccount, LedgerTransaction, LedgerEntry, OffchainLaunch, OffchainBid, OffchainPosition, OffchainAntiSnipe. <C>prisma db push</C> runs on container boot when <C>DATABASE_URL</C> is set.</> },
           { k: "Memory store", v: "Used when DATABASE_URL is unset (demo). Not durable; a custodial deployment must use Postgres." },
           { k: "Redis", v: <>Response cache (1–2 s TTLs on lists, stats, revenue) and the keeper job queue. Falls back to an in-process map when <C>REDIS_URL</C> is unset.</> },
           { k: "Browser", v: "Encrypted bid salts in IndexedDB; a client-side demo world takes over if the API is unreachable." },

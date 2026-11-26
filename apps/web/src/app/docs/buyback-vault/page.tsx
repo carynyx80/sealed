@@ -34,7 +34,7 @@ export default function BuybackVault() {
         lede="At graduation the Protocol Credit Pool advances a fee-credit line of 10–15% of the raise into a vault that can only buy the token and burn it. Pool fees repay the line later."
       >
         <StatusBadge status="demo" />
-        <StatusBadge status="dev" label="Offchain ledger" />
+        <StatusBadge status="offchain-passing" label="Offchain ledger · tests passing" />
         <StatusBadge status="chain-pending" />
       </DocHeader>
 
@@ -87,9 +87,9 @@ export default function BuybackVault() {
       <Ledger
         items={[
           { k: "Onchain mode", s: "chain-pending", v: <>The vault is a token account at PDA <C>[&quot;buyback_vault&quot;, launch]</C> whose authority is the launch PDA. The only instruction that moves funds out is <C>execute_buyback_drip</C>, which sends them to the pool&apos;s quote reserve. There is no admin, creator or arbitrary-destination path.</> },
-          { k: "Tests that cover it", v: <>Anchor tests &ldquo;exposes exactly the contract instructions — no vault withdraw path&rdquo; and &ldquo;buyback vault cannot be withdrawn with a forged authority&rdquo; (written, not yet run in this workspace).</> },
+          { k: "Tests that cover it", v: <>Anchor tests &ldquo;exposes exactly the contract instructions — no vault withdraw path&rdquo; and &ldquo;buyback vault cannot be withdrawn with a forged authority&rdquo; (both pass in the 18/18 anchor run).</> },
           { k: "Bounded cranks", v: <>Drips are permissionless but gated by <C>DripNotDue</C> and <C>VaultEmpty</C>. A hostile caller can only run a drip that is already due.</> },
-          { k: "Offchain mode", s: "dev", v: <>The vault is a ledger account whose only allowed posting is a drip into the pool. This is a <strong>policy enforced by Sealed&apos;s backend</strong>, not by a program: in custodial mode you trust the operator to keep it. See <A href="/docs/custody">Custody</A>.</> },
+          { k: "Offchain mode", s: "offchain-passing", v: <>The vault is a ledger account whose only allowed posting is a drip into the pool. This is a <strong>policy enforced by Sealed&apos;s backend</strong>, not by a program: in custodial mode you trust the operator to keep it. See <A href="/docs/custody">Custody</A>.</> },
         ]}
       />
 

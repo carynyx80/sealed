@@ -8,9 +8,12 @@ export const metadata: Metadata = { title: "Deploy" };
 const API_ENV: Array<[string, string, string]> = [
   ["EXECUTION_MODE", "offchain", "offchain (custodial, default) or onchain (roadmap)."],
   ["COMPANY_WALLET", COMPANY_WALLET, "Public address that receives deposits and is reported in proof of reserves."],
-  ["COMPANY_WALLET_SECRET_KEY", "secret · operator-set", "Signs withdrawals. Unset → payoutsEnabled=false and every withdrawal waits for manual approval. Never commit it."],
-  ["ADMIN_TOKEN", "secret", "Header token for /api/admin/withdrawals (approve / reject)."],
-  ["DEPOSIT_CONFIRMATIONS", "finalized", "Confirmations required before a deposit is credited."],
+  ["COMPANY_WALLET_SECRET_KEY", "secret · operator-set", "Signs withdrawals. Unset → payoutsEnabled=false, no payout worker runs and every withdrawal stays queued (funds locked) until it is set or the withdrawal is rejected. Never commit it."],
+  ["ADMIN_TOKEN", "secret", "Value of the x-admin-token header for /api/admin/withdrawals (list / approve / reject) and /api/admin/credit-pool/seed. Unset → admin routes answer 503."],
+  ["DEPOSIT_CONFIRMATIONS", "finalized", "\"finalized\" or an integer 1–1000 of confirmed-slot depth before a deposit is credited."],
+  ["CUSTODY_WORKERS", "auto", "Run the deposit watcher and payout worker. Default: WORKERS_ENABLED and not demo, so with DEMO_MODE=true they stay off unless this is true."],
+  ["SIWS_DOMAIN", "sealed.app", "Domain shown in the sign-in message."],
+  ["DEPOSIT_POLL_MS / PAYOUT_POLL_MS / OFFCHAIN_TICK_MS", "15000 / 10000 / 2000", "Deposit watcher, payout worker and offchain scheduler cadence."],
   ["HELIUS_API_KEY", "secret", "Builds the Helius RPC URL when SOLANA_RPC_URL is unset; deposit detection; Privacy Ring proxy."],
   ["DEMO_MODE", "auto", "true when SOLANA_RPC_URL is unset. HELIUS_API_KEY alone does not turn demo off — set DEMO_MODE=false."],
   ["DATABASE_URL", "${{Postgres.DATABASE_URL}}", "Postgres. Optional in demo (memory store); required for custody."],
@@ -62,6 +65,13 @@ export default function Deploy() {
         ]}
         caption="Devnet / demo deployments. Check /api/health for isDemo and the active mode before depositing anything."
       />
+      <Note title="Current deployment status" tone="signal">
+        <p>
+          Web: live on Vercel (Next 15.0.8, React 19.0.9). API: live on Railway with Postgres and Redis, <C>EXECUTION_MODE=offchain</C> and{" "}
+          <C>DEMO_MODE=true</C>, so demo launches are merged with real offchain ones. Not configured yet: <C>COMPANY_WALLET_SECRET_KEY</C> (payouts off) and{" "}
+          <C>HELIUS_API_KEY</C> (no deposit detection). Program: built and tested locally, not deployed to devnet.
+        </p>
+      </Note>
 
       <H2 id="local" n="11.1">Local quickstart</H2>
       <CodeBlock
@@ -80,7 +90,9 @@ open http://localhost:3000/docs`}
           [<C key="c">pnpm --filter @sealed/e2e test:invariants</C>, "seeded property tests on clearing, fees, commitment, schema, demo world"],
           [<C key="c">pnpm --filter @sealed/e2e test:e2e</C>, "boots the built API (and web) and checks them black-box"],
           [<C key="c">scripts/verify.sh</C>, "full definition of done with a PASS/FAIL table"],
-          [<C key="c">pnpm anchor:build · pnpm anchor:test</C>, "Solana program"],
+          [<C key="c">cd apps/api && node --import tsx --test test/*.test.ts</C>, "API unit and integration suite (87 tests), including the custody and offchain engine"],
+          [<C key="c">pnpm anchor:build</C>, "anchor build of the Solana program"],
+          [<C key="c">cd programs/sealed-launchpad && anchor test -- --features test-mode</C>, "anchor suite (18 tests). The test-mode feature is required; the root pnpm anchor:test script omits it. cargo test -p sealed_launchpad --lib runs the 15 Rust unit tests."],
         ]}
       />
 
@@ -95,7 +107,7 @@ open http://localhost:3000/docs`}
         head={["Variable", "Example", "Purpose"]}
         colClass={["min-w-[11rem]", "min-w-[9rem]", "min-w-[16rem]"]}
         rows={API_ENV.map(([k, v, d]) => [<C key="k">{k}</C>, <span key="v" className="font-mono text-[12px] [overflow-wrap:anywhere]">{v}</span>, d])}
-        caption="EXECUTION_MODE, COMPANY_WALLET*, ADMIN_TOKEN and DEPOSIT_CONFIRMATIONS belong to the custodial backend that is in development."
+        caption="EXECUTION_MODE, COMPANY_WALLET*, ADMIN_TOKEN, DEPOSIT_CONFIRMATIONS and CUSTODY_WORKERS configure the custodial backend (apps/api/src/offchain/custody/config.ts). On the hosted API, COMPANY_WALLET_SECRET_KEY and HELIUS_API_KEY are not set yet."
       />
       <H3 id="env-web">Web (Vercel)</H3>
       <Table dense head={["Variable", "Value"]} rows={WEB_ENV.map(([k, v]) => [<C key="k">{k}</C>, v])} caption="NEXT_PUBLIC_* values are inlined at build time; redeploy after changing them." />
@@ -110,6 +122,8 @@ open http://localhost:3000/docs`}
         <li>
           Set the variables above. For custody add <C>EXECUTION_MODE=offchain</C>, <C>COMPANY_WALLET</C>, <C>COMPANY_WALLET_SECRET_KEY</C> (operator only),{" "}
           <C>ADMIN_TOKEN</C>, <C>DEPOSIT_CONFIRMATIONS</C>, <C>HELIUS_API_KEY</C>, <C>DEMO_MODE=false</C> and <C>CORS_ORIGIN=https://&lt;vercel-domain&gt;</C>.
+          Then seed the credit pool from company funds with <C>POST /api/admin/credit-pool/seed</C>; graduations draw their buyback credit from it and get
+          none while it is empty.
         </li>
         <li>
           Run <C>scripts/deploy-api.sh</C> (wraps <C>railway up</C>; asks first, <C>--yes</C> / <C>--dry-run</C>). The container runs <C>prisma db push</C> on boot
@@ -132,7 +146,7 @@ docker run -p 4000:4000 sealed-api`} />
       </OL>
 
       <H2 id="devnet" n="11.5">Program on devnet (onchain mode)</H2>
-      <StatusBadge status="planned" label="Not deployed yet" />
+      <StatusBadge status="chain-pending" />
       <CodeBlock
         lang="bash"
         title="deploy-devnet.sh"
@@ -145,7 +159,10 @@ scripts/deploy-devnet.sh`}
         config, credit pools, mock quote mints) and writes <C>PROGRAM_ID</C> / <C>NEXT_PUBLIC_PROGRAM_ID</C> into the env files.
       </P>
       <Note title="Before you go live" tone="warn">
-        <p>Never run a public deployment with DEMO_MODE=true: demo-bid and in-memory launch creation are unauthenticated. Read Security first.</p>
+        <p>
+          Never run a public mainnet deployment with DEMO_MODE=true: demo-bid and unauthenticated in-memory launch creation are enabled in demo. The
+          hosted devnet API runs in demo today. Read Security first.
+        </p>
       </Note>
     </>
   );

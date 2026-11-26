@@ -436,7 +436,7 @@ export function OneClickJupiterSwap({ launch }: { launch: LaunchSummary }) {
             <div>{message}</div>
             {lastSig && phase === "filled" && (
               <div className="num mt-1 truncate text-xs opacity-80">
-                {lastSig.startsWith("ledger:") ? `ledger ref ${lastSig.slice(7, 27)}` : lastSig.startsWith("demo") ? lastSig.slice(0, 20) + "…" : (
+                {lastSig.startsWith("ledger:") ? `Receipt ${lastSig.slice(0, 27)}` : lastSig.startsWith("demo") ? lastSig.slice(0, 20) + "…" : (
                   <a
                     className="underline underline-offset-2"
                     target="_blank"

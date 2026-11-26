@@ -5,6 +5,7 @@ import clsx from "clsx";
 import type { LaunchSummary } from "@sealed/shared";
 import { useNow } from "@/lib/live";
 import { fmtAmount, fmtCountdown, fmtCompact } from "@/lib/format";
+import { useCustodyInfo } from "@/lib/custody";
 import { RollingNumber } from "../motion/RollingNumber";
 import { SPRING } from "../motion/spring";
 
@@ -16,6 +17,7 @@ export function BuybackCountdownCard({ launch }: { launch: LaunchSummary }) {
   const reduce = useReducedMotion();
   const v = launch.vault;
   const q = launch.quoteAsset;
+  const offchain = useCustodyInfo().availability === "available";
   if (!v) return null;
   const exhausted = v.nextDripTs === 0 || v.balance <= 0;
   const left = now === null || exhausted ? null : Math.max(0, v.nextDripTs - now);
@@ -131,7 +133,9 @@ export function BuybackCountdownCard({ launch }: { launch: LaunchSummary }) {
       </div>
 
       <p className="mt-4 text-[11px] leading-relaxed text-night-muted">
-        Non-withdrawable. The program permits swap-to-burn only &mdash; neither the creator nor any admin can move vault funds to a wallet.
+        {offchain
+          ? <>Non-withdrawable. Sealed&rsquo;s ledger permits swap-to-burn only &mdash; the creator cannot move vault funds to a wallet.</>
+          : <>Non-withdrawable. The program permits swap-to-burn only &mdash; neither the creator nor any admin can move vault funds to a wallet.</>}
       </p>
     </section>
   );

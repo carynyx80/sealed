@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { createServer } from "node:net";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -71,4 +72,18 @@ export async function portFree(port: number): Promise<boolean> {
   } catch {
     return true;
   }
+}
+
+/** Ask the OS for a free TCP port on 127.0.0.1. */
+export function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.unref();
+    srv.on("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const addr = srv.address();
+      const port = typeof addr === "object" && addr ? addr.port : 0;
+      srv.close(() => (port ? resolve(port) : reject(new Error("no port"))));
+    });
+  });
 }

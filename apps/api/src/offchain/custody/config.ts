@@ -13,6 +13,11 @@ import type { AppConfig } from "../../config.js";
  *   SIWS_DOMAIN                domain shown in the sign-in message (default "sealed.app")
  *   CUSTODY_WORKERS            run DepositWatcher / PayoutWorker (default: follows WORKERS_ENABLED)
  *   DEPOSIT_POLL_MS / PAYOUT_POLL_MS
+ *
+ * Test-only hooks (never honoured on NETWORK=mainnet; used by tests/e2e/custody.e2e.test.ts):
+ *   ENABLE_TEST_CREDIT         "true" → POST /api/admin/test-credit credits a wallet without an on-chain deposit
+ *   ENABLE_TEST_CLOCK          "true" → POST /api/admin/test-clock advances the offchain engine clock
+ *                              (also ignored when NODE_ENV=production)
  */
 export interface CustodyConfig {
   companyWallet: string;
@@ -28,9 +33,14 @@ export interface CustodyConfig {
   depositPollMs: number;
   payoutPollMs: number;
   workers: boolean;
+  /** ENABLE_TEST_CREDIT && network !== mainnet. */
+  testCredit: boolean;
+  /** ENABLE_TEST_CLOCK && network !== mainnet && NODE_ENV !== production. */
+  testClock: boolean;
 }
 
 const nonEmpty = (v: string | undefined) => (v && v.trim() !== "" ? v.trim() : undefined);
+const truthy = (v: string | undefined) => ["1", "true", "yes", "on"].includes((nonEmpty(v) ?? "").toLowerCase());
 
 /** Helius RPC derived from HELIUS_API_KEY (preferred for custody), else the app's SOLANA_RPC_URL. */
 export function custodyRpcUrl(network: Network, heliusApiKey?: string, fallback?: string): string | undefined {
@@ -62,7 +72,9 @@ export function loadCustodyConfig(cfg: AppConfig, env: Record<string, string | u
     rpcUrl: custodyRpcUrl(cfg.network, cfg.heliusApiKey, cfg.rpcUrl),
     depositPollMs: Number(nonEmpty(env.DEPOSIT_POLL_MS) ?? 15_000),
     payoutPollMs: Number(nonEmpty(env.PAYOUT_POLL_MS) ?? 10_000),
-    workers: workersEnv ? ["1", "true", "yes", "on"].includes(workersEnv.toLowerCase()) : cfg.workersEnabled && !cfg.isDemo,
+    workers: workersEnv ? truthy(workersEnv) : cfg.workersEnabled && !cfg.isDemo,
+    testCredit: truthy(env.ENABLE_TEST_CREDIT) && cfg.network !== "mainnet",
+    testClock: truthy(env.ENABLE_TEST_CLOCK) && cfg.network !== "mainnet" && cfg.nodeEnv !== "production",
     ...overrides,
   };
 }

@@ -2,6 +2,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useReducedMotion } from "@/components/motion/reduced";
 import clsx from "clsx";
+import type { ReactNode } from "react";
 import type { Network, QuoteAssetSymbol, Trade } from "@sealed/shared";
 import { useNow } from "@/lib/live";
 import { fmtAgo, fmtAmount, fmtCompact, fmtPrice, shortAddr, solscanTx } from "@/lib/format";
@@ -40,12 +41,11 @@ export function TradeTape({ trades, quote, ticker, network, max = 14 }: { trades
               className={clsx("relative border-b border-rule", t.isBuyback && "bg-gain-tint")}
             >
               {t.isBuyback && <span className="absolute inset-y-0 left-0 w-[2px] bg-gain" aria-hidden />}
-              <a
-                href={solscanTx(t.signature, network)}
-                target="_blank"
-                rel="noreferrer"
+              <RowLink
+                signature={t.signature}
+                network={network}
                 className={clsx(COLS, "items-baseline py-2.5 text-[12px] transition-colors hover:bg-paper-deep/60", t.isBuyback && "pl-2.5 hover:bg-gain-tint")}
-                aria-label={`${t.isBuyback ? "Vault buy and burn" : t.side} ${fmtAmount(t.amountQuote)} ${quote} — view on Solscan`}
+                label={`${t.isBuyback ? "Vault buy and burn" : t.side} ${fmtAmount(t.amountQuote)} ${quote}`}
               >
                 <span className="num text-ink-muted">{now === null ? "—" : fmtAgo(t.ts, now)}</span>
                 {t.isBuyback ? (
@@ -63,11 +63,28 @@ export function TradeTape({ trades, quote, ticker, network, max = 14 }: { trades
                 <span className="num hidden text-right text-ink-slate sm:block">{fmtPrice(t.price)}</span>
                 <span className="num hidden text-right text-ink-slate sm:block">{fmtCompact(t.amountToken, 2)}</span>
                 <span className={clsx("num text-right", t.isBuyback ? "text-gain" : "text-ink")}>{fmtAmount(t.amountQuote)}</span>
-              </a>
+              </RowLink>
             </motion.li>
           ))}
         </AnimatePresence>
       </ul>
     </div>
+  );
+}
+
+/** Real signatures link to Solscan; offchain ledger refs (`ledger:<id>`) and demo fills are receipts with no explorer page. */
+function RowLink({ signature, network, className, label, children }: { signature: string; network: Network; className: string; label: string; children: ReactNode }) {
+  const onchain = !!signature && !signature.startsWith("ledger:") && !signature.startsWith("demo");
+  if (!onchain) {
+    return (
+      <div className={className} aria-label={label} title={signature.startsWith("ledger:") ? `Receipt ${signature}` : undefined}>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <a href={solscanTx(signature, network)} target="_blank" rel="noreferrer" className={className} aria-label={`${label} — view on Solscan`}>
+      {children}
+    </a>
   );
 }

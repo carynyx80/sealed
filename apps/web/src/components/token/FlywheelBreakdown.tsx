@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { FLYWHEEL_SPLIT, REPAY_SPLIT, type LaunchSummary } from "@sealed/shared";
 import { useReducedMotion } from "@/components/motion/reduced";
 import { fmtAmount } from "@/lib/format";
+import { useCustodyInfo } from "@/lib/custody";
 
 interface Slice { key: string; label: string; bps: number; fill: string; text: string }
 
@@ -22,6 +23,7 @@ type PhaseState = "active" | "next" | "done";
 /** Fee routing as a proportional ledger: Phase 1 (80/20 auto-repay) → Phase 2 (50/35/15 holder flywheel). */
 export function FlywheelBreakdown({ launch }: { launch: LaunchSummary }) {
   const c = launch.credit;
+  const offchain = useCustodyInfo().availability === "available";
   const q = launch.quoteAsset;
   const graduated = launch.status === "live" || launch.status === "flywheel";
   const fly = launch.status === "flywheel" || c?.phase === "flywheel";
@@ -35,7 +37,7 @@ export function FlywheelBreakdown({ launch }: { launch: LaunchSummary }) {
   return (
     <div>
       <p className="max-w-xl text-[13px] leading-relaxed text-ink-slate">
-        Every trade pays a <span className="num text-ink">1%</span> pool fee into the token&rsquo;s Fee Collector PDA. It is routed in two phases, enforced by the program.
+        Every trade pays a <span className="num text-ink">1%</span> pool fee into the token&rsquo;s {offchain ? "fee collector account" : "Fee Collector PDA"}. It is routed in two phases, enforced by {offchain ? <>Sealed&rsquo;s ledger</> : "the program"}.
         {c && (
           <> Lifetime fees on this pool: <span className="num text-ink">{fmtAmount(c.feesCollected)}</span> <span className="font-mono text-[11px] text-ink-muted">{q}</span>.</>
         )}

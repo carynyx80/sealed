@@ -6,6 +6,7 @@
   "scripts": {
     "test:invariants": "node --import tsx --test --test-reporter=spec \"invariants/**/*.test.ts\"",
     "test:e2e": "node --import tsx --test --test-reporter=spec --test-concurrency=1 \"e2e/**/*.test.ts\"",
+    "smoke:devnet": "tsx ../scripts/devnet-smoke.ts",
     "test": "pnpm run test:invariants && pnpm run test:e2e",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

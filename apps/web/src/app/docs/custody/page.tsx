@@ -21,8 +21,20 @@ export default function Custody() {
         }
         lede="In the default execution mode Sealed holds your deposits in a company wallet and tracks what you own in a double-entry ledger. This page explains exactly how money gets in, how it gets out, and what you are trusting."
       >
-        <StatusBadge status="dev" />
+        <StatusBadge status="offchain-passing" label="Ledger + SIWS · tests passing" />
+        <StatusBadge status="dev" label="Payouts pending operator key" />
+        <StatusBadge status="dev" label="Deposit detection pending HELIUS_API_KEY" />
       </DocHeader>
+
+      <Note title="Status on the hosted API" tone="signal">
+        <p>
+          The custody code is built and its tests pass (API suite 87/87), and it is deployed on Railway with Postgres and Redis. Two operator secrets are
+          not set yet: <C>COMPANY_WALLET_SECRET_KEY</C>, without which <C>payoutsEnabled</C> is false and no withdrawal is ever sent, and{" "}
+          <C>HELIUS_API_KEY</C> (or <C>SOLANA_RPC_URL</C>), without which deposits are not detected and <C>POST /api/account/deposits</C> answers 503. The
+          hosted API also runs with <C>DEMO_MODE=true</C>, which keeps the deposit watcher and payout worker off unless <C>CUSTODY_WORKERS=true</C> is set.
+          Do not send real funds until <C>/api/custody/info</C> shows <C>payoutsEnabled: true</C>.
+        </p>
+      </Note>
 
       <Note title="Custody disclosure" tone="warn">
         <p>
@@ -38,7 +50,8 @@ export default function Custody() {
         The backend runs auctions, clearing, the graduation pool, buyback drips, fee splits and holder rewards as postings in a Postgres double-entry
         ledger. Every posting debits one account and credits another, so the books always sum to zero. Real assets live in one place: the company
         wallet. Proof of reserves compares that wallet&apos;s on-chain balances with the sum of user liabilities in the ledger, live. The contract for all of
-        this is <C>packages/shared/src/custody.ts</C>; the server code is being written in <C>apps/api/src/offchain/</C>.
+        this is <C>packages/shared/src/custody.ts</C>; the server code is in <C>apps/api/src/offchain/</C> (ledger, engine, auth, custody) and{" "}
+        <C>apps/api/src/routes/</C> (<C>auth</C>, <C>account</C>, <C>trade</C>, <C>custody</C>, <C>admin</C>).
       </P>
       <Figures
         items={[
@@ -63,6 +76,11 @@ export default function Custody() {
           <C>Authorization: Bearer &lt;token&gt;</C> on every account and trade call.
         </li>
       </OL>
+      <P>
+        Nonces expire after 5 minutes and are single-use. Sessions last 7 days; the server stores only a SHA-256 hash of the token.{" "}
+        <C>GET /api/auth/session</C> returns <C>{'{ wallet }'}</C> for a valid token and <C>POST /api/auth/logout</C> revokes it. The nonce and verify
+        calls are rate-limited per IP and per wallet (429).
+      </P>
 
       <H2 id="deposits" n="2.3">Deposits</H2>
       <P>
@@ -70,7 +88,7 @@ export default function Custody() {
         the memo <C>{DEPOSIT_MEMO_PREFIX}&lt;depositRef&gt;</C>. The backend watches the wallet through Helius RPC, matches the memo, waits for the
         configured confirmations (<C>DEPOSIT_CONFIRMATIONS</C>, finalized commitment) and then credits your available balance.
       </P>
-      <Figure caption="Deposit flow. If detection is slow you can nudge it by posting the transaction signature to /api/account/deposits.">
+      <Figure caption="Deposit flow. If detection is slow you can nudge it by posting the transaction signature to /api/account/deposits (202 if not final yet, 404 if the transaction holds no deposit for your memo).">
         <Sequence
           lanes={["You", "Solana", "Sealed API", "Ledger"]}
           steps={[
@@ -129,16 +147,16 @@ Content-Type: application/json
       <Ledger
         items={[
           { k: "Auto-approved", v: <>At or under <N>{usd(WITHDRAWAL_LIMITS.autoApproveMaxUsd)}</N> USD-equivalent and inside the <N>{usd(WITHDRAWAL_LIMITS.dailyPerWalletUsd)}</N> daily per-wallet limit.</> },
-          { k: "Manual approval", v: <>Above either limit, or whenever payouts are disabled. An operator approves or rejects with <C>ADMIN_TOKEN</C> on <C>/api/admin/withdrawals</C>.</> },
-          { k: "Payouts disabled", v: <>Until the operator sets <C>COMPANY_WALLET_SECRET_KEY</C>, <C>payoutsEnabled</C> is false and every withdrawal queues for manual processing.</> },
+          { k: "Manual approval", v: <>Above either limit the request lands in <C>pending_approval</C>. An operator lists, approves (→ <C>queued</C>) or rejects it on <C>/api/admin/withdrawals</C> with the <C>x-admin-token</C> header (value <C>ADMIN_TOKEN</C>).</> },
+          { k: "Payouts disabled", v: <>Until the operator sets <C>COMPANY_WALLET_SECRET_KEY</C> (and an RPC), <C>payoutsEnabled</C> is false and no payout worker runs: <C>queued</C> withdrawals wait, funds stay locked, and approving one only moves it to <C>queued</C>. Rejecting unlocks the funds.</> },
           { k: "USD valuation", v: "Limits use the reference prices in quoteAssets.ts, which are demo prices — a known simplification." },
         ]}
       />
       <Table
         head={["Withdrawal status", "Meaning"]}
         rows={[
-          [<C key="s">queued</C>, "Accepted, waiting for the payout worker."],
-          [<C key="s">pending_approval</C>, "Over a limit or payouts disabled; waiting for an operator."],
+          [<C key="s">queued</C>, "Accepted (auto-approved or operator-approved), waiting for the payout worker. Waits indefinitely while payouts are disabled."],
+          [<C key="s">pending_approval</C>, "Over the auto-approve or daily limit; waiting for an operator."],
           [<C key="s">sending</C>, "Transaction built and submitted from the company wallet."],
           [<C key="s">sent</C>, "Confirmed on-chain; signature attached."],
           [<C key="s">failed</C>, "Submission failed; funds are unlocked back to available."],
@@ -149,7 +167,7 @@ Content-Type: application/json
       <H2 id="por" n="2.6">Proof of reserves</H2>
       <P>
         <C>GET /api/custody/info</C> (no auth) returns, per asset, the company wallet&apos;s on-chain balance, the ledger&apos;s total liabilities to users, their
-        ratio and an as-of timestamp. A ratio ≥ 1 means every user balance is covered by assets you can verify yourself on a block explorer.
+        ratio and an as-of timestamp (cached for 30 s; without an RPC the on-chain side cannot be read). A ratio ≥ 1 means every user balance is covered by assets you can verify yourself on a block explorer.
       </P>
       <CodeBlock
         lang="json"

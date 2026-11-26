@@ -22,6 +22,8 @@ import { PriceChart } from "./PriceChart";
 import { TradeTape } from "./TradeTape";
 import { FlywheelBreakdown } from "./FlywheelBreakdown";
 import { LedgerRow, SealRing, SectionHead } from "./RoomParts";
+import { ClaimPanel } from "./ClaimPanel";
+import { useCustodyInfo } from "@/lib/custody";
 
 /*
  * Token Room. Desktop: asymmetric 12-col bento (8 main / 4 rail). Mobile: one column whose order is set per item
@@ -41,6 +43,7 @@ const ORDER = {
 
 export function TokenRoom({ idOrMint }: { idOrMint: string }) {
   const { data, loading, error } = useLaunchRoom(idOrMint);
+  const offchain = useCustodyInfo().availability === "available";
 
   if (loading || (!data && !error)) return <RoomSkeleton />;
   if (!data?.launch) {
@@ -96,7 +99,11 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
                   <div className="mt-5">
                     <TradeTape trades={data.trades} quote={L.quoteAsset} ticker={L.ticker} network={L.network} />
                   </div>
-                  <p className="mt-3 font-mono text-[10px] leading-relaxed text-ink-muted">Each row links to Solscan. Programmatic buys execute from the vault on a fixed cadence and are burned in the same transaction.</p>
+                  <p className="mt-3 font-mono text-[10px] leading-relaxed text-ink-muted">
+                    {offchain
+                      ? "Fills settle on Sealed's ledger. Programmatic buys execute from the vault on a fixed cadence and are burned in the same ledger entry."
+                      : "Each row links to Solscan. Programmatic buys execute from the vault on a fixed cadence and are burned in the same transaction."}
+                  </p>
                 </FadeIn>
                 <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(8))} delay={0.04}>
                   <SectionHead mark="03 — Particulars" title="Market" />
@@ -114,7 +121,7 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
           ) : (
             <>
               <SealedBook launch={L} className={ord(2)} />
-              <AuctionTerms launch={L} className={ord(3)} />
+              <AuctionTerms launch={L} offchain={offchain} className={ord(3)} />
               <AfterAuction launch={L} className={ord(4)} />
               <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", ord(5))}>
                 <SectionHead mark="04 — Fees" title={<>Holder <span className="accent">flywheel</span></>} aside={<span>from the first trade</span>} />
@@ -130,7 +137,8 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
         <aside className="contents lg:col-span-4 lg:flex lg:min-w-0 lg:flex-col lg:gap-6" aria-label={graduated ? "Trade and vault" : "Auction"}>
           {graduated ? (
             <>
-              <div className={clsx("min-w-0", ord(1))}>
+              <div className={clsx("flex min-w-0 flex-col gap-4 sm:gap-5 lg:gap-6", ord(1))}>
+                <ClaimPanel launch={L} variant="card" />
                 <OneClickJupiterSwap launch={L} />
               </div>
               <div className={clsx("min-w-0", ord(2))}>
@@ -163,6 +171,7 @@ export function TokenRoom({ idOrMint }: { idOrMint: string }) {
                   ? "Reveals are closed. The uniform clearing price is being computed and the pool is about to graduate."
                   : "This auction did not reach its minimum. Every deposit is refundable in full."}
               </p>
+              <ClaimPanel launch={L} variant="embedded" />
             </section>
           )}
         </aside>
@@ -384,14 +393,14 @@ function SealedBook({ launch: L, className }: { launch: LaunchSummary; className
   );
 }
 
-function AuctionTerms({ launch: L, className }: { launch: LaunchSummary; className?: string }) {
+function AuctionTerms({ launch: L, offchain, className }: { launch: LaunchSummary; offchain: boolean; className?: string }) {
   const a = L.auction;
   const q = L.quoteAsset;
   const commitMin = Math.round((a.commitEndTs - a.commitStartTs) / 60);
   const revealMin = Math.round((a.revealEndTs - a.commitEndTs) / 60);
   return (
     <FadeIn className={clsx("card min-w-0 p-5 sm:p-6", className)}>
-      <SectionHead mark="02 — Terms" title="Auction terms" aside={<span>enforced on-chain</span>} />
+      <SectionHead mark="02 — Terms" title="Auction terms" aside={<span>{offchain ? "enforced by Sealed's ledger" : "enforced on-chain"}</span>} />
       <div className="mt-4 grid gap-x-10 md:grid-cols-2">
         <dl>
           <LedgerRow k="Floor price" v={`${fmtPrice(a.floorPrice)} ${q}`} />

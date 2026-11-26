@@ -5,15 +5,23 @@ import { useEffect, useState } from "react";
 import clsx from "clsx";
 import type { LaunchSummary } from "@sealed/shared";
 import type { CommitArgs, CommitResult, SealedBidStatus } from "@/lib/defiTypes";
-import { fmtAmount, fmtPrice, shortAddr } from "@/lib/format";
+import { fmtAmount, fmtPrice, shortAddr, solscanTx } from "@/lib/format";
+import { useCustodyInfo } from "@/lib/custody";
 import { SPRING } from "../motion/spring";
 import { CheckIcon, LockIcon, XIcon } from "../ui/Icons";
 
-const STEPS: { id: SealedBidStatus; label: string }[] = [
+const ONCHAIN_STEPS: { id: SealedBidStatus; label: string }[] = [
   { id: "hashing", label: "Hashing commitment (keccak256)" },
   { id: "signing", label: "Signing in your wallet" },
   { id: "submitting", label: "Submitting sealed commit" },
   { id: "done", label: "Sealed & escrowed" },
+];
+/** Offchain custodial mode: the commitment is recorded by Sealed's ledger; the deposit is locked from the Sealed balance. */
+const LEDGER_STEPS: { id: SealedBidStatus; label: string }[] = [
+  { id: "hashing", label: "Hashing commitment (keccak256)" },
+  { id: "signing", label: "Signing in to Sealed" },
+  { id: "submitting", label: "Recording commitment on Sealed's ledger" },
+  { id: "done", label: "Sealed · deposit locked" },
 ];
 const ORDER: SealedBidStatus[] = ["idle", "hashing", "signing", "submitting", "done"];
 
@@ -33,6 +41,9 @@ export function SealedBidModal({ open, onClose, launch, args, status, error, onC
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const q = launch.quoteAsset;
+  // Same switch useSealedBid uses (custody API reachable → offchain custodial ledger).
+  const offchain = useCustodyInfo().availability === "available";
+  const STEPS = offchain ? LEDGER_STEPS : ONCHAIN_STEPS;
 
   useEffect(() => {
     if (!open) return;
@@ -95,13 +106,15 @@ export function SealedBidModal({ open, onClose, launch, args, status, error, onC
             <dl className="grid grid-cols-2 border-y border-ink text-sm">
               <div className="border-b border-rule py-3 pr-3"><dt className="eyebrow">Max price · sealed</dt><dd className="num mt-1">{fmtPrice(args.maxPrice)} {q}</dd></div>
               <div className="border-b border-l border-rule py-3 pl-3"><dt className="eyebrow">Bid amount · sealed</dt><dd className="num mt-1">{fmtAmount(args.amount)} {q}</dd></div>
-              <div className="py-3 pr-3"><dt className="eyebrow">{args.privateDeposit ? "Deposit · shielded" : "Deposit · public"}</dt><dd className="num mt-1">{fmtAmount(args.deposit)} {q}</dd></div>
+              <div className="py-3 pr-3"><dt className="eyebrow">{offchain ? "Deposit · locked" : args.privateDeposit ? "Deposit · shielded" : "Deposit · public"}</dt><dd className="num mt-1">{fmtAmount(args.deposit)} {q}</dd></div>
               <div className="border-l border-rule py-3 pl-3"><dt className="eyebrow">Auto-reveal</dt><dd className="mt-1 text-[13px]">{args.autoReveal ? "Encrypted to relayer" : "Manual"}</dd></div>
             </dl>
 
             <p className="mt-4 flex gap-2 text-[12px] leading-relaxed text-ink-slate">
               <LockIcon className="mt-0.5 shrink-0" width={13} height={13} />
-              Only a keccak256 commitment and your deposit go on-chain. Your price and size stay private until the reveal window.
+              {offchain
+                ? <>Sealed&apos;s ledger records only a keccak256 commitment, and your deposit is locked from your Sealed balance. Your price and size stay private until the reveal window.</>
+                : <>Only a keccak256 commitment and your deposit go on-chain. Your price and size stay private until the reveal window.</>}
             </p>
 
             <ol className="mt-5 space-y-2.5">
@@ -122,7 +135,7 @@ export function SealedBidModal({ open, onClose, launch, args, status, error, onC
             {result && (result.commitmentHex || result.signature) && (
               <div className="mt-4 space-y-1 rounded-field border border-gain/20 bg-gain-tint p-3 text-[12px] text-gain">
                 {result.commitmentHex && <p className="num break-all">commitment {shortAddr(result.commitmentHex, 10)}</p>}
-                {result.signature && <p className="num break-all">tx {shortAddr(result.signature, 10)}</p>}
+                {result.signature && <Receipt signature={result.signature} launch={launch} />}
                 {result.autoRevealQueued && <p>Auto-reveal queued with the relayer.</p>}
               </div>
             )}
@@ -145,5 +158,23 @@ export function SealedBidModal({ open, onClose, launch, args, status, error, onC
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+/** Ledger refs (`ledger:<id>`) are receipts from Sealed's offchain ledger: no explorer link. Only real signatures link to Solscan. */
+function Receipt({ signature, launch }: { signature: string; launch: LaunchSummary }) {
+  if (signature.startsWith("ledger:")) {
+    return <p className="num break-all">Receipt {signature}</p>;
+  }
+  if (launch.isDemo || signature.startsWith("demo")) {
+    return <p className="num break-all">tx {shortAddr(signature, 10)} <span className="text-gain/70">(simulated)</span></p>;
+  }
+  return (
+    <p className="num break-all">
+      tx{" "}
+      <a className="underline underline-offset-2" href={solscanTx(signature, launch.network)} target="_blank" rel="noreferrer">
+        {shortAddr(signature, 10)}
+      </a>
+    </p>
   );
 }

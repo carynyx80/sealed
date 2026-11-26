@@ -1,0 +1,16 @@
+/*
+ * Above-the-fold hero entrance. Pure CSS so it runs from the very first paint, before hydration, and it animates
+ * transform ONLY: the dateline, headline, lede and CTAs are fully opaque in the server HTML, so the headline is the
+ * LCP element on phones instead of waiting ~1s for framer-motion to fade it in from opacity 0.
+ */
+@keyframes hero-rise {
+  from { transform: translate3d(0, 14px, 0); }
+  to { transform: none; }
+}
+.hero-rise {
+  animation: hero-rise 720ms cubic-bezier(0.22, 0.8, 0.24, 1) both;
+  animation-delay: var(--hero-delay, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-rise { animation: none; }
+}

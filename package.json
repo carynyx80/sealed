@@ -9,7 +9,7 @@
     "test": "pnpm -r test",
     "seed": "pnpm --filter @sealed/api seed",
     "anchor:build": "cd programs/sealed-launchpad && anchor build",
-    "anchor:test": "cd programs/sealed-launchpad && anchor test"
+    "anchor:test": "cd programs/sealed-launchpad && anchor test -- --features test-mode"
   },
   "devDependencies": {
     "typescript": "5.6.3"

@@ -182,7 +182,7 @@ export function LobbyGrid() {
           <Link href="/launch" className="btn-primary justify-self-start">Launch a token</Link>
         </div>
       )}
-      <p className="fine mt-6">Bid amounts in sealed lots are hidden until the reveal window. Escrow totals are public on-chain. Vol 24h in USD at reference prices.</p>
+      <p className="fine mt-6">Bid amounts in sealed lots are hidden until the reveal window. Escrow totals are public. Vol 24h in USD at reference prices.</p>
     </section>
   );
 }

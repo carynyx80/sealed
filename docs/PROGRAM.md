@@ -1,6 +1,6 @@
 # Onchain program — `sealed_launchpad` (roadmap non-custodial mode)
 
-Status: **implemented on-chain, tests pending.** Program id `71geDPZMKfjJnKE4an15QyyH5TyFG1w7XEL5tUkp5Tpy` has **no account on devnet** (checked 2026-11-26); no `.so` built in this workspace. Anchor 0.32. IDL: `programs/sealed-launchpad/idl/sealed_launchpad.json`. Contract: `packages/shared/src/program.ts`.
+Status: **on-chain, tests passing (not deployed).** `anchor build` succeeds; 15/15 Rust unit tests; `anchor test -- --features test-mode` 18/18. Program id `71geDPZMKfjJnKE4an15QyyH5TyFG1w7XEL5tUkp5Tpy` has **no account on devnet** (checked 2026-11-26). Anchor 0.32. IDL: `programs/sealed-launchpad/idl/sealed_launchpad.json`. Contract: `packages/shared/src/program.ts`.
 
 ## Instructions (14)
 | Instruction | Caller | Args | Emits |
@@ -31,7 +31,7 @@ ProtocolConfig, CreditPool, LaunchAccount (incl. `histogram: [u64; 64]`, clearin
 6000–6022 (order of `PROGRAM_ERRORS`): CreatorAllocationTooHigh, InvalidAuctionSupply, InvalidCreditBps, InvalidDuration, InvalidDripInterval, CommitWindowClosed, RevealWindowNotOpen, RevealWindowClosed, CommitmentMismatch, InvalidTick, BidExceedsDeposit, AlreadyRevealed, AuctionNotEnded, AuctionNotCleared, AlreadyClaimed, AlreadyGraduated, DripNotDue, VaultEmpty, SlippageExceeded, SniperIneligible, InsufficientStake, MathOverflow, Unauthorized. 6023–6027: InvalidParams, InvalidStatus, ZeroAmount, NotLive, InvalidAccount.
 
 ## Tests
-`programs/sealed-launchpad/tests/sealed-launchpad.ts` (full lifecycle, cap, vault guard, flywheel flip, sniper exclusion, failed auction) and 14 `math.rs` unit tests. Not yet run here: `pnpm anchor:test`.
+`programs/sealed-launchpad/tests/sealed-launchpad.ts` (full lifecycle, cap, vault guard, flywheel flip, sniper exclusion, failed auction) and 14 `math.rs` unit tests. Results (2026-11-26): `cargo test -p sealed_launchpad --lib` 15/15 (14 + Anchor's generated id test); `anchor test -- --features test-mode` 18/18. The `test-mode` feature (relaxed timing minimums) is required — run from `programs/sealed-launchpad` (`pnpm test` there); the root `pnpm anchor:test` omits it.
 
 ## Known gap
 `apps/api/src/workers/buybackKeeper.ts` passes `keeper` (IDL: `cranker`) and omits `token_mint` (drip) and `credit_vault`, `platform_ops_quote`, `treasury_quote` (distribute_fees).

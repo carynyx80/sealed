@@ -47,7 +47,8 @@ export default function HowItWorks() {
         lede="A launch moves through six statuses. This page walks through each one: who acts, what money moves, and which numbers are fixed by the protocol."
       >
         <StatusBadge status="demo" />
-        <StatusBadge status="dev" label="Offchain ledger · in development" />
+        <StatusBadge status="offchain-passing" label="Offchain ledger · tests passing" />
+        <StatusBadge status="chain-pending" />
       </DocHeader>
 
       <H2 id="modes" n="1.1">Two execution modes, one rulebook</H2>
@@ -59,7 +60,7 @@ export default function HowItWorks() {
           ["How you sign in / act", "SIWS signature → bearer token → API calls", "Wallet signs each transaction"],
           ["Anti-snipe rule", <>Buys within <N>{ANTI_SNIPE_WINDOW_SEC}s</N> of graduation are flagged</>, "Buys in the graduation slot are flagged"],
           ["Math", <><C>computeClearing</C>, <C>settleBid</C>, <C>splitFees</C> from <C>@sealed/shared</C></>, "math.rs, a line-for-line port"],
-          ["Status", <StatusBadge key="a" status="dev" />, <StatusBadge key="b" status="chain-pending" />],
+          ["Status", <StatusBadge key="a" status="offchain-passing" label="Off-chain · tests passing · deployed" />, <StatusBadge key="b" status="chain-pending" />],
         ]}
       />
 
@@ -149,7 +150,7 @@ export default function HowItWorks() {
       <Table
         head={["Action", "Offchain (default)", "Onchain (roadmap)"]}
         rows={[
-          ["Create launch", "creator via API", "creator signs create_launch"],
+          ["Create launch", "signed-in creator: POST /api/launches with a bearer token", "creator signs create_launch"],
           ["Commit bid", "POST /api/trade/commit (locks internal balance)", "bidder signs commit_bid (SPL transfer to escrow)"],
           ["Reveal", "POST /api/trade/reveal or auto-reveal", "anyone with the preimage: reveal_bid"],
           ["Clear, graduate", "backend scheduler", "permissionless crank: clear_auction, graduate_and_open_credit"],
@@ -161,7 +162,9 @@ export default function HowItWorks() {
       <Note title="Demo mode">
         <p>
           With no environment set, the API runs <C>DEMO_MODE</C> with an in-memory store and a deterministic demo world; the UI labels it Devnet / Demo.
-          Demo bids go through <C>POST /api/auctions/:id/demo-bid</C> with a real keccak commitment. No real funds move.
+          Demo bids go through <C>POST /api/auctions/:id/demo-bid</C> with a real keccak commitment. No real funds move. The hosted API currently runs
+          with <C>DEMO_MODE=true</C> on top of Postgres, so demo launches are listed next to real offchain launches; each launch carries{" "}
+          <C>isDemo</C>.
         </p>
       </Note>
     </>

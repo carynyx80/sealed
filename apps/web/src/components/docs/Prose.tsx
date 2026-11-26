@@ -13,11 +13,11 @@ export type Status = "demo" | "chain-pending" | "chain-passing" | "offchain-pass
 const STATUS: Record<Status, { label: string; cls: string; dot: string }> = {
   demo: { label: "Live in demo", cls: "border-gain/30 bg-gain-tint text-gain", dot: "bg-gain" },
   "chain-passing": { label: "On-chain · tests passing", cls: "border-ink/20 bg-sheet text-ink", dot: "bg-ink" },
-  "chain-pending": { label: "On-chain · tests pending", cls: "border-rule-strong bg-sheet text-ink-soft", dot: "border border-ink-soft bg-transparent" },
+  "chain-pending": { label: "On-chain · tests passing (not deployed)", cls: "border-rule-strong bg-sheet text-ink-soft", dot: "border border-ink-soft bg-transparent" },
   "offchain-passing": { label: "Off-chain · tests passing", cls: "border-rule-strong bg-sheet text-ink-soft", dot: "bg-ink-soft" },
   simulated: { label: "Simulated", cls: "border-dashed border-ink-slate/50 bg-paper text-ink-slate", dot: "border border-dashed border-ink-slate" },
   planned: { label: "Planned", cls: "border-dashed border-rule-strong bg-transparent text-ink-muted", dot: "bg-rule-strong" },
-  dev: { label: "In development", cls: "border-signal/30 bg-signal-tint text-signal-ink", dot: "bg-signal" },
+  dev: { label: "Live · needs operator key", cls: "border-signal/30 bg-signal-tint text-signal-ink", dot: "bg-signal" },
   partial: { label: "Partial", cls: "border-burn/30 bg-burn-tint text-burn", dot: "bg-burn" },
 };
 
@@ -34,10 +34,10 @@ export function StatusBadge({ status, label, className }: { status: Status; labe
 export function StatusLegend() {
   const order: Array<[Status, string]> = [
     ["demo", "Runs today in the demo world (API DEMO_MODE or the in-browser fallback). No real funds."],
-    ["chain-pending", "Implemented in the Anchor program. Tests are written but have not been run against a built program in this workspace."],
+    ["chain-pending", "Implemented in the Anchor program. anchor build succeeds, the 15 Rust unit tests and the 18-test anchor suite (with --features test-mode) pass locally. Not deployed to devnet or mainnet."],
     ["offchain-passing", "TypeScript implementation with unit, invariant or e2e tests that pass today."],
     ["simulated", "A stand-in that models the behaviour (for example the simulated Privacy Ring)."],
-    ["dev", "Specified in the shared contract (packages/shared/src/custody.ts); the backend is being written now."],
+    ["dev", "Built, tested and deployed on Railway, but switched off until the operator sets a secret (COMPANY_WALLET_SECRET_KEY for payouts, HELIUS_API_KEY for deposit detection)."],
     ["partial", "Code exists but a known gap stops it working end to end. The gap is described next to the badge."],
     ["planned", "Designed, not built."],
   ];
